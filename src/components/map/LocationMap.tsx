@@ -78,7 +78,8 @@ export default function LocationMap({ shots, onSelectShot }: LocationMapProps) {
     <MapContainer
       center={[mapCenter[0], mapCenter[1]] as L.LatLngExpression}
       zoom={13}
-      style={{ height: '650px', width: '100%' }}
+      scrollWheelZoom={false}
+      style={{ height: '100%', width: '100%' }}
       className="rounded-lg"
     >
       <TileLayer

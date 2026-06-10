@@ -47,6 +47,9 @@ body {
 }
 
 .map-container {
-  height: 600px;
+  height: min(65vh, 600px);
+  min-height: 420px;
   width: 100%;
+  overflow: hidden;
+  border-radius: 0.5rem;
 }
