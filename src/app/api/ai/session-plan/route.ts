@@ -1,7 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/serverAuth';
 import { generateSessionPlan, SessionPlan } from '@/lib/ai/gemini';
-import { geocodeLocations } from '@/lib/geo/geocode';
+import { geocodeLocations, geocodePlace } from '@/lib/geo/geocode';
+
+function normalizeLocationName(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function simplifyLocationName(value: string) {
+  const primary = value.split('/')[0]?.split('(')[0]?.trim() || value.trim();
+  return primary
+    .replace(/\b(open green space|urban edge|district|area|waterfront)\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -29,17 +45,60 @@ export async function POST(request: NextRequest) {
       constraints: typeof payload.constraints === 'string' ? payload.constraints : undefined,
     });
 
-    const enrichedLocations = await geocodeLocations(
+    const city = typeof payload.city === 'string' ? payload.city : undefined;
+
+    const initialLocations = await geocodeLocations(
       plan.locationSuggestions ?? [],
-      typeof payload.city === 'string' ? payload.city : undefined
+      city
     );
 
-    const locationByName = new Map(
-      enrichedLocations.map(location => [location.name.toLowerCase(), location])
+    const cityFallbackGeo = city ? await geocodePlace({ place: city }) : { latitude: null, longitude: null };
+
+    const enrichedLocations = await Promise.all(
+      initialLocations.map(async location => {
+        if (location.latitude != null && location.longitude != null) {
+          return location;
+        }
+
+        const simplified = simplifyLocationName(location.name);
+        const retryGeo = await geocodePlace({ place: simplified || location.name, city });
+
+        if (retryGeo.latitude != null && retryGeo.longitude != null) {
+          return {
+            ...location,
+            latitude: retryGeo.latitude,
+            longitude: retryGeo.longitude,
+            displayName: retryGeo.displayName ?? location.displayName,
+          };
+        }
+
+        if (cityFallbackGeo.latitude != null && cityFallbackGeo.longitude != null) {
+          return {
+            ...location,
+            latitude: cityFallbackGeo.latitude,
+            longitude: cityFallbackGeo.longitude,
+            displayName: cityFallbackGeo.displayName ?? location.displayName,
+          };
+        }
+
+        return location;
+      })
     );
+
+    const locationByName = new Map(enrichedLocations.map(location => [normalizeLocationName(location.name), location]));
 
     const enrichedShotList = (plan.shotList ?? []).map(shot => {
-      const match = locationByName.get((shot.location ?? '').toLowerCase());
+      const shotLocation = normalizeLocationName(shot.location ?? '');
+      const exactMatch = locationByName.get(shotLocation);
+      const fuzzyMatch =
+        exactMatch ??
+        enrichedLocations.find(location => {
+          const normalized = normalizeLocationName(location.name);
+          return normalized.includes(shotLocation) || shotLocation.includes(normalized);
+        });
+
+      const match = fuzzyMatch ?? null;
+
       return {
         ...shot,
         latitude: match?.latitude ?? null,

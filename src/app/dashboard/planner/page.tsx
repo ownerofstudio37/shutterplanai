@@ -72,6 +72,10 @@ function getAuthHeader() {
   return headers;
 }
 
+function sleep(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 export default function PlannerPage() {
   const router = useRouter();
 
@@ -175,6 +179,51 @@ export default function PlannerPage() {
         return;
       }
 
+      const createShotWithRetry = async (payload: Record<string, unknown>, retries = 2) => {
+        let lastError = 'Failed to create shot';
+
+        for (let attempt = 0; attempt <= retries; attempt += 1) {
+          const response = await fetch('/api/shots', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...getAuthHeader(),
+            },
+            body: JSON.stringify(payload),
+          });
+
+          let result: { success?: boolean; error?: string } = {};
+          try {
+            result = (await response.json()) as { success?: boolean; error?: string };
+          } catch {
+            result = { success: false, error: 'Invalid shot API response' };
+          }
+
+          if (response.ok && result.success) {
+            return { success: true as const };
+          }
+
+          lastError = result.error || `Shot API failed (${response.status})`;
+
+          const shouldRetry =
+            attempt < retries &&
+            (response.status >= 500 ||
+              response.status === 429 ||
+              (response.status === 404 && /project not found/i.test(lastError)));
+
+          if (!shouldRetry) {
+            break;
+          }
+
+          await sleep((attempt + 1) * 300);
+        }
+
+        return { success: false as const, error: lastError };
+      };
+
+      let createdShots = 0;
+      const failedShots: string[] = [];
+
       for (const shot of plan.shotList) {
         const location = locationIndex.get((shot.location || '').toLowerCase());
         const refinement = refinementIndex.get((shot.location || '').toLowerCase());
@@ -201,28 +250,39 @@ export default function PlannerPage() {
           .filter(Boolean)
           .join('\n');
 
-        await fetch('/api/shots', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...getAuthHeader(),
-          },
-          body: JSON.stringify({
-            projectId,
-            title: shot.title,
-            description: shot.description,
-            location: shot.location,
-            latitude,
-            longitude,
-            notes,
-            microSpotName: shot.microSpot,
-            parkingNotes: location?.logistics?.parking ?? '',
-            walkingDistance: location?.logistics?.walkingDistance ?? '',
-            restroomLocation: location?.logistics?.restroom ?? '',
-            backgroundDescription: location?.whyItWorks ?? '',
-            status: 'planned',
-          }),
+        const shotResult = await createShotWithRetry({
+          projectId,
+          title: shot.title?.trim() || 'Untitled Shot',
+          description: shot.description,
+          location: shot.location,
+          plannedTime: shootDate || null,
+          latitude,
+          longitude,
+          notes,
+          microSpotName: shot.microSpot,
+          parkingNotes: location?.logistics?.parking ?? '',
+          walkingDistance: location?.logistics?.walkingDistance ?? '',
+          restroomLocation: location?.logistics?.restroom ?? '',
+          backgroundDescription: location?.whyItWorks ?? '',
+          status: 'planned',
         });
+
+        if (shotResult.success) {
+          createdShots += 1;
+        } else {
+          failedShots.push(shot.title || 'Untitled Shot');
+        }
+      }
+
+      if (createdShots === 0) {
+        setError(
+          `Project was created, but no shots were saved. ${failedShots.length > 0 ? `Failed: ${failedShots.slice(0, 3).join(', ')}` : ''}`.trim()
+        );
+        return;
+      }
+
+      if (failedShots.length > 0) {
+        setError(`Created ${createdShots} shots, but ${failedShots.length} failed.`);
       }
 
       router.push(`/dashboard/shot-board?project=${projectId}`);
