@@ -8,6 +8,7 @@ export interface LocationCandidate extends GeocodeResult {
   name: string;
   sourceQuery: string;
   relevanceScore: number;
+  distanceKm?: number | null;
 }
 
 interface GeocodeInput {
@@ -227,95 +228,126 @@ function getSearchQueries(sessionCategory: SearchCandidateInput['sessionCategory
 
 export async function searchLocationCandidates(input: SearchCandidateInput): Promise<LocationCandidate[]> {
   const queries = getSearchQueries(input.sessionCategory);
-  const blocked = (input.bannedTerms ?? []).map(term => term.toLowerCase()).filter(Boolean);
+  const blocked = (input.bannedTerms ?? []).map(t => t.toLowerCase()).filter(Boolean);
   const city = input.city.trim();
   const limit = input.limit ?? 8;
-  const cityGeo = await geocodePlace({ place: city });
 
-  const toRadians = (value: number) => (value * Math.PI) / 180;
+  // Resolve city center: prefer provided coordinates, otherwise geocode the city name
+  const cityCenter =
+    input.near?.latitude != null && input.near?.longitude != null
+      ? { latitude: input.near.latitude, longitude: input.near.longitude }
+      : await geocodePlace({ place: city });
+
+  const hasCenter = cityCenter.latitude != null && cityCenter.longitude != null;
+  const cLat = cityCenter.latitude as number;
+  const cLon = cityCenter.longitude as number;
+
+  const toRadians = (v: number) => (v * Math.PI) / 180;
   const haversineKm = (aLat: number, aLon: number, bLat: number, bLon: number) => {
-    const earthRadiusKm = 6371;
+    const R = 6371;
     const dLat = toRadians(bLat - aLat);
     const dLon = toRadians(bLon - aLon);
-    const lat1 = toRadians(aLat);
-    const lat2 = toRadians(bLat);
-    const h =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    return 2 * earthRadiusKm * Math.asin(Math.sqrt(h));
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(toRadians(aLat)) * Math.cos(toRadians(bLat)) * Math.sin(dLon / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(a));
   };
 
-  const candidates: Array<LocationCandidate & { distanceKm: number | null }> = [];
+  // Build Nominatim viewbox string: left,top,right,bottom = minLon,maxLat,maxLon,minLat
+  function buildViewbox(lat: number, lon: number, radiusKm: number): string {
+    const dLat = radiusKm / 111;
+    const dLon = radiusKm / (111 * Math.cos(toRadians(lat)));
+    return `${lon - dLon},${lat + dLat},${lon + dLon},${lat - dLat}`;
+  }
 
-  for (const entry of queries) {
-    const query = `${entry.query}, ${city}`;
-    const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=4&q=${encodeURIComponent(query)}`;
+  type RawCandidate = LocationCandidate & { distanceKm: number | null };
+  const collected: RawCandidate[] = [];
+  const seenKeys = new Set<string>();
+  // Track which query types have already found at least one result so we don't
+  // re-run them at a wider radius — only expand the ones that came up empty.
+  const satisfiedQueries = new Set<string>();
 
-    try {
-      const response = await fetch(url, {
-        headers: {
-          Accept: 'application/json',
-          'User-Agent': 'ShutterPlanAI/1.0',
-        },
-        cache: 'no-store',
-      });
+  // Cascade: 25 km → 50 km → 80 km.
+  // For a big city, the first tier finds everything. For a small town, later
+  // tiers reach into the surrounding metro area.
+  const radiusTiers = [25, 50, 80];
+  const minTarget = Math.max(3, Math.ceil(limit / 2));
 
-      if (!response.ok) continue;
+  for (const radiusKm of radiusTiers) {
+    if (collected.length >= minTarget) break;
 
-      const results = (await response.json()) as Array<{
-        lat?: string;
-        lon?: string;
-        display_name?: string;
-      }>;
+    const viewbox = hasCenter ? buildViewbox(cLat, cLon, radiusKm) : null;
 
-      for (const result of results) {
-        const latitude = Number(result.lat);
-        const longitude = Number(result.lon);
-        const displayName = result.display_name ?? '';
-        if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) continue;
+    for (const entry of queries) {
+      // Skip queries that already found candidates — no need to widen for them.
+      if (satisfiedQueries.has(entry.query)) continue;
 
-        const lower = normalizeText(displayName);
-        if (blocked.some(term => lower.includes(term))) continue;
+      // Geographic bounding-box search: finds anything of this type within the
+      // box regardless of which city it officially belongs to. Falls back to
+      // a plain text query when we have no coordinates.
+      const url = viewbox
+        ? `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&viewbox=${viewbox}&bounded=1&q=${encodeURIComponent(entry.query)}`
+        : `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&q=${encodeURIComponent(`${entry.query}, ${city}`)}`;
 
-        let distanceKm: number | null = null;
-        if (cityGeo.latitude != null && cityGeo.longitude != null) {
-          distanceKm = haversineKm(cityGeo.latitude, cityGeo.longitude, latitude, longitude);
-          const maxDistanceKm = input.near?.maxDistanceKm ?? 65;
-          if (distanceKm > maxDistanceKm) continue;
-        }
-
-        const candidateName = displayName.split(',')[0]?.trim() || displayName;
-        candidates.push({
-          name: candidateName,
-          latitude,
-          longitude,
-          displayName,
-          sourceQuery: query,
-          relevanceScore: entry.relevanceScore,
-          distanceKm,
+      try {
+        const response = await fetch(url, {
+          headers: { Accept: 'application/json', 'User-Agent': 'ShutterPlanAI/1.0' },
+          cache: 'no-store',
         });
+
+        if (response.ok) {
+          const results = (await response.json()) as Array<{ lat?: string; lon?: string; display_name?: string }>;
+          let foundThisQuery = 0;
+
+          for (const result of results) {
+            const lat = Number(result.lat);
+            const lon = Number(result.lon);
+            const displayName = result.display_name ?? '';
+            if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+
+            const lower = normalizeText(displayName);
+            if (blocked.some(t => lower.includes(t))) continue;
+
+            const key = normalizeText(displayName || `${lat.toFixed(4)},${lon.toFixed(4)}`);
+            if (seenKeys.has(key)) continue;
+            seenKeys.add(key);
+
+            let distanceKm: number | null = null;
+            if (hasCenter) {
+              distanceKm = haversineKm(cLat, cLon, lat, lon);
+              if (distanceKm > radiusKm) continue;
+            }
+
+            collected.push({
+              name: displayName.split(',')[0]?.trim() || displayName,
+              latitude: lat,
+              longitude: lon,
+              displayName,
+              sourceQuery: entry.query,
+              relevanceScore: entry.relevanceScore,
+              distanceKm,
+            });
+            foundThisQuery++;
+          }
+
+          if (foundThisQuery > 0) satisfiedQueries.add(entry.query);
+        }
+      } catch {
+        // ignore and continue to next query
       }
 
-      if (candidates.length >= limit * 2) break;
-    } catch {
-      // ignore and continue to next query
+      await sleep(200); // Nominatim rate limit: ≤ 1 req/sec
+      if (collected.length >= limit * 2) break;
     }
   }
 
-  const seen = new Set<string>();
-  return candidates
+  return collected
     .sort((a, b) => {
       if (a.relevanceScore !== b.relevanceScore) return b.relevanceScore - a.relevanceScore;
       if (a.distanceKm == null && b.distanceKm == null) return 0;
       if (a.distanceKm == null) return 1;
       if (b.distanceKm == null) return -1;
       return a.distanceKm - b.distanceKm;
-    })
-    .filter(candidate => {
-      const key = normalizeText(candidate.displayName || candidate.name);
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
     })
     .slice(0, limit);
 }

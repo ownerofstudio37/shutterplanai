@@ -109,7 +109,7 @@ export async function POST(request: NextRequest) {
         ? {
             latitude: cityFallbackGeo.latitude,
             longitude: cityFallbackGeo.longitude,
-            maxDistanceKm: 20,
+            maxDistanceKm: 80, // match the widest cascade tier in searchLocationCandidates
           }
         : undefined;
 
@@ -117,9 +117,10 @@ export async function POST(request: NextRequest) {
       ? await searchLocationCandidates({
           city,
           sessionCategory,
-          near: nearCity,
+          // No radius cap here — the cascade inside searchLocationCandidates
+          // starts at 25 km and expands to 50/80 km for small cities.
           bannedTerms,
-          limit: 6,
+          limit: 8,
         })
       : [];
 
