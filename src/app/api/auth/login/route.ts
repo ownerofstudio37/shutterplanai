@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createMockToken, findUserByEmail, toPublicUser } from '@/lib/auth/mockStore';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { ensureUserProfile, toAppUser } from '@/lib/auth/supabaseUser';
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,22 +13,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const user = findUserByEmail(email);
-    if (!user || user.password !== password) {
+    const supabase = createSupabaseServerClient();
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
+    if (error || !data.user || !data.session) {
       return NextResponse.json(
         { success: false, error: 'Invalid credentials' },
         { status: 401 }
       );
     }
 
-    const token = createMockToken(user.email);
+    const profile = await ensureUserProfile(data.user);
+    const appUser = toAppUser(data.user, profile);
 
     return NextResponse.json(
       {
         success: true,
         data: {
-          user: toPublicUser(user),
-          token,
+          user: appUser,
+          token: data.session.access_token,
         },
       },
       { status: 200 }
