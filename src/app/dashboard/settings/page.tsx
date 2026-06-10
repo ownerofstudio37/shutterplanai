@@ -48,6 +48,7 @@ export default function SettingsPage() {
   const [profile, setProfile] = useState<BusinessProfile>(EMPTY_PROFILE);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isAnalyzingWebsite, setIsAnalyzingWebsite] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -112,6 +113,39 @@ export default function SettingsPage() {
       setError('Failed to save profile');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const analyzeWebsite = async () => {
+    setIsAnalyzingWebsite(true);
+    setError(null);
+    setMessage(null);
+
+    try {
+      const response = await fetch('/api/account/business-profile/analyze-website', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeader(),
+        },
+        body: JSON.stringify({ websiteUrl: profile.websiteUrl }),
+      });
+
+      const result = await response.json();
+      if (!result.success) {
+        setError(result.error ?? 'Failed to analyze website');
+        return;
+      }
+
+      setProfile({
+        ...EMPTY_PROFILE,
+        ...(result.data ?? {}),
+      });
+      setMessage(result.message ?? 'Website analyzed and profile updated.');
+    } catch {
+      setError('Failed to analyze website');
+    } finally {
+      setIsAnalyzingWebsite(false);
     }
   };
 
@@ -246,7 +280,15 @@ export default function SettingsPage() {
           ) : null}
         </div>
 
-        <div className="mt-5">
+        <div className="mt-5 flex flex-wrap gap-3">
+          <Button
+            variant="secondary"
+            onClick={analyzeWebsite}
+            isLoading={isAnalyzingWebsite}
+            disabled={isLoading || isSaving || isAnalyzingWebsite}
+          >
+            Analyze website
+          </Button>
           <Button onClick={saveProfile} isLoading={isSaving} disabled={isLoading || isSaving}>
             Save business profile
           </Button>
