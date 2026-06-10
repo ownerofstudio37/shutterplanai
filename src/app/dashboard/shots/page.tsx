@@ -20,6 +20,7 @@ interface ShotItem {
   location?: string;
   planned_time?: string | null;
   notes?: string;
+  image_url?: string | null;
   status: 'planned' | 'taken' | 'approved' | 'rejected';
 }
 
@@ -54,8 +55,10 @@ export default function ShotsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editingShot, setEditingShot] = useState<ShotItem | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [editForm, setEditForm] = useState<ShotFormState>({
     title: '',
     description: '',
@@ -174,6 +177,7 @@ export default function ShotsPage() {
 
   const openEditModal = (shot: ShotItem) => {
     setEditingShot(shot);
+    setSelectedFile(null);
     setEditForm({
       title: shot.title,
       description: shot.description,
@@ -219,6 +223,42 @@ export default function ShotsPage() {
       setError('Failed to update shot');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const uploadShotImage = async () => {
+    if (!editingShot || !selectedFile) {
+      setError('Choose an image file first');
+      return;
+    }
+
+    setIsUploading(true);
+    setError(null);
+
+    try {
+      const formData = new FormData();
+      formData.append('shotId', editingShot.id);
+      formData.append('file', selectedFile);
+
+      const response = await fetch('/api/uploads/shot-image', {
+        method: 'POST',
+        headers: getAuthHeader(),
+        body: formData,
+      });
+
+      const result = await response.json();
+      if (!result.success) {
+        setError(result.error ?? 'Failed to upload image');
+        return;
+      }
+
+      setSelectedFile(null);
+      setEditingShot(prev => (prev ? { ...prev, image_url: result.data?.image_url } : prev));
+      await loadShots();
+    } catch {
+      setError('Failed to upload image');
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -351,6 +391,13 @@ export default function ShotsPage() {
               <div key={shot.id} className="rounded-lg border border-gray-200 p-4">
                 <div className="flex items-start justify-between gap-4">
                   <div>
+                    {shot.image_url && (
+                      <img
+                        src={shot.image_url}
+                        alt={shot.title}
+                        className="mb-3 h-32 w-full max-w-sm rounded-lg object-cover"
+                      />
+                    )}
                     <h4 className="font-semibold text-gray-900">{shot.title}</h4>
                     <p className="mt-1 text-sm text-gray-600">{shot.description || 'No description'}</p>
                     <p className="mt-2 text-xs text-gray-500">
@@ -433,6 +480,26 @@ export default function ShotsPage() {
             <option value="approved">Approved</option>
             <option value="rejected">Rejected</option>
           </select>
+          <div className="space-y-2 rounded-lg border border-dashed border-gray-300 p-4">
+            <label className="block text-sm font-medium text-gray-700">Shot image</label>
+            {editingShot?.image_url && (
+              <img
+                src={editingShot.image_url}
+                alt={editingShot.title}
+                className="h-40 w-full rounded-lg object-cover"
+              />
+            )}
+            <input
+              type="file"
+              accept="image/*"
+              aria-label="Upload shot image"
+              onChange={event => setSelectedFile(event.target.files?.[0] ?? null)}
+              className="w-full rounded-lg border border-gray-300 px-4 py-2"
+            />
+            <Button type="button" variant="secondary" isLoading={isUploading} onClick={() => void uploadShotImage()}>
+              {isUploading ? 'Uploading...' : 'Upload Image'}
+            </Button>
+          </div>
         </div>
       </Modal>
     </div>
