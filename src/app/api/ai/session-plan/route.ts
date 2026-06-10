@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/serverAuth';
-import { generateSessionPlan, SessionPlan } from '@/lib/ai/gemini';
+import { generateSessionPlan, SessionPlan, SessionPlanLocation } from '@/lib/ai/gemini';
 import { geocodeLocations, geocodePlace, searchLocationCandidates } from '@/lib/geo/geocode';
 
 function normalizeLocationName(value: string) {
@@ -43,6 +43,44 @@ function isGenericLocationLabel(value: string) {
   return /(open green space|urban edge|district|waterfront|park \/ open green space|city center)/i.test(value);
 }
 
+function buildLocationSuggestionFromCandidate(
+  candidate: { name: string; displayName?: string | null; latitude?: number | null; longitude?: number | null },
+  sessionCategory: 'family' | 'engagement' | 'event' | 'portrait'
+): SessionPlanLocation {
+  const display = candidate.displayName?.split(',').slice(0, 2).join(',').trim() || candidate.name;
+  const isFamily = sessionCategory === 'family';
+  const isEngagement = sessionCategory === 'engagement';
+
+  return {
+    name: display,
+    displayName: candidate.displayName || candidate.name,
+    googleMapsUrl: getGoogleMapsUrl({
+      latitude: candidate.latitude,
+      longitude: candidate.longitude,
+      query: candidate.displayName || candidate.name,
+    }),
+    latitude: candidate.latitude ?? null,
+    longitude: candidate.longitude ?? null,
+    whyItWorks: isFamily
+      ? 'Easy parking, low walking burden, and flexible background options for a family session.'
+      : isEngagement
+        ? 'Strong scenic variety and comfortable pacing for an engagement session.'
+        : 'Photogenic setting with good composition potential and minimal transition time.',
+    microLocations: isFamily
+      ? ['Open shade area', 'Tree-lined path', 'Quiet backdrop']
+      : isEngagement
+        ? ['Scenic overlook', 'Clean backdrop wall', 'Pathway curve']
+        : ['Leading line area', 'Texture wall', 'Open background'],
+    logistics: {
+      parking: 'Confirm parking closest to the main entrance before arrival.',
+      restroom: 'Check nearby public restroom access before the session.',
+      walkingDistance: candidate.latitude != null && candidate.longitude != null
+        ? 'Keep transitions short and under 5 minutes when possible.'
+        : 'Keep transitions short and check access in advance.',
+    },
+  };
+}
+
 export async function POST(request: NextRequest) {
   try {
     const auth = await requireAuth(request);
@@ -63,9 +101,7 @@ export async function POST(request: NextRequest) {
     }
 
     const city = typeof payload.city === 'string' ? payload.city : undefined;
-    const bannedTerms = isFamilySession
-      ? ['high school', 'jail', 'prison', 'cemetery', 'hospital', 'industrial', 'warehouse']
-      : [];
+    const bannedTerms = ['high school', 'jail', 'prison', 'cemetery', 'hospital', 'industrial', 'warehouse'];
 
     const cityFallbackGeo = city ? await geocodePlace({ place: city }) : { latitude: null, longitude: null };
     const nearCity =
@@ -73,7 +109,7 @@ export async function POST(request: NextRequest) {
         ? {
             latitude: cityFallbackGeo.latitude,
             longitude: cityFallbackGeo.longitude,
-            maxDistanceKm: 45,
+            maxDistanceKm: 20,
           }
         : undefined;
 
@@ -174,12 +210,16 @@ export async function POST(request: NextRequest) {
       };
     });
 
+    const groundedLocations = locationCandidates.length > 0
+      ? locationCandidates.slice(0, 6).map(candidate => buildLocationSuggestionFromCandidate(candidate, sessionCategory))
+      : finalizedLocations;
+
     const candidateNames = new Set(
-      locationCandidates.map(candidate => normalizeLocationName(candidate.displayName || candidate.name))
+      groundedLocations.map(candidate => normalizeLocationName(candidate.displayName || candidate.name))
     );
 
     const locationByName = new Map(
-      finalizedLocations.flatMap(location => {
+      groundedLocations.flatMap(location => {
         const aliases = [location.name, location.displayName, simplifyLocationName(location.name)].filter(Boolean) as string[];
         return aliases.map(alias => [normalizeLocationName(alias), location] as const);
       })
@@ -190,13 +230,13 @@ export async function POST(request: NextRequest) {
       const exactMatch = locationByName.get(shotLocation);
       const fuzzyMatch =
         exactMatch ??
-        finalizedLocations.find(location => {
+        groundedLocations.find(location => {
           const normalized = normalizeLocationName(location.name);
           return normalized.includes(shotLocation) || shotLocation.includes(normalized);
         });
 
       const match = fuzzyMatch ?? null;
-      const fallbackLocation = finalizedLocations[0]?.name || city || shot.location || 'Primary location';
+      const fallbackLocation = groundedLocations[0]?.name || city || shot.location || 'Primary location';
       const needsReplacement = !shotLocation || isGenericLocationLabel(shot.location ?? '') || (!match && candidateNames.size > 0);
 
       return {
@@ -213,7 +253,7 @@ export async function POST(request: NextRequest) {
         success: true,
         data: {
           ...plan,
-          locationSuggestions: finalizedLocations,
+          locationSuggestions: groundedLocations,
           shotList: enrichedShotList,
         },
       },

@@ -25,6 +25,10 @@ export interface SessionPlanLocation {
   name: string;
   whyItWorks: string;
   microLocations: string[];
+  displayName?: string;
+  googleMapsUrl?: string;
+  latitude?: number | null;
+  longitude?: number | null;
   logistics: {
     parking: string;
     restroom: string;
@@ -946,7 +950,7 @@ Creative pass instructions:
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: `${prompt}${hardDataPrompt}${qualityGuardrails}` }] }],
-          generationConfig: { temperature: 0.7, responseMimeType: 'application/json' },
+          generationConfig: { temperature: 0.25, topP: 0.8, responseMimeType: 'application/json' },
         }),
       }
     );
