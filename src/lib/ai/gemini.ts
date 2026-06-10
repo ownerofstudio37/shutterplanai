@@ -73,6 +73,76 @@ export interface SessionPlanRefinement {
   updatedContingencyPlans: string[];
 }
 
+type SessionCategory = 'family' | 'engagement' | 'portrait' | 'event';
+
+function getSessionCategory(shootType: string): SessionCategory {
+  const value = shootType.toLowerCase();
+  if (/family|newborn|maternity|kids|children/.test(value)) return 'family';
+  if (/engagement|proposal|couple|anniversary/.test(value)) return 'engagement';
+  if (/event|wedding|party|corporate/.test(value)) return 'event';
+  return 'portrait';
+}
+
+function parseDurationMinutes(duration?: string): number {
+  if (!duration) return 90;
+  const value = duration.toLowerCase().trim();
+
+  const hourMatch = value.match(/(\d+(?:\.\d+)?)\s*(h|hr|hrs|hour|hours)/);
+  const minuteMatch = value.match(/(\d+)\s*(m|min|mins|minute|minutes)/);
+
+  const hours = hourMatch ? Number(hourMatch[1]) : 0;
+  const minutes = minuteMatch ? Number(minuteMatch[1]) : 0;
+
+  const combined = Math.round(hours * 60 + minutes);
+  if (combined > 0) return Math.max(20, Math.min(240, combined));
+
+  const numericOnly = Number(value.replace(/[^0-9]/g, ''));
+  if (Number.isFinite(numericOnly) && numericOnly > 0) {
+    return Math.max(20, Math.min(240, numericOnly));
+  }
+
+  return 90;
+}
+
+function getShotCountTarget(durationMinutes: number) {
+  if (durationMinutes <= 35) return { min: 5, max: 8 };
+  if (durationMinutes <= 60) return { min: 7, max: 11 };
+  if (durationMinutes <= 90) return { min: 9, max: 14 };
+  return { min: 12, max: 18 };
+}
+
+function buildTimelineForDuration(durationMinutes: number): SessionPlanTimelineItem[] {
+  if (durationMinutes <= 35) {
+    return [
+      { timeBlock: 'Arrival + Fast Setup (0-5 min)', focus: 'Quick alignment', notes: 'Confirm must-have shots and pick first micro-spot immediately.' },
+      { timeBlock: `Core Portraits (5-${Math.max(15, durationMinutes - 12)} min)`, focus: 'Priority hero frames', notes: 'Capture strongest compositions first with minimal transitions.' },
+      { timeBlock: `Movement + Details (${Math.max(15, durationMinutes - 12)}-${durationMinutes} min)`, focus: 'Candid + ring/detail finishers', notes: 'End with quick candid movement and close-up detail safety frames.' },
+    ];
+  }
+
+  if (durationMinutes <= 60) {
+    const block1End = Math.round(durationMinutes * 0.2);
+    const block2End = Math.round(durationMinutes * 0.55);
+    const block3End = Math.round(durationMinutes * 0.85);
+    return [
+      { timeBlock: `Arrival + Warmup (0-${block1End} min)`, focus: 'Comfort + setup', notes: 'Confirm shot order and settle into natural pacing.' },
+      { timeBlock: `Core Portraits (${block1End}-${block2End} min)`, focus: 'Hero compositions', notes: 'Prioritize must-have frames while energy is highest.' },
+      { timeBlock: `Variety + Movement (${block2End}-${block3End} min)`, focus: 'Lifestyle variety', notes: 'Shift to candid prompts and perspective changes.' },
+      { timeBlock: `Closing Signatures (${block3End}-${durationMinutes} min)`, focus: 'Final impact frames', notes: 'Close with one safe frame and one creative frame.' },
+    ];
+  }
+
+  const block1End = Math.round(durationMinutes * 0.18);
+  const block2End = Math.round(durationMinutes * 0.45);
+  const block3End = Math.round(durationMinutes * 0.75);
+  return [
+    { timeBlock: `Arrival + Warmup (0-${block1End} min)`, focus: 'Introduce flow and comfort', notes: 'Quick orientation, confirm wardrobe, and align on key outcomes.' },
+    { timeBlock: `Core Portraits (${block1End}-${block2End} min)`, focus: 'Reliable hero images', notes: 'Capture must-have frames first while energy is high.' },
+    { timeBlock: `Variety + Movement (${block2End}-${block3End} min)`, focus: 'Lifestyle and candid variety', notes: 'Use prompts and transitions between micro-locations.' },
+    { timeBlock: `Final Highlights (${block3End}-${durationMinutes} min)`, focus: 'Signature closing shots', notes: 'Finish with 1-2 bold compositions and backup safety frame.' },
+  ];
+}
+
 function getGeminiConfig() {
   const apiKey = process.env.GEMINI_API_KEY;
   const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
@@ -181,7 +251,10 @@ function getFallbackSessionPlan(input: {
   constraints?: string;
 }): SessionPlan {
   const cityLabel = input.city || 'your area';
-  const isFamilySession = /family|newborn|maternity|kids|children/i.test(input.shootType);
+  const sessionCategory = getSessionCategory(input.shootType);
+  const durationMinutes = parseDurationMinutes(input.duration);
+  const shotCountTarget = getShotCountTarget(durationMinutes);
+  const isFamilySession = sessionCategory === 'family';
 
   const fallbackLocations = isFamilySession
     ? [
@@ -249,13 +322,16 @@ function getFallbackSessionPlan(input: {
         },
       ];
 
-  const fallbackShots: SessionPlanShot[] = [
+  const baseShots: SessionPlanShot[] = [
     {
-      title: 'Hero group portrait',
+      title: sessionCategory === 'engagement' ? 'Hero couple portrait' : 'Hero group portrait',
       description: 'Balanced, polished anchor frame for the full session.',
       location: fallbackLocations[0].name,
       microSpot: fallbackLocations[0].microLocations[0],
-      poseSuggestion: 'Triangular grouping with slight stagger and connected hands.',
+      poseSuggestion:
+        sessionCategory === 'engagement'
+          ? 'Close stance with natural touch points and relaxed eye lines.'
+          : 'Triangular grouping with slight stagger and connected hands.',
       compositionSuggestion: 'Eye-level, centered with negative space for print crops.',
       timingHint: 'Start of session',
       notes: 'Capture this first as a guaranteed keeper.',
@@ -281,11 +357,14 @@ function getFallbackSessionPlan(input: {
       notes: 'Shoot bursts across 10-15 second prompts.',
     },
     {
-      title: 'Sibling / child connection',
-      description: 'Playful interaction frame with layered depth.',
+      title: sessionCategory === 'family' ? 'Sibling / child connection' : 'Movement portrait variation',
+      description: sessionCategory === 'family' ? 'Playful interaction frame with layered depth.' : 'Candid interaction frame with layered depth.',
       location: fallbackLocations[1].name,
       microSpot: fallbackLocations[1].microLocations[0],
-      poseSuggestion: 'Prompt a short game or shared joke to trigger natural expression.',
+      poseSuggestion:
+        sessionCategory === 'family'
+          ? 'Prompt a short game or shared joke to trigger natural expression.'
+          : 'Prompt movement and conversation to generate authentic expressions.',
       compositionSuggestion: 'Horizontal framing with environmental context.',
       timingHint: 'Mid-session',
       notes: 'Use continuous AF for movement.',
@@ -298,7 +377,7 @@ function getFallbackSessionPlan(input: {
       poseSuggestion: 'Layered seated positions with subtle hand connection.',
       compositionSuggestion: 'Symmetry-forward framing with slight angle break.',
       timingHint: 'Mid-session reset',
-      notes: 'Great when kids need a brief pause.',
+      notes: sessionCategory === 'family' ? 'Great when kids need a brief pause.' : 'Useful for resetting posture and breathing between movement sets.',
     },
     {
       title: 'Individual portrait A',
@@ -352,15 +431,12 @@ function getFallbackSessionPlan(input: {
     },
   ];
 
+  const fallbackShots = baseShots.slice(0, shotCountTarget.max);
+
   return {
     projectTitle: `${input.shootType} Session Plan`,
     creativeDirection: `A ${input.mood || 'balanced'} visual approach for ${input.subjectDetails || 'the subject'} with practical pacing and flexible backup options.`,
-    timeline: [
-      { timeBlock: 'Arrival + Warmup (0-15 min)', focus: 'Introduce flow and comfort', notes: `Quick orientation, check wardrobe, and confirm pace for a ${input.duration || 'standard'} session.` },
-      { timeBlock: 'Core Portraits (15-40 min)', focus: 'Reliable hero images', notes: 'Capture must-have frames first while energy is high.' },
-      { timeBlock: 'Variety + Movement (40-70 min)', focus: 'Lifestyle and candid variety', notes: 'Use prompts and transitions between micro-locations.' },
-      { timeBlock: 'Final Highlights (70-90 min)', focus: 'Signature closing shots', notes: 'Finish with 1-2 bold compositions and backup safety frame.' },
-    ],
+    timeline: buildTimelineForDuration(durationMinutes),
     locationSuggestions: fallbackLocations,
     shotList: fallbackShots,
     clientPrepChecklist: [
@@ -371,7 +447,9 @@ function getFallbackSessionPlan(input: {
     ],
     contingencyPlans: [
       'If weather shifts, move to covered walkways or nearby indoor public spaces.',
-      'If kids lose focus, switch to movement prompts and shorter shot cycles.',
+      ...(sessionCategory === 'family'
+        ? ['If kids lose focus, switch to movement prompts and shorter shot cycles.']
+        : ['If energy dips, rotate to shorter prompt cycles and tighter compositions.']),
       'If location is crowded, prioritize tighter compositions and alternate micro-spots.',
     ],
   };
@@ -454,6 +532,9 @@ export async function generateSessionPlan(input: {
   constraints?: string;
 }) {
   const { apiKey, model } = getGeminiConfig();
+  const durationMinutes = parseDurationMinutes(input.duration);
+  const shotCountTarget = getShotCountTarget(durationMinutes);
+  const sessionCategory = getSessionCategory(input.shootType);
   const prompt = `You are an expert photography pre-production planner.
 
 Build a complete session plan for:
@@ -487,10 +568,10 @@ Return JSON only with schema:
 
 Quality requirements:
 - Return 4-6 locationSuggestions.
-- Return 10-16 shotList items.
+- Return ${shotCountTarget.min}-${shotCountTarget.max} shotList items.
 - Timeline should respect session duration ${input.duration || '(if unspecified assume ~90 minutes)'}.
 - No generic placeholders (e.g., "Urban Edge", "Open Green Space").
-- Locations must be family-safe if shoot type implies family/newborn/kids.
+- ${sessionCategory === 'family' ? 'Locations must be family-safe and kid-friendly.' : 'Do not include child/sibling-specific shots unless user explicitly mentioned kids.'}
 - Every shot must reference one of the listed locationSuggestions.`;
 
   try {
@@ -516,18 +597,28 @@ Quality requirements:
     const normalizedPlan = {
       projectTitle: parsed.projectTitle?.trim() || `${input.shootType} Session Plan`,
       creativeDirection: parsed.creativeDirection?.trim() || '',
-      timeline: Array.isArray(parsed.timeline) ? parsed.timeline.slice(0, 8) : [],
+      timeline: buildTimelineForDuration(durationMinutes),
       locationSuggestions: Array.isArray(parsed.locationSuggestions) ? parsed.locationSuggestions.slice(0, 6) : [],
-      shotList: Array.isArray(parsed.shotList) ? parsed.shotList.slice(0, 20) : [],
+      shotList: Array.isArray(parsed.shotList) ? parsed.shotList.slice(0, shotCountTarget.max) : [],
       clientPrepChecklist: Array.isArray(parsed.clientPrepChecklist) ? parsed.clientPrepChecklist.slice(0, 12) : [],
       contingencyPlans: Array.isArray(parsed.contingencyPlans) ? parsed.contingencyPlans.slice(0, 12) : [],
     };
 
-    if (normalizedPlan.locationSuggestions.length < 3 || normalizedPlan.shotList.length < 8) {
+    const disallowedShotPattern = sessionCategory === 'family' ? null : /\b(kid|kids|child|children|sibling|toddler|newborn|baby)\b/i;
+    const filteredShotList = disallowedShotPattern
+      ? normalizedPlan.shotList.filter(shot => !disallowedShotPattern.test(`${shot.title} ${shot.description} ${shot.notes}`))
+      : normalizedPlan.shotList;
+
+    const repairedPlan = {
+      ...normalizedPlan,
+      shotList: filteredShotList,
+    };
+
+    if (repairedPlan.locationSuggestions.length < 3 || repairedPlan.shotList.length < shotCountTarget.min) {
       throw new Error('Plan quality below threshold');
     }
 
-    return normalizedPlan;
+    return repairedPlan;
   } catch {
     return getFallbackSessionPlan(input);
   }
