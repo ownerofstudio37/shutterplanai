@@ -166,10 +166,10 @@ export default function LocationsPage() {
         </div>
       </Card>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-6 lg:grid-cols-4">
         {/* Map */}
-        <div className="lg:col-span-2">
-          <Card>
+        <div className="lg:col-span-3">
+          <Card className="h-full">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Location Map</h3>
             {filteredShots.length === 0 ? (
               <div className="flex items-center justify-center h-96 bg-gray-50 rounded-lg">
@@ -187,8 +187,8 @@ export default function LocationsPage() {
         </div>
 
         {/* Shot Details Sidebar */}
-        <div>
-          <Card>
+        <div className="lg:col-span-1">
+          <Card className="h-full sticky top-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Shot Details</h3>
 
             {selectedShot ? (
