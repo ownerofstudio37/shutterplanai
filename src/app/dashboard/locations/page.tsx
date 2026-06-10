@@ -166,130 +166,125 @@ export default function LocationsPage() {
         </div>
       </Card>
 
-      <div className="grid gap-6 lg:grid-cols-5 lg:grid-rows-1">
-        {/* Map - Takes up 3/5 of space */}
-        <div className="lg:col-span-3">
-          <Card className="flex flex-col h-full">
-            <div className="shrink-0">
-              <h3 className="text-lg font-semibold text-gray-900">Location Map</h3>
+      {/* Map Section */}
+      <Card>
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Location Map</h3>
+        {filteredShots.length === 0 ? (
+          <div className="flex items-center justify-center h-96 bg-gray-50 rounded-lg">
+            <div className="text-center">
+              <p className="text-gray-600 font-medium mb-2">No mapped locations yet</p>
+              <p className="text-sm text-gray-500">
+                Add coordinates to your shots in the Shots dashboard to see them on the map
+              </p>
             </div>
-            <div className="flex-1 min-h-0">
-              {filteredShots.length === 0 ? (
-                <div className="flex items-center justify-center h-full bg-gray-50 rounded-lg">
-                  <div className="text-center">
-                    <p className="text-gray-600 font-medium mb-2">No mapped locations yet</p>
-                    <p className="text-sm text-gray-500">
-                      Add coordinates to your shots in the Shots dashboard to see them on the map
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div className="h-full w-full">
-                  <MapWithNoSSR shots={filteredShots} onSelectShot={setSelectedShot} />
+          </div>
+        ) : (
+            <div className="map-container">
+            <MapWithNoSSR shots={filteredShots} onSelectShot={setSelectedShot} />
+          </div>
+        )}
+      </Card>
+
+      {/* Details Section */}
+      <div className="grid gap-6 md:grid-cols-2">
+        {/* Shot Details */}
+        <Card>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Shot Details</h3>
+
+          {selectedShot ? (
+            <div className="space-y-4">
+              <div>
+                <h4 className="font-semibold text-gray-900">{selectedShot.title}</h4>
+                <p className="text-sm text-gray-600 mt-1">{selectedShot.project_title}</p>
+              </div>
+
+              <div>
+                <p className="text-xs font-medium text-gray-700 mb-1">Main Location</p>
+                <p className="text-sm text-gray-900">{selectedShot.location || 'Not specified'}</p>
+              </div>
+
+              {selectedShot.micro_spot_name && (
+                <div>
+                  <p className="text-xs font-medium text-gray-700 mb-1">🎯 Micro-Spot</p>
+                  <p className="text-sm text-gray-900">{selectedShot.micro_spot_name}</p>
                 </div>
               )}
+
+              {selectedShot.background_description && (
+                <div>
+                  <p className="text-xs font-medium text-gray-700 mb-1">📸 Background</p>
+                  <p className="text-sm text-gray-900">{selectedShot.background_description}</p>
+                </div>
+              )}
+
+              {selectedShot.parking_notes && (
+                <div>
+                  <p className="text-xs font-medium text-gray-700 mb-1">🚗 Parking</p>
+                  <p className="text-sm text-gray-900">{selectedShot.parking_notes}</p>
+                </div>
+              )}
+
+              {selectedShot.walking_distance && (
+                <div>
+                  <p className="text-xs font-medium text-gray-700 mb-1">🚶 Walking Distance</p>
+                  <p className="text-sm text-gray-900">{selectedShot.walking_distance}</p>
+                </div>
+              )}
+
+              {selectedShot.restroom_location && (
+                <div>
+                  <p className="text-xs font-medium text-gray-700 mb-1">🚻 Restroom</p>
+                  <p className="text-sm text-gray-900">{selectedShot.restroom_location}</p>
+                </div>
+              )}
+
+              {selectedShot.latitude && selectedShot.longitude && (
+                <div className="pt-3 border-t">
+                  <p className="text-xs font-medium text-gray-700 mb-1">Coordinates</p>
+                  <p className="text-xs text-gray-600">
+                    {selectedShot.latitude.toFixed(6)}, {selectedShot.longitude.toFixed(6)}
+                  </p>
+                </div>
+              )}
+
+              <Button
+                type="button"
+                className="w-full"
+                onClick={() => window.open(
+                  `https://maps.google.com/?q=${selectedShot.latitude},${selectedShot.longitude}`,
+                  '_blank'
+                )}
+              >
+                Open in Google Maps
+              </Button>
             </div>
-          </Card>
-        </div>
-
-        {/* Shot Details Sidebar - Takes up 2/5 of space */}
-        <div className="lg:col-span-2 space-y-6">
-          <Card>
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Shot Details</h3>
-
-            {selectedShot ? (
-              <div className="space-y-4">
-                <div>
-                  <h4 className="font-semibold text-gray-900">{selectedShot.title}</h4>
-                  <p className="text-sm text-gray-600 mt-1">{selectedShot.project_title}</p>
-                </div>
-
-                <div>
-                  <p className="text-xs font-medium text-gray-700 mb-1">Main Location</p>
-                  <p className="text-sm text-gray-900">{selectedShot.location || 'Not specified'}</p>
-                </div>
-
-                {selectedShot.micro_spot_name && (
-                  <div>
-                    <p className="text-xs font-medium text-gray-700 mb-1">🎯 Micro-Spot</p>
-                    <p className="text-sm text-gray-900">{selectedShot.micro_spot_name}</p>
-                  </div>
-                )}
-
-                {selectedShot.background_description && (
-                  <div>
-                    <p className="text-xs font-medium text-gray-700 mb-1">📸 Background</p>
-                    <p className="text-sm text-gray-900">{selectedShot.background_description}</p>
-                  </div>
-                )}
-
-                {selectedShot.parking_notes && (
-                  <div>
-                    <p className="text-xs font-medium text-gray-700 mb-1">🚗 Parking</p>
-                    <p className="text-sm text-gray-900">{selectedShot.parking_notes}</p>
-                  </div>
-                )}
-
-                {selectedShot.walking_distance && (
-                  <div>
-                    <p className="text-xs font-medium text-gray-700 mb-1">🚶 Walking Distance</p>
-                    <p className="text-sm text-gray-900">{selectedShot.walking_distance}</p>
-                  </div>
-                )}
-
-                {selectedShot.restroom_location && (
-                  <div>
-                    <p className="text-xs font-medium text-gray-700 mb-1">🚻 Restroom</p>
-                    <p className="text-sm text-gray-900">{selectedShot.restroom_location}</p>
-                  </div>
-                )}
-
-                {selectedShot.latitude && selectedShot.longitude && (
-                  <div className="pt-3 border-t">
-                    <p className="text-xs font-medium text-gray-700 mb-1">Coordinates</p>
-                    <p className="text-xs text-gray-600">
-                      {selectedShot.latitude.toFixed(6)}, {selectedShot.longitude.toFixed(6)}
-                    </p>
-                  </div>
-                )}
-
-                <Button
-                  type="button"
-                  className="w-full"
-                  onClick={() => window.open(
-                    `https://maps.google.com/?q=${selectedShot.latitude},${selectedShot.longitude}`,
-                    '_blank'
-                  )}
-                >
-                  Open in Google Maps
-                </Button>
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <p className="text-gray-500">Click a pin on the map to view details</p>
-              </div>
-            )}
-          </Card>
-
-          {shotsWithoutLocation.length > 0 && (
-            <Card>
-              <h3 className="text-sm font-semibold text-gray-900 mb-3">Unmapped Shots</h3>
-              <div className="space-y-2 max-h-40 overflow-y-auto">
-                {shotsWithoutLocation.map(shot => (
-                  <div
-                    key={shot.id}
-                    className="text-xs p-2 bg-amber-50 border border-amber-200 rounded text-amber-900 hover:bg-amber-100 cursor-pointer transition-colors"
-                  >
-                    {shot.title}
-                  </div>
-                ))}
-              </div>
-              <p className="text-xs text-gray-500 mt-3 pt-3 border-t">
-                Add coordinates in Shots dashboard to map these locations
-              </p>
-            </Card>
+          ) : (
+            <div className="text-center py-8">
+              <p className="text-gray-500">Click a pin on the map to view details</p>
+            </div>
           )}
-        </div>
+        </Card>
+
+        {/* Unmapped Shots */}
+        {shotsWithoutLocation.length > 0 && (
+          <Card>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Unmapped Shots ({shotsWithoutLocation.length})</h3>
+            <div className="space-y-2">
+              {shotsWithoutLocation.map(shot => (
+                <div
+                  key={shot.id}
+                  className="text-sm p-3 bg-amber-50 border border-amber-200 rounded text-amber-900 hover:bg-amber-100 cursor-pointer transition-colors"
+                >
+                  <p className="font-medium">{shot.title}</p>
+                  <p className="text-xs text-amber-700 mt-1">{shot.project_title}</p>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-gray-500 mt-4 pt-4 border-t">
+              💡 Add coordinates in Shots dashboard to map these locations
+            </p>
+          </Card>
+        )}
       </div>
     </div>
   );
