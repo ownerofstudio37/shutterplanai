@@ -47,13 +47,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   return (
     <div className="flex h-screen bg-gray-100">
       {/* Sidebar */}
-      <aside className="w-64 bg-white shadow-lg">
+      <aside className="relative flex w-64 flex-col bg-white shadow-lg">
         <div className="p-6 border-b">
           <h1 className="text-2xl font-bold text-blue-600">ShutterPlan</h1>
           <p className="text-sm text-gray-600 mt-1">Photography Planning</p>
         </div>
 
-        <nav className="p-4 space-y-2">
+        <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
           <Link
             href="/dashboard"
             className="block px-4 py-2 text-gray-700 hover:bg-blue-50 rounded-lg transition-colors"
@@ -98,7 +98,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           </Link>
         </nav>
 
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t bg-gray-50">
+        <div className="p-4 border-t bg-gray-50">
           <div className="mb-4">
             <p className="text-sm font-medium text-gray-900">{user.name}</p>
             <p className="text-xs text-gray-600">{user.email}</p>
