@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { Modal } from '@/components/ui/Modal';
 import { tokenUtils } from '@/lib/auth';
 
 interface ProjectOption {
@@ -17,7 +18,18 @@ interface ShotItem {
   title: string;
   description: string;
   location?: string;
+  planned_time?: string | null;
+  notes?: string;
   status: 'planned' | 'taken' | 'approved' | 'rejected';
+}
+
+interface ShotFormState {
+  title: string;
+  description: string;
+  location: string;
+  plannedTime: string;
+  notes: string;
+  status: ShotItem['status'];
 }
 
 function getAuthHeader() {
@@ -38,7 +50,17 @@ export default function ShotsPage() {
   const [location, setLocation] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editingShot, setEditingShot] = useState<ShotItem | null>(null);
+  const [editForm, setEditForm] = useState<ShotFormState>({
+    title: '',
+    description: '',
+    location: '',
+    plannedTime: '',
+    notes: '',
+    status: 'planned',
+  });
 
   const loadProjects = async () => {
     const response = await fetch('/api/projects', {
@@ -147,6 +169,56 @@ export default function ShotsPage() {
     }
   };
 
+  const openEditModal = (shot: ShotItem) => {
+    setEditingShot(shot);
+    setEditForm({
+      title: shot.title,
+      description: shot.description,
+      location: shot.location ?? '',
+      plannedTime: shot.planned_time?.slice(0, 16) ?? '',
+      notes: shot.notes ?? '',
+      status: shot.status,
+    });
+  };
+
+  const saveShot = async () => {
+    if (!editingShot) return;
+
+    setIsSaving(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/shots/${editingShot.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeader(),
+        },
+        body: JSON.stringify({
+          title: editForm.title,
+          description: editForm.description,
+          location: editForm.location,
+          plannedTime: editForm.plannedTime || null,
+          notes: editForm.notes,
+          status: editForm.status,
+        }),
+      });
+
+      const result = await response.json();
+      if (!result.success) {
+        setError(result.error ?? 'Failed to update shot');
+        return;
+      }
+
+      setEditingShot(null);
+      await loadShots();
+    } catch {
+      setError('Failed to update shot');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Card>
@@ -228,15 +300,83 @@ export default function ShotsPage() {
                       {shot.location ? ` · ${shot.location}` : ''}
                     </p>
                   </div>
-                  <Button variant="danger" size="sm" onClick={() => void deleteShot(shot.id)}>
-                    Delete
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button variant="secondary" size="sm" onClick={() => openEditModal(shot)}>
+                      Edit
+                    </Button>
+                    <Button variant="danger" size="sm" onClick={() => void deleteShot(shot.id)}>
+                      Delete
+                    </Button>
+                  </div>
                 </div>
               </div>
             ))}
           </div>
         )}
       </Card>
+
+      <Modal
+        isOpen={Boolean(editingShot)}
+        onClose={() => setEditingShot(null)}
+        title="Edit Shot"
+        actions={
+          <>
+            <Button variant="ghost" onClick={() => setEditingShot(null)}>
+              Cancel
+            </Button>
+            <Button isLoading={isSaving} onClick={() => void saveShot()}>
+              Save Changes
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <input
+            value={editForm.title}
+            onChange={event => setEditForm(prev => ({ ...prev, title: event.target.value }))}
+            className="w-full rounded-lg border border-gray-300 px-4 py-2"
+            placeholder="Shot title"
+          />
+          <textarea
+            value={editForm.description}
+            onChange={event => setEditForm(prev => ({ ...prev, description: event.target.value }))}
+            className="min-h-24 w-full rounded-lg border border-gray-300 px-4 py-2"
+            placeholder="Shot description"
+          />
+          <input
+            value={editForm.location}
+            onChange={event => setEditForm(prev => ({ ...prev, location: event.target.value }))}
+            className="w-full rounded-lg border border-gray-300 px-4 py-2"
+            placeholder="Location"
+          />
+          <input
+            type="datetime-local"
+            aria-label="Planned shoot time"
+            value={editForm.plannedTime}
+            onChange={event => setEditForm(prev => ({ ...prev, plannedTime: event.target.value }))}
+            className="w-full rounded-lg border border-gray-300 px-4 py-2"
+          />
+          <textarea
+            value={editForm.notes}
+            onChange={event => setEditForm(prev => ({ ...prev, notes: event.target.value }))}
+            className="min-h-24 w-full rounded-lg border border-gray-300 px-4 py-2"
+            placeholder="Shot notes"
+          />
+          <select
+            aria-label="Shot status"
+            value={editForm.status}
+            onChange={event =>
+              setEditForm(prev => ({ ...prev, status: event.target.value as ShotItem['status'] }))
+            }
+            className="w-full rounded-lg border border-gray-300 px-4 py-2"
+          >
+            <option value="planned">Planned</option>
+            <option value="taken">Taken</option>
+            <option value="approved">Approved</option>
+            <option value="rejected">Rejected</option>
+          </select>
+        </div>
+      </Modal>
     </div>
   );
 }
