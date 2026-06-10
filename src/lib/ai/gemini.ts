@@ -81,6 +81,21 @@ export interface SessionPlanRefinement {
 
 type SessionCategory = 'family' | 'engagement' | 'portrait' | 'event';
 
+export interface BusinessContext {
+  businessName?: string;
+  businessType?: string;
+  address?: string;
+  zipCode?: string;
+  baseLocation?: string;
+  websiteUrl?: string;
+  websiteSummary?: string;
+  brandTone?: string;
+  preferredLocationTypes?: string;
+  avoidLocationTypes?: string;
+  poseDirectionStyle?: string;
+  prepGuideNotes?: string;
+}
+
 interface SessionPlanningDataPackage {
   sessionCategory: SessionCategory;
   durationMinutes: number;
@@ -97,6 +112,7 @@ interface SessionPlanningDataPackage {
   contingencyPlans: string[];
   timeline: SessionPlanTimelineItem[];
   hardRules: string[];
+  businessContext?: BusinessContext;
 }
 
 function getSessionCategory(shootType: string): SessionCategory {
@@ -170,6 +186,7 @@ function buildTimelineForDuration(durationMinutes: number): SessionPlanTimelineI
 function buildClientPrepChecklist(input: {
   sessionCategory: SessionCategory;
   durationMinutes: number;
+  businessContext?: BusinessContext;
 }): string[] {
   const common = [
     'Arrive 10 minutes early so the session can start on time.',
@@ -180,38 +197,55 @@ function buildClientPrepChecklist(input: {
   ];
 
   if (input.sessionCategory === 'engagement') {
-    return [
+    const base = [
       ...common,
       'Bring rings cleaned and ready for close-up detail shots.',
       'Keep hands groomed and pockets clear for clean posing.',
       'If changing outfits, bring a compact backup and a place to change.',
-    ].slice(0, 6);
+    ];
+    return [
+      ...(input.businessContext?.prepGuideNotes ? [`Brand prep note: ${input.businessContext.prepGuideNotes}`] : []),
+      ...base,
+    ].slice(0, 7);
   }
 
   if (input.sessionCategory === 'family') {
-    return [
+    const base = [
       ...common,
       'Pack snacks, water, and any comfort items for kids.',
       'Bring wipes, tissues, and a backup outfit for small messes.',
       'Let everyone wear shoes they can walk in comfortably.',
-    ].slice(0, 6);
+    ];
+    return [
+      ...(input.businessContext?.prepGuideNotes ? [`Brand prep note: ${input.businessContext.prepGuideNotes}`] : []),
+      ...base,
+    ].slice(0, 7);
   }
 
   if (input.sessionCategory === 'event') {
-    return [
+    const base = [
       ...common,
       'Send any logos, speakers, or VIP names that need to be captured.',
       'Confirm any venue or permit constraints before arrival.',
       'Bring a shot priority list for key moments and must-have people.',
-    ].slice(0, 6);
+    ];
+    return [
+      ...(input.businessContext?.prepGuideNotes ? [`Brand prep note: ${input.businessContext.prepGuideNotes}`] : []),
+      ...base,
+    ].slice(0, 7);
   }
 
-  return [
+  const base = [
     ...common,
     'Bring outfit options that read cleanly on camera without heavy pattern clashes.',
     'Confirm preferred focal length / framing style if you have one.',
     'Share any accessibility or mobility needs before the session begins.',
-  ].slice(0, 6);
+  ];
+
+  return [
+    ...(input.businessContext?.prepGuideNotes ? [`Brand prep note: ${input.businessContext.prepGuideNotes}`] : []),
+    ...base,
+  ].slice(0, 7);
 }
 
 function buildContingencyPlans(input: { sessionCategory: SessionCategory; durationMinutes: number }): string[] {
@@ -443,6 +477,7 @@ function buildSessionPlanningDataPackage(input: {
   city: string;
   duration?: string;
   locationCandidates?: LocationCandidate[];
+  businessContext?: BusinessContext;
 }) : SessionPlanningDataPackage {
   const sessionCategory = getSessionCategory(input.shootType);
   const durationMinutes = parseDurationMinutes(input.duration);
@@ -464,7 +499,11 @@ function buildSessionPlanningDataPackage(input: {
       relevanceScore: candidate.relevanceScore,
     })),
     requiredShots,
-    clientPrepChecklist: buildClientPrepChecklist({ sessionCategory, durationMinutes }),
+    clientPrepChecklist: buildClientPrepChecklist({
+      sessionCategory,
+      durationMinutes,
+      businessContext: input.businessContext,
+    }),
     contingencyPlans: buildContingencyPlans({ sessionCategory, durationMinutes }),
     timeline: buildTimelineForDuration(durationMinutes),
     hardRules: [
@@ -477,7 +516,11 @@ function buildSessionPlanningDataPackage(input: {
       `Use ${durationMinutes} minutes as the session length target.`,
       `Generate between ${shotCountTarget.min} and ${shotCountTarget.max} shots.`,
       'Use only real location candidates and do not invent locations.',
+      input.businessContext?.avoidLocationTypes
+        ? `Avoid location types: ${input.businessContext.avoidLocationTypes}.`
+        : '',
     ].filter(Boolean),
+    businessContext: input.businessContext,
   };
 }
 
@@ -488,6 +531,7 @@ function buildCreativeDirection(input: {
   durationMinutes: number;
   mustHaveShots?: string;
   constraints?: string;
+  businessContext?: BusinessContext;
 }) {
   const toneMap: Record<SessionCategory, string> = {
     family: 'warm, playful, and low-pressure',
@@ -507,6 +551,9 @@ function buildCreativeDirection(input: {
     input.subjectDetails?.trim(),
     input.mustHaveShots?.trim() ? `Must-haves: ${input.mustHaveShots.trim()}` : '',
     input.constraints?.trim() ? `Constraints: ${input.constraints.trim()}` : '',
+    input.businessContext?.brandTone?.trim() ? `Brand tone: ${input.businessContext.brandTone.trim()}` : '',
+    input.businessContext?.websiteSummary?.trim() ? `Website context: ${input.businessContext.websiteSummary.trim()}` : '',
+    input.businessContext?.poseDirectionStyle?.trim() ? `Pose direction style: ${input.businessContext.poseDirectionStyle.trim()}` : '',
   ].filter(Boolean);
 
   return [
@@ -673,12 +720,14 @@ function buildDeterministicPlan(input: {
   mustHaveShots?: string;
   constraints?: string;
   locationCandidates?: LocationCandidate[];
+  businessContext?: BusinessContext;
 }): SessionPlan {
   const planningData = buildSessionPlanningDataPackage({
     shootType: input.shootType,
     city: input.city,
     duration: input.duration,
     locationCandidates: input.locationCandidates,
+    businessContext: input.businessContext,
   });
 
   const locationSuggestions = buildGroundedLocationSuggestions({
@@ -699,16 +748,27 @@ function buildDeterministicPlan(input: {
   ).map((shot, index) => {
     const location = locationSuggestions[index % locationSuggestions.length];
     const microSpot = location.microLocations[index % location.microLocations.length] || shot.microSpot;
+    const brandNotes: string[] = [];
+    if (planningData.businessContext?.businessName) {
+      brandNotes.push(`Brand: ${planningData.businessContext.businessName}`);
+    }
+    if (planningData.businessContext?.brandTone) {
+      brandNotes.push(`Brand tone: ${planningData.businessContext.brandTone}`);
+    }
+    if (planningData.businessContext?.poseDirectionStyle) {
+      brandNotes.push(`Pose style: ${planningData.businessContext.poseDirectionStyle}`);
+    }
+
     return {
       ...shot,
       location: location.name,
       microSpot,
-      notes: shot.notes || 'Grounded from session planning data.',
+      notes: [shot.notes || 'Grounded from session planning data.', ...brandNotes].filter(Boolean).join(' '),
     };
   });
 
   return {
-    projectTitle: `${input.shootType} Session Plan`,
+    projectTitle: `${input.businessContext?.businessName ? `${input.businessContext.businessName} • ` : ''}${input.shootType} Session Plan`,
     creativeDirection: buildCreativeDirection({
       sessionCategory: planningData.sessionCategory,
       subjectDetails: input.subjectDetails,
@@ -716,6 +776,7 @@ function buildDeterministicPlan(input: {
       durationMinutes: planningData.durationMinutes,
       mustHaveShots: input.mustHaveShots,
       constraints: input.constraints,
+      businessContext: input.businessContext,
     }),
     timeline: planningData.timeline,
     locationSuggestions,
@@ -1113,6 +1174,7 @@ export async function generateSessionPlan(input: {
   mustHaveShots?: string;
   constraints?: string;
   locationCandidates?: LocationCandidate[];
+  businessContext?: BusinessContext;
 }) {
   const plan = buildDeterministicPlan(input);
   return plan;

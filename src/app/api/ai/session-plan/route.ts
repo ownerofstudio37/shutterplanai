@@ -1,7 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/serverAuth';
-import { generateSessionPlan, SessionPlan, SessionPlanLocation } from '@/lib/ai/gemini';
+import { createSupabaseAdminClient } from '@/lib/supabase/server';
+import { BusinessContext, generateSessionPlan, SessionPlan, SessionPlanLocation } from '@/lib/ai/gemini';
 import { geocodeLocations, geocodePlace, searchLocationCandidates } from '@/lib/geo/geocode';
+
+function toTrimmedOrUndefined(value: unknown) {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+async function getBusinessContextForUser(userId: string): Promise<BusinessContext | undefined> {
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin.auth.admin.getUserById(userId);
+  const raw = data?.user?.user_metadata?.businessProfile;
+
+  if (!raw || typeof raw !== 'object') return undefined;
+
+  const profile = raw as Record<string, unknown>;
+  const context: BusinessContext = {
+    businessName: toTrimmedOrUndefined(profile.businessName),
+    businessType: toTrimmedOrUndefined(profile.businessType),
+    address: toTrimmedOrUndefined(profile.address),
+    zipCode: toTrimmedOrUndefined(profile.zipCode),
+    baseLocation: toTrimmedOrUndefined(profile.baseLocation),
+    websiteUrl: toTrimmedOrUndefined(profile.websiteUrl),
+    websiteSummary: toTrimmedOrUndefined(profile.websiteSummary),
+    brandTone: toTrimmedOrUndefined(profile.brandTone),
+    preferredLocationTypes: toTrimmedOrUndefined(profile.preferredLocationTypes),
+    avoidLocationTypes: toTrimmedOrUndefined(profile.avoidLocationTypes),
+    poseDirectionStyle: toTrimmedOrUndefined(profile.poseDirectionStyle),
+    prepGuideNotes: toTrimmedOrUndefined(profile.prepGuideNotes),
+  };
+
+  return Object.values(context).some(Boolean) ? context : undefined;
+}
 
 function normalizeLocationName(value: string) {
   return value
@@ -92,6 +125,7 @@ export async function POST(request: NextRequest) {
     const shootType = typeof payload.shootType === 'string' ? payload.shootType : '';
     const isFamilySession = /family|newborn|maternity|kids|children/i.test(shootType);
     const sessionCategory = getSessionCategory(shootType);
+    const businessContext = await getBusinessContextForUser(auth.userId);
 
     if (!payload?.shootType || typeof payload.shootType !== 'string') {
       return NextResponse.json(
@@ -100,8 +134,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const city = typeof payload.city === 'string' ? payload.city : undefined;
-    const bannedTerms = ['high school', 'jail', 'prison', 'cemetery', 'hospital', 'industrial', 'warehouse'];
+    const cityInput = toTrimmedOrUndefined(payload.city);
+    const city = cityInput || businessContext?.baseLocation || businessContext?.zipCode;
+
+    const dynamicAvoidTerms = (businessContext?.avoidLocationTypes ?? '')
+      .split(',')
+      .map(term => term.trim().toLowerCase())
+      .filter(Boolean)
+      .slice(0, 12);
+
+    const bannedTerms = [
+      'high school',
+      'jail',
+      'prison',
+      'cemetery',
+      'hospital',
+      'industrial',
+      'warehouse',
+      ...dynamicAvoidTerms,
+    ];
 
     const cityFallbackGeo = city ? await geocodePlace({ place: city }) : { latitude: null, longitude: null };
     const nearCity =
@@ -127,13 +178,14 @@ export async function POST(request: NextRequest) {
     const plan: SessionPlan = await generateSessionPlan({
       shootType: payload.shootType,
       subjectDetails: typeof payload.subjectDetails === 'string' ? payload.subjectDetails : '',
-      city: typeof payload.city === 'string' ? payload.city : '',
+      city: city || '',
       shootDate: typeof payload.shootDate === 'string' ? payload.shootDate : undefined,
       duration: typeof payload.duration === 'string' ? payload.duration : undefined,
       mood: typeof payload.mood === 'string' ? payload.mood : 'natural',
       mustHaveShots: typeof payload.mustHaveShots === 'string' ? payload.mustHaveShots : undefined,
       constraints: typeof payload.constraints === 'string' ? payload.constraints : undefined,
       locationCandidates,
+      businessContext,
     });
 
     const initialLocations = await geocodeLocations(
