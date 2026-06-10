@@ -45,12 +45,20 @@ export async function POST(request: NextRequest) {
       creativeBrief: typeof creativeBrief === 'string' ? creativeBrief : undefined,
     });
 
-    return NextResponse.json({ success: true, data: suggestions }, { status: 200 });
+    return NextResponse.json(
+      {
+        success: true,
+        data: suggestions,
+        isUsingFallback: suggestions.length > 0 && !process.env.GEMINI_API_KEY,
+      },
+      { status: 200 }
+    );
   } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to generate shot suggestions';
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to generate AI shot suggestions',
+        error: message,
       },
       { status: 500 }
     );

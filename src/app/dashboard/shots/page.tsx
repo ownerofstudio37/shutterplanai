@@ -413,6 +413,16 @@ export default function ShotsPage() {
           />
         </div>
 
+        {error && (
+          <div className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800 border border-amber-200">
+            <p className="font-medium">
+              {error.includes('temporarily unavailable') || error.includes('503')
+                ? '⚡ AI service is busy right now. Using template suggestions instead.'
+                : `⚠️ ${error}`}
+            </p>
+          </div>
+        )}
+
         {aiSuggestions.length > 0 && (
           <div className="mt-6 grid gap-4 lg:grid-cols-2">
             {aiSuggestions.map(suggestion => (
