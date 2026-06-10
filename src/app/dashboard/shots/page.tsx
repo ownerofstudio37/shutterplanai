@@ -22,6 +22,13 @@ interface ShotItem {
   notes?: string;
   image_url?: string | null;
   status: 'planned' | 'taken' | 'approved' | 'rejected';
+  latitude?: number | null;
+  longitude?: number | null;
+  micro_spot_name?: string;
+  parking_notes?: string;
+  background_description?: string;
+  walking_distance?: string;
+  restroom_location?: string;
 }
 
 interface ShotFormState {
@@ -31,6 +38,13 @@ interface ShotFormState {
   plannedTime: string;
   notes: string;
   status: ShotItem['status'];
+  microSpotName: string;
+  parkingNotes: string;
+  backgroundDescription: string;
+  walkingDistance: string;
+  restroomLocation: string;
+  latitude: string;
+  longitude: string;
 }
 
 interface AiSuggestion {
@@ -79,6 +93,13 @@ export default function ShotsPage() {
     plannedTime: '',
     notes: '',
     status: 'planned',
+    microSpotName: '',
+    parkingNotes: '',
+    backgroundDescription: '',
+    walkingDistance: '',
+    restroomLocation: '',
+    latitude: '',
+    longitude: '',
   });
 
   const loadProjects = async () => {
@@ -201,6 +222,13 @@ export default function ShotsPage() {
       plannedTime: shot.planned_time?.slice(0, 16) ?? '',
       notes: shot.notes ?? '',
       status: shot.status,
+      microSpotName: shot.micro_spot_name ?? '',
+      parkingNotes: shot.parking_notes ?? '',
+      backgroundDescription: shot.background_description ?? '',
+      walkingDistance: shot.walking_distance ?? '',
+      restroomLocation: shot.restroom_location ?? '',
+      latitude: shot.latitude?.toString() ?? '',
+      longitude: shot.longitude?.toString() ?? '',
     });
   };
 
