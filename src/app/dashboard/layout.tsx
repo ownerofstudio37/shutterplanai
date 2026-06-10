@@ -73,6 +73,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             Shots
           </Link>
           <Link
+            href="/dashboard/shot-board"
+            className="block px-4 py-2 text-gray-700 hover:bg-blue-50 rounded-lg transition-colors"
+          >
+            Shot Board
+          </Link>
+          <Link
             href="/dashboard/settings"
             className="block px-4 py-2 text-gray-700 hover:bg-blue-50 rounded-lg transition-colors"
           >

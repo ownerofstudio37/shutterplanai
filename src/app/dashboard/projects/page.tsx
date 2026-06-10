@@ -1,6 +1,9 @@
 'use client';
 
+'use client';
+
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
@@ -297,6 +300,9 @@ export default function ProjectsPage() {
                     )}
                   </div>
                   <div className="flex gap-2">
+                    <Link href={`/dashboard/shot-board?project=${project.id}`}>
+                      <Button variant="ghost" size="sm">Export</Button>
+                    </Link>
                     <Button variant="secondary" size="sm" onClick={() => openEditModal(project)}>
                       Edit
                     </Button>

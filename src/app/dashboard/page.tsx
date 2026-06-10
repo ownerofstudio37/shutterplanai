@@ -242,6 +242,11 @@ export default function Dashboard() {
                 📸 Plan New Shot
               </Button>
             </Link>
+            <Link href="/dashboard/shot-board">
+              <Button variant="secondary" className="w-full text-left">
+                🖨️ Export Shot Board
+              </Button>
+            </Link>
             <Link href="/dashboard/settings">
               <Button variant="secondary" className="w-full text-left">
                 ⚙️ Settings
