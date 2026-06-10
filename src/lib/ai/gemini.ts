@@ -57,14 +57,26 @@ export interface SessionPlan {
   contingencyPlans: string[];
 }
 
+export interface LocationRefinement {
+  name: string;
+  kidFriendlinessScore: number;
+  crowdRiskScore: number;
+  walkingBurdenScore: number;
+  overallScore: number;
+  bestTimeWindow: string;
+  rationale: string;
+  recommendedMicroSpots: string[];
+}
+
+export interface SessionPlanRefinement {
+  locationRefinements: LocationRefinement[];
+  updatedContingencyPlans: string[];
+}
+
 function getGeminiConfig() {
   const apiKey = process.env.GEMINI_API_KEY;
   const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
-
-  if (!apiKey) {
-    throw new Error('Missing GEMINI_API_KEY');
-  }
-
+  if (!apiKey) throw new Error('Missing GEMINI_API_KEY');
   return { apiKey, model };
 }
 
@@ -74,13 +86,10 @@ function extractJsonArray(text: string): ShotSuggestion[] {
   const candidate = fencedMatch?.[1] ?? trimmed;
   const startIndex = candidate.indexOf('[');
   const endIndex = candidate.lastIndexOf(']');
-
   if (startIndex === -1 || endIndex === -1) {
     throw new Error('AI response did not include JSON suggestions');
   }
-
   const parsed = JSON.parse(candidate.slice(startIndex, endIndex + 1)) as ShotSuggestion[];
-
   return parsed.map(item => ({
     title: item.title?.trim() || 'Untitled shot',
     description: item.description?.trim() || '',
@@ -96,15 +105,34 @@ function extractJsonObject<T>(text: string): T {
   const candidate = fencedMatch?.[1] ?? trimmed;
   const startIndex = candidate.indexOf('{');
   const endIndex = candidate.lastIndexOf('}');
-
   if (startIndex === -1 || endIndex === -1) {
     throw new Error('AI response did not include JSON object');
   }
-
   return JSON.parse(candidate.slice(startIndex, endIndex + 1)) as T;
 }
 
-function getGenericFallbackSuggestions(projectTitle: string): ShotSuggestion[] {
+async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3): Promise<Response> {
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const response = await fetch(url, options);
+      if (response.status >= 400 && response.status < 500) return response;
+      if (!response.ok && response.status >= 500 && attempt < maxRetries - 1) {
+        await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+        continue;
+      }
+      return response;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      if (attempt < maxRetries - 1) {
+        await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+      }
+    }
+  }
+  throw lastError || new Error('Fetch failed after retries');
+}
+
+function getGenericFallbackSuggestions(): ShotSuggestion[] {
   return [
     {
       title: 'Wide establishing shot',
@@ -151,11 +179,9 @@ function getFallbackSessionPlan(input: {
   mood: string;
   constraints?: string;
 }): SessionPlan {
-  const title = `${input.shootType} Session Plan`;
   const cityLabel = input.city || 'your area';
-
   return {
-    projectTitle: title,
+    projectTitle: `${input.shootType} Session Plan`,
     creativeDirection: `A ${input.mood || 'balanced'} visual approach for ${input.subjectDetails || 'the subject'} with practical pacing and flexible backup options.`,
     timeline: [
       { timeBlock: 'Arrival + Warmup (0-10 min)', focus: 'Introduce flow and comfort', notes: 'Quick orientation, check wardrobe, set expectations.' },
@@ -231,42 +257,27 @@ function getFallbackSessionPlan(input: {
   };
 }
 
-async function fetchWithRetry(
-  url: string,
-  options: RequestInit,
-  maxRetries: number = 3
-): Promise<Response> {
-  let lastError: Error | null = null;
-
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    try {
-      const response = await fetch(url, options);
-
-      // Don't retry on client errors (4xx)
-      if (response.status >= 400 && response.status < 500) {
-        return response;
-      }
-
-      // For server errors (5xx), retry with exponential backoff
-      if (!response.ok && response.status >= 500) {
-        if (attempt < maxRetries - 1) {
-          const delayMs = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s
-          await new Promise(resolve => setTimeout(resolve, delayMs));
-          continue;
-        }
-      }
-
-      return response;
-    } catch (error) {
-      lastError = error instanceof Error ? error : new Error(String(error));
-      if (attempt < maxRetries - 1) {
-        const delayMs = Math.pow(2, attempt) * 1000;
-        await new Promise(resolve => setTimeout(resolve, delayMs));
-      }
-    }
-  }
-
-  throw lastError || new Error('Fetch failed after retries');
+function getFallbackRefinement(input: { plan: SessionPlan }): SessionPlanRefinement {
+  const locationRefinements = (input.plan.locationSuggestions ?? []).map((location, index) => ({
+    name: location.name,
+    kidFriendlinessScore: Math.max(4, 8 - index),
+    crowdRiskScore: 5 + index,
+    walkingBurdenScore: 4 + index,
+    overallScore: Math.max(5, 8 - index),
+    bestTimeWindow: index === 0 ? 'Early session or golden hour' : 'Mid-session with flexible timing',
+    rationale:
+      index === 0
+        ? 'Balanced logistics and flexible backgrounds make this a safer primary choice.'
+        : 'Useful as a secondary option if primary location becomes crowded.',
+    recommendedMicroSpots: location.microLocations?.slice(0, 3) ?? [],
+  }));
+  return {
+    locationRefinements,
+    updatedContingencyPlans: [
+      ...(input.plan.contingencyPlans ?? []),
+      'Prioritize top-ranked location first, then pivot to second-ranked option if crowding increases.',
+    ].slice(0, 12),
+  };
 }
 
 export async function generateShotSuggestions(input: {
@@ -275,91 +286,40 @@ export async function generateShotSuggestions(input: {
   creativeBrief?: string;
 }) {
   const { apiKey, model } = getGeminiConfig();
-
   const prompt = `You are helping a photographer plan a shoot.
 
-Project:
-- Title: ${input.project.title}
-- Description: ${input.project.description || 'No description provided'}
-- Status: ${input.project.status}
+Project title: ${input.project.title}
+Project description: ${input.project.description || 'None'}
+Creative brief: ${input.creativeBrief?.trim() || 'None'}
 
-Creative brief from user:
-${input.creativeBrief?.trim() || 'No extra brief provided.'}
+Avoid duplicates from existing shots:
+${input.existingShots.map(s => `- ${s.title}`).join('\n') || 'No existing shots'}
 
-Existing shots to avoid duplicating:
-${input.existingShots.length === 0 ? 'No shots exist yet.' : input.existingShots
-    .map(
-      shot => `- ${shot.title}: ${shot.description || 'No description'} | ${shot.location || 'No location'} | ${shot.status}`
-    )
-    .join('\n')}
-
-Return exactly 5 fresh shot suggestions as raw JSON only.
-Each item must use this schema:
-[
-  {
-    "title": "string",
-    "description": "string",
-    "location": "string",
-    "notes": "string",
-    "plannedTimeHint": "string"
-  }
-]
-
-Keep titles concise. Make suggestions practical and visually distinct.`;
+Return exactly 5 suggestions as raw JSON array using:
+[{"title":"string","description":"string","location":"string","notes":"string","plannedTimeHint":"string"}]`;
 
   try {
     const response = await fetchWithRetry(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
       {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contents: [
-            {
-              parts: [{ text: prompt }],
-            },
-          ],
-          generationConfig: {
-            temperature: 0.8,
-            responseMimeType: 'application/json',
-          },
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.8, responseMimeType: 'application/json' },
         }),
       }
     );
-
     if (!response.ok) {
-      const errorText = await response.text();
-      // If Gemini is unavailable after retries, fall back to generic suggestions
-      if (response.status >= 500) {
-        console.warn('Gemini service temporarily unavailable, using fallback suggestions');
-        return getGenericFallbackSuggestions(input.project.title);
-      }
-      throw new Error(`Gemini request failed: ${errorText}`);
+      if (response.status >= 500) return getGenericFallbackSuggestions();
+      throw new Error(await response.text());
     }
-
-    const payload = (await response.json()) as {
-      candidates?: Array<{
-        content?: {
-          parts?: Array<{
-            text?: string;
-          }>;
-        };
-      }>;
-    };
-
+    const payload = (await response.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
     const text = payload.candidates?.[0]?.content?.parts?.map(part => part.text ?? '').join('') ?? '';
-
-    if (!text) {
-      throw new Error('Gemini returned an empty response');
-    }
-
+    if (!text) throw new Error('Empty AI response');
     return extractJsonArray(text);
-  } catch (error) {
-    // Final fallback: return generic suggestions if all else fails
-    console.warn('Failed to generate AI suggestions, using fallback:', error);
-    return getGenericFallbackSuggestions(input.project.title);
+  } catch {
+    return getGenericFallbackSuggestions();
   }
 }
 
@@ -373,122 +333,129 @@ export async function generateSessionPlan(input: {
   constraints?: string;
 }) {
   const { apiKey, model } = getGeminiConfig();
-
   const prompt = `You are an expert photography pre-production planner.
 
-Create a full session plan for this shoot:
+Build a complete session plan for:
 - Shoot type: ${input.shootType}
 - Subject details: ${input.subjectDetails}
-- City / area: ${input.city}
-- Shoot date: ${input.shootDate || 'Not specified'}
-- Mood/style: ${input.mood}
-- Must-have shots: ${input.mustHaveShots || 'None specified'}
-- Constraints: ${input.constraints || 'None specified'}
+- City: ${input.city}
+- Date: ${input.shootDate || 'Not specified'}
+- Mood: ${input.mood}
+- Must-have shots: ${input.mustHaveShots || 'None'}
+- Constraints: ${input.constraints || 'None'}
 
-Return JSON only with this exact schema:
+Return JSON only with schema:
 {
-  "projectTitle": "string",
-  "creativeDirection": "string",
-  "timeline": [
-    { "timeBlock": "string", "focus": "string", "notes": "string" }
-  ],
-  "locationSuggestions": [
-    {
-      "name": "string",
-      "whyItWorks": "string",
-      "microLocations": ["string"],
-      "logistics": {
-        "parking": "string",
-        "restroom": "string",
-        "walkingDistance": "string"
-      }
-    }
-  ],
-  "shotList": [
-    {
-      "title": "string",
-      "description": "string",
-      "location": "string",
-      "microSpot": "string",
-      "poseSuggestion": "string",
-      "compositionSuggestion": "string",
-      "timingHint": "string",
-      "notes": "string"
-    }
-  ],
-  "clientPrepChecklist": ["string"],
-  "contingencyPlans": ["string"]
-}
-
-Requirements:
-- Provide 3-5 timeline blocks.
-- Provide 2-4 location suggestions with detailed micro-locations.
-- Provide 8-14 shotList items.
-- Keep all advice practical and specific for a working photographer.
-- Include kid/family pacing considerations if relevant.
-- Do not include markdown fences or any prose outside JSON.`;
+"projectTitle":"string",
+"creativeDirection":"string",
+"timeline":[{"timeBlock":"string","focus":"string","notes":"string"}],
+"locationSuggestions":[{"name":"string","whyItWorks":"string","microLocations":["string"],"logistics":{"parking":"string","restroom":"string","walkingDistance":"string"}}],
+"shotList":[{"title":"string","description":"string","location":"string","microSpot":"string","poseSuggestion":"string","compositionSuggestion":"string","timingHint":"string","notes":"string"}],
+"clientPrepChecklist":["string"],
+"contingencyPlans":["string"]
+}`;
 
   try {
     const response = await fetchWithRetry(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
       {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.7,
-            responseMimeType: 'application/json',
-          },
+          generationConfig: { temperature: 0.7, responseMimeType: 'application/json' },
         }),
       }
     );
-
     if (!response.ok) {
-      const errorText = await response.text();
-      if (response.status >= 500) {
-        console.warn('Gemini planner unavailable, using fallback session plan');
-        return getFallbackSessionPlan(input);
-      }
-      throw new Error(`Gemini planner request failed: ${errorText}`);
+      if (response.status >= 500) return getFallbackSessionPlan(input);
+      throw new Error(await response.text());
     }
-
-    const payload = (await response.json()) as {
-      candidates?: Array<{
-        content?: {
-          parts?: Array<{
-            text?: string;
-          }>;
-        };
-      }>;
-    };
-
+    const payload = (await response.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
     const text = payload.candidates?.[0]?.content?.parts?.map(part => part.text ?? '').join('') ?? '';
-    if (!text) {
-      throw new Error('Gemini planner returned an empty response');
-    }
-
+    if (!text) throw new Error('Empty AI response');
     const parsed = extractJsonObject<SessionPlan>(text);
-
     return {
       projectTitle: parsed.projectTitle?.trim() || `${input.shootType} Session Plan`,
       creativeDirection: parsed.creativeDirection?.trim() || '',
       timeline: Array.isArray(parsed.timeline) ? parsed.timeline.slice(0, 8) : [],
-      locationSuggestions: Array.isArray(parsed.locationSuggestions)
-        ? parsed.locationSuggestions.slice(0, 6)
-        : [],
+      locationSuggestions: Array.isArray(parsed.locationSuggestions) ? parsed.locationSuggestions.slice(0, 6) : [],
       shotList: Array.isArray(parsed.shotList) ? parsed.shotList.slice(0, 20) : [],
-      clientPrepChecklist: Array.isArray(parsed.clientPrepChecklist)
-        ? parsed.clientPrepChecklist.slice(0, 12)
-        : [],
-      contingencyPlans: Array.isArray(parsed.contingencyPlans)
-        ? parsed.contingencyPlans.slice(0, 12)
-        : [],
+      clientPrepChecklist: Array.isArray(parsed.clientPrepChecklist) ? parsed.clientPrepChecklist.slice(0, 12) : [],
+      contingencyPlans: Array.isArray(parsed.contingencyPlans) ? parsed.contingencyPlans.slice(0, 12) : [],
     };
-  } catch (error) {
-    console.warn('Failed to generate session plan, using fallback:', error);
+  } catch {
     return getFallbackSessionPlan(input);
+  }
+}
+
+export async function refineSessionPlan(input: {
+  plan: SessionPlan;
+  subjectDetails?: string;
+  mood?: string;
+  constraints?: string;
+}) {
+  const { apiKey, model } = getGeminiConfig();
+  const prompt = `You are a photography planning quality-control assistant.
+
+Given this plan, score each location:
+- Kid friendliness (higher is better)
+- Crowd risk (higher is riskier)
+- Walking burden (higher is harder)
+- Overall suitability (higher is better)
+
+Context:
+- Subject details: ${input.subjectDetails || 'Not specified'}
+- Mood: ${input.mood || 'Not specified'}
+- Constraints: ${input.constraints || 'None'}
+
+Plan JSON:
+${JSON.stringify(input.plan)}
+
+Return JSON only with schema:
+{
+"locationRefinements":[{"name":"string","kidFriendlinessScore":1,"crowdRiskScore":1,"walkingBurdenScore":1,"overallScore":1,"bestTimeWindow":"string","rationale":"string","recommendedMicroSpots":["string"]}],
+"updatedContingencyPlans":["string"]
+}
+
+Scoring rules: scores are integers 1-10. Higher kidFriendlinessScore = better. Higher crowdRiskScore = riskier. Higher walkingBurdenScore = harder. Higher overallScore = better overall pick.`;
+
+  try {
+    const response = await fetchWithRetry(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.4, responseMimeType: 'application/json' },
+        }),
+      }
+    );
+    if (!response.ok) {
+      if (response.status >= 500) return getFallbackRefinement(input);
+      throw new Error(await response.text());
+    }
+    const payload = (await response.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
+    const text = payload.candidates?.[0]?.content?.parts?.map(part => part.text ?? '').join('') ?? '';
+    if (!text) throw new Error('Empty AI response');
+    const parsed = extractJsonObject<SessionPlanRefinement>(text);
+    const locationRefinements = (parsed.locationRefinements ?? [])
+      .map(item => ({
+        ...item,
+        kidFriendlinessScore: Math.min(10, Math.max(1, Math.round(Number(item.kidFriendlinessScore) || 1))),
+        crowdRiskScore: Math.min(10, Math.max(1, Math.round(Number(item.crowdRiskScore) || 1))),
+        walkingBurdenScore: Math.min(10, Math.max(1, Math.round(Number(item.walkingBurdenScore) || 1))),
+        overallScore: Math.min(10, Math.max(1, Math.round(Number(item.overallScore) || 1))),
+        recommendedMicroSpots: Array.isArray(item.recommendedMicroSpots) ? item.recommendedMicroSpots.slice(0, 5) : [],
+      }))
+      .slice(0, 10)
+      .sort((a, b) => b.overallScore - a.overallScore);
+    return {
+      locationRefinements,
+      updatedContingencyPlans: Array.isArray(parsed.updatedContingencyPlans) ? parsed.updatedContingencyPlans.slice(0, 12) : [],
+    };
+  } catch {
+    return getFallbackRefinement(input);
   }
 }

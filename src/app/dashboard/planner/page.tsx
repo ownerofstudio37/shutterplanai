@@ -49,6 +49,18 @@ interface SessionPlan {
   shotList: SessionPlanShot[];
   clientPrepChecklist: string[];
   contingencyPlans: string[];
+  locationRefinements?: LocationRefinement[];
+}
+
+interface LocationRefinement {
+  name: string;
+  kidFriendlinessScore: number;
+  crowdRiskScore: number;
+  walkingBurdenScore: number;
+  overallScore: number;
+  bestTimeWindow: string;
+  rationale: string;
+  recommendedMicroSpots: string[];
 }
 
 function getAuthHeader() {
@@ -74,12 +86,21 @@ export default function PlannerPage() {
   const [plan, setPlan] = useState<SessionPlan | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isRefining, setIsRefining] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
 
   const locationIndex = useMemo(() => {
     const map = new Map<string, SessionPlanLocation>();
     (plan?.locationSuggestions ?? []).forEach(location => {
       map.set(location.name.toLowerCase(), location);
+    });
+    return map;
+  }, [plan]);
+
+  const refinementIndex = useMemo(() => {
+    const map = new Map<string, LocationRefinement>();
+    (plan?.locationRefinements ?? []).forEach(refinement => {
+      map.set(refinement.name.toLowerCase(), refinement);
     });
     return map;
   }, [plan]);
@@ -156,6 +177,7 @@ export default function PlannerPage() {
 
       for (const shot of plan.shotList) {
         const location = locationIndex.get((shot.location || '').toLowerCase());
+        const refinement = refinementIndex.get((shot.location || '').toLowerCase());
         const latitude = shot.latitude ?? location?.latitude ?? null;
         const longitude = shot.longitude ?? location?.longitude ?? null;
 
@@ -165,6 +187,11 @@ export default function PlannerPage() {
           `Composition: ${shot.compositionSuggestion}`,
           `Timing: ${shot.timingHint}`,
           shot.geocodedLocationName ? `Map match: ${shot.geocodedLocationName}` : '',
+          refinement ? `Location score: ${refinement.overallScore}/10` : '',
+          refinement ? `Kid-friendly: ${refinement.kidFriendlinessScore}/10` : '',
+          refinement ? `Crowd risk: ${refinement.crowdRiskScore}/10` : '',
+          refinement ? `Walking burden: ${refinement.walkingBurdenScore}/10` : '',
+          refinement?.bestTimeWindow ? `Best window: ${refinement.bestTimeWindow}` : '',
           location?.logistics?.parking ? `Parking: ${location.logistics.parking}` : '',
           location?.logistics?.restroom ? `Restroom: ${location.logistics.restroom}` : '',
           location?.logistics?.walkingDistance
@@ -206,6 +233,57 @@ export default function PlannerPage() {
     }
   };
 
+  const refinePlan = async () => {
+    if (!plan) return;
+
+    setIsRefining(true);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/ai/session-plan/refine', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeader(),
+        },
+        body: JSON.stringify({
+          plan,
+          subjectDetails,
+          mood,
+          constraints,
+        }),
+      });
+
+      const result = await response.json();
+      if (!result.success) {
+        setError(result.error ?? 'Failed to refine plan');
+        return;
+      }
+
+      const locationRefinements = Array.isArray(result.data?.locationRefinements)
+        ? result.data.locationRefinements
+        : [];
+
+      const updatedContingencyPlans = Array.isArray(result.data?.updatedContingencyPlans)
+        ? result.data.updatedContingencyPlans
+        : plan.contingencyPlans;
+
+      setPlan(prev =>
+        prev
+          ? {
+              ...prev,
+              locationRefinements,
+              contingencyPlans: updatedContingencyPlans,
+            }
+          : prev
+      );
+    } catch {
+      setError('Failed to refine plan');
+    } finally {
+      setIsRefining(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Card>
@@ -242,6 +320,9 @@ export default function PlannerPage() {
                 <p className="text-sm text-gray-600">{plan.creativeDirection}</p>
               </div>
               <div className="flex gap-2">
+                <Button variant="ghost" isLoading={isRefining} onClick={() => void refinePlan()}>
+                  {isRefining ? 'Refining...' : 'Refine Plan'}
+                </Button>
                 <Button variant="secondary" isLoading={isApplying} onClick={() => void applyPlanToWorkspace()}>
                   {isApplying ? 'Applying...' : 'Create Project + Shot List'}
                 </Button>
@@ -287,6 +368,36 @@ export default function PlannerPage() {
               </div>
             </Card>
           </div>
+
+          {plan.locationRefinements && plan.locationRefinements.length > 0 && (
+            <Card>
+              <h4 className="mb-3 text-lg font-semibold text-gray-900">Refined Location Scores</h4>
+              <div className="space-y-3">
+                {plan.locationRefinements.map(ref => (
+                  <div key={ref.name} className="rounded-lg border border-gray-200 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="font-semibold text-gray-900">{ref.name}</p>
+                      <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+                        Overall {ref.overallScore}/10
+                      </span>
+                    </div>
+                    <p className="mt-1 text-sm text-gray-600">{ref.rationale}</p>
+                    <div className="mt-2 grid gap-2 text-xs text-gray-700 sm:grid-cols-3">
+                      <p>Kid-friendly: {ref.kidFriendlinessScore}/10</p>
+                      <p>Crowd risk: {ref.crowdRiskScore}/10</p>
+                      <p>Walking burden: {ref.walkingBurdenScore}/10</p>
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500">Best time window: {ref.bestTimeWindow}</p>
+                    {ref.recommendedMicroSpots?.length > 0 && (
+                      <p className="mt-1 text-xs text-gray-500">
+                        Recommended micro-spots: {ref.recommendedMicroSpots.join(' • ')}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
 
           <Card>
             <h4 className="mb-3 text-lg font-semibold text-gray-900">AI Shot List</h4>

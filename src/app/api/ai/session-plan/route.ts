@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/serverAuth';
-import { generateSessionPlan } from '@/lib/ai/gemini';
+import { generateSessionPlan, SessionPlan } from '@/lib/ai/gemini';
 import { geocodeLocations } from '@/lib/geo/geocode';
 
 export async function POST(request: NextRequest) {
@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const plan = await generateSessionPlan({
+    const plan: SessionPlan = await generateSessionPlan({
       shootType: payload.shootType,
       subjectDetails: typeof payload.subjectDetails === 'string' ? payload.subjectDetails : '',
       city: typeof payload.city === 'string' ? payload.city : '',
