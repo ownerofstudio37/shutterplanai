@@ -11,6 +11,9 @@ interface SessionPlanLocation {
   name: string;
   whyItWorks: string;
   microLocations: string[];
+  latitude?: number | null;
+  longitude?: number | null;
+  displayName?: string;
   logistics: {
     parking: string;
     restroom: string;
@@ -33,6 +36,9 @@ interface SessionPlanShot {
   compositionSuggestion: string;
   timingHint: string;
   notes: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  geocodedLocationName?: string | null;
 }
 
 interface SessionPlan {
@@ -150,12 +156,15 @@ export default function PlannerPage() {
 
       for (const shot of plan.shotList) {
         const location = locationIndex.get((shot.location || '').toLowerCase());
+        const latitude = shot.latitude ?? location?.latitude ?? null;
+        const longitude = shot.longitude ?? location?.longitude ?? null;
 
         const notes = [
           shot.notes,
           `Pose suggestion: ${shot.poseSuggestion}`,
           `Composition: ${shot.compositionSuggestion}`,
           `Timing: ${shot.timingHint}`,
+          shot.geocodedLocationName ? `Map match: ${shot.geocodedLocationName}` : '',
           location?.logistics?.parking ? `Parking: ${location.logistics.parking}` : '',
           location?.logistics?.restroom ? `Restroom: ${location.logistics.restroom}` : '',
           location?.logistics?.walkingDistance
@@ -176,6 +185,8 @@ export default function PlannerPage() {
             title: shot.title,
             description: shot.description,
             location: shot.location,
+            latitude,
+            longitude,
             notes,
             microSpotName: shot.microSpot,
             parkingNotes: location?.logistics?.parking ?? '',
@@ -262,6 +273,11 @@ export default function PlannerPage() {
                   <div key={location.name} className="rounded-lg border border-gray-200 p-3">
                     <p className="font-semibold text-gray-900">{location.name}</p>
                     <p className="mt-1 text-sm text-gray-600">{location.whyItWorks}</p>
+                    {location.latitude != null && location.longitude != null && (
+                      <p className="mt-2 text-xs text-blue-700">
+                        Coordinates: {Number(location.latitude).toFixed(5)}, {Number(location.longitude).toFixed(5)}
+                      </p>
+                    )}
                     <p className="mt-2 text-xs text-gray-500">Micro-spots: {location.microLocations.join(' • ')}</p>
                     <p className="mt-2 text-xs text-gray-500">Parking: {location.logistics.parking}</p>
                     <p className="text-xs text-gray-500">Restroom: {location.logistics.restroom}</p>
@@ -280,6 +296,11 @@ export default function PlannerPage() {
                   <p className="font-semibold text-gray-900">{shot.title}</p>
                   <p className="mt-1 text-sm text-gray-600">{shot.description}</p>
                   <p className="mt-2 text-xs text-gray-500">Location: {shot.location}</p>
+                  {shot.latitude != null && shot.longitude != null && (
+                    <p className="text-xs text-blue-700">
+                      Coordinates: {Number(shot.latitude).toFixed(5)}, {Number(shot.longitude).toFixed(5)}
+                    </p>
+                  )}
                   <p className="text-xs text-gray-500">Micro-spot: {shot.microSpot}</p>
                   <p className="text-xs text-gray-500">Pose: {shot.poseSuggestion}</p>
                   <p className="text-xs text-gray-500">Composition: {shot.compositionSuggestion}</p>

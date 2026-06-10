@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/serverAuth';
 import { generateSessionPlan } from '@/lib/ai/gemini';
+import { geocodeLocations } from '@/lib/geo/geocode';
 
 export async function POST(request: NextRequest) {
   try {
@@ -28,7 +29,36 @@ export async function POST(request: NextRequest) {
       constraints: typeof payload.constraints === 'string' ? payload.constraints : undefined,
     });
 
-    return NextResponse.json({ success: true, data: plan }, { status: 200 });
+    const enrichedLocations = await geocodeLocations(
+      plan.locationSuggestions ?? [],
+      typeof payload.city === 'string' ? payload.city : undefined
+    );
+
+    const locationByName = new Map(
+      enrichedLocations.map(location => [location.name.toLowerCase(), location])
+    );
+
+    const enrichedShotList = (plan.shotList ?? []).map(shot => {
+      const match = locationByName.get((shot.location ?? '').toLowerCase());
+      return {
+        ...shot,
+        latitude: match?.latitude ?? null,
+        longitude: match?.longitude ?? null,
+        geocodedLocationName: match?.displayName ?? null,
+      };
+    });
+
+    return NextResponse.json(
+      {
+        success: true,
+        data: {
+          ...plan,
+          locationSuggestions: enrichedLocations,
+          shotList: enrichedShotList,
+        },
+      },
+      { status: 200 }
+    );
   } catch (error) {
     return NextResponse.json(
       {
