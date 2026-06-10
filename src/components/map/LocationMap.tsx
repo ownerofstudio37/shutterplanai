@@ -45,14 +45,21 @@ const getMarkerIcon = (status: string) => {
 };
 
 export default function LocationMap({ shots, onSelectShot }: LocationMapProps) {
-  // Calculate map center from shots
+  // Calculate map center from shots with valid coordinates
   const mapCenter = useMemo(() => {
-    if (shots.length === 0) {
+    const validShots = shots.filter(s => s.latitude !== null && s.latitude !== undefined && s.longitude !== null && s.longitude !== undefined);
+    
+    if (validShots.length === 0) {
       return [40, -95] as const; // Default to center of US
     }
 
-    const avgLat = shots.reduce((sum, s) => sum + (s.latitude || 0), 0) / shots.length;
-    const avgLng = shots.reduce((sum, s) => sum + (s.longitude || 0), 0) / shots.length;
+    const avgLat = validShots.reduce((sum, s) => sum + (s.latitude as number), 0) / validShots.length;
+    const avgLng = validShots.reduce((sum, s) => sum + (s.longitude as number), 0) / validShots.length;
+
+    // Ensure values are valid numbers
+    if (!isFinite(avgLat) || !isFinite(avgLng)) {
+      return [40, -95] as const;
+    }
 
     return [avgLat, avgLng] as const;
   }, [shots]);
@@ -63,6 +70,9 @@ export default function LocationMap({ shots, onSelectShot }: LocationMapProps) {
     },
     [onSelectShot]
   );
+
+  // Only render markers for shots with valid coordinates
+  const validShots = shots.filter(s => s.latitude !== null && s.latitude !== undefined && s.longitude !== null && s.longitude !== undefined);
 
   return (
     <MapContainer
@@ -76,7 +86,7 @@ export default function LocationMap({ shots, onSelectShot }: LocationMapProps) {
         attribution="&copy; <a href='https://www.openstreetmap.org/copyright'>OpenStreetMap</a>"
       />
 
-      {shots.map(shot => (
+      {validShots.map(shot => (
         <Marker
           key={shot.id}
           position={[shot.latitude as number, shot.longitude as number] as L.LatLngExpression}

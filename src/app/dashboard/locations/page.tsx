@@ -171,7 +171,18 @@ export default function LocationsPage() {
         <div className="lg:col-span-2">
           <Card>
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Location Map</h3>
-            <MapWithNoSSR shots={filteredShots} onSelectShot={setSelectedShot} />
+            {filteredShots.length === 0 ? (
+              <div className="flex items-center justify-center h-96 bg-gray-50 rounded-lg">
+                <div className="text-center">
+                  <p className="text-gray-600 font-medium mb-2">No mapped locations yet</p>
+                  <p className="text-sm text-gray-500">
+                    Add coordinates to your shots in the Shots dashboard to see them on the map
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <MapWithNoSSR shots={filteredShots} onSelectShot={setSelectedShot} />
+            )}
           </Card>
         </div>
 
