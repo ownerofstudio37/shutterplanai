@@ -166,29 +166,35 @@ export default function LocationsPage() {
         </div>
       </Card>
 
-      <div className="grid gap-6 lg:grid-cols-4">
-        {/* Map */}
+      <div className="grid gap-6 lg:grid-cols-5 lg:grid-rows-1">
+        {/* Map - Takes up 3/5 of space */}
         <div className="lg:col-span-3">
-          <Card className="h-full">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Location Map</h3>
-            {filteredShots.length === 0 ? (
-              <div className="flex items-center justify-center h-96 bg-gray-50 rounded-lg">
-                <div className="text-center">
-                  <p className="text-gray-600 font-medium mb-2">No mapped locations yet</p>
-                  <p className="text-sm text-gray-500">
-                    Add coordinates to your shots in the Shots dashboard to see them on the map
-                  </p>
+          <Card className="flex flex-col h-full">
+            <div className="shrink-0">
+              <h3 className="text-lg font-semibold text-gray-900">Location Map</h3>
+            </div>
+            <div className="flex-1 min-h-0">
+              {filteredShots.length === 0 ? (
+                <div className="flex items-center justify-center h-full bg-gray-50 rounded-lg">
+                  <div className="text-center">
+                    <p className="text-gray-600 font-medium mb-2">No mapped locations yet</p>
+                    <p className="text-sm text-gray-500">
+                      Add coordinates to your shots in the Shots dashboard to see them on the map
+                    </p>
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <MapWithNoSSR shots={filteredShots} onSelectShot={setSelectedShot} />
-            )}
+              ) : (
+                <div className="h-full w-full">
+                  <MapWithNoSSR shots={filteredShots} onSelectShot={setSelectedShot} />
+                </div>
+              )}
+            </div>
           </Card>
         </div>
 
-        {/* Shot Details Sidebar */}
-        <div className="lg:col-span-1">
-          <Card className="h-full sticky top-6">
+        {/* Shot Details Sidebar - Takes up 2/5 of space */}
+        <div className="lg:col-span-2 space-y-6">
+          <Card>
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Shot Details</h3>
 
             {selectedShot ? (
@@ -266,13 +272,13 @@ export default function LocationsPage() {
           </Card>
 
           {shotsWithoutLocation.length > 0 && (
-            <Card className="mt-6">
+            <Card>
               <h3 className="text-sm font-semibold text-gray-900 mb-3">Unmapped Shots</h3>
-              <div className="space-y-2 max-h-80 overflow-y-auto">
+              <div className="space-y-2 max-h-40 overflow-y-auto">
                 {shotsWithoutLocation.map(shot => (
                   <div
                     key={shot.id}
-                    className="text-sm p-2 bg-amber-50 border border-amber-200 rounded text-amber-900 hover:bg-amber-100 cursor-pointer transition-colors"
+                    className="text-xs p-2 bg-amber-50 border border-amber-200 rounded text-amber-900 hover:bg-amber-100 cursor-pointer transition-colors"
                   >
                     {shot.title}
                   </div>
