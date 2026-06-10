@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/serverAuth';
 import { generateSessionPlan, SessionPlan } from '@/lib/ai/gemini';
-import { geocodeLocations, geocodePlace } from '@/lib/geo/geocode';
+import { geocodeLocations, geocodePlace, searchLocationCandidates } from '@/lib/geo/geocode';
 
 function normalizeLocationName(value: string) {
   return value
@@ -31,6 +31,18 @@ function getGoogleMapsUrl(input: { latitude?: number | null; longitude?: number 
   return `https://maps.google.com/?q=${encodeURIComponent(input.query)}`;
 }
 
+function getSessionCategory(shootType: string) {
+  const value = shootType.toLowerCase();
+  if (/family|newborn|maternity|kids|children/.test(value)) return 'family' as const;
+  if (/engagement|proposal|couple|anniversary/.test(value)) return 'engagement' as const;
+  if (/event|wedding|party|corporate/.test(value)) return 'event' as const;
+  return 'portrait' as const;
+}
+
+function isGenericLocationLabel(value: string) {
+  return /(open green space|urban edge|district|waterfront|park \/ open green space|city center)/i.test(value);
+}
+
 export async function POST(request: NextRequest) {
   try {
     const auth = await requireAuth(request);
@@ -41,6 +53,7 @@ export async function POST(request: NextRequest) {
     const payload = await request.json();
     const shootType = typeof payload.shootType === 'string' ? payload.shootType : '';
     const isFamilySession = /family|newborn|maternity|kids|children/i.test(shootType);
+    const sessionCategory = getSessionCategory(shootType);
 
     if (!payload?.shootType || typeof payload.shootType !== 'string') {
       return NextResponse.json(
@@ -48,17 +61,6 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-
-    const plan: SessionPlan = await generateSessionPlan({
-      shootType: payload.shootType,
-      subjectDetails: typeof payload.subjectDetails === 'string' ? payload.subjectDetails : '',
-      city: typeof payload.city === 'string' ? payload.city : '',
-      shootDate: typeof payload.shootDate === 'string' ? payload.shootDate : undefined,
-      duration: typeof payload.duration === 'string' ? payload.duration : undefined,
-      mood: typeof payload.mood === 'string' ? payload.mood : 'natural',
-      mustHaveShots: typeof payload.mustHaveShots === 'string' ? payload.mustHaveShots : undefined,
-      constraints: typeof payload.constraints === 'string' ? payload.constraints : undefined,
-    });
 
     const city = typeof payload.city === 'string' ? payload.city : undefined;
     const bannedTerms = isFamilySession
@@ -74,6 +76,28 @@ export async function POST(request: NextRequest) {
             maxDistanceKm: 45,
           }
         : undefined;
+
+    const locationCandidates = city
+      ? await searchLocationCandidates({
+          city,
+          sessionCategory,
+          near: nearCity,
+          bannedTerms,
+          limit: 6,
+        })
+      : [];
+
+    const plan: SessionPlan = await generateSessionPlan({
+      shootType: payload.shootType,
+      subjectDetails: typeof payload.subjectDetails === 'string' ? payload.subjectDetails : '',
+      city: typeof payload.city === 'string' ? payload.city : '',
+      shootDate: typeof payload.shootDate === 'string' ? payload.shootDate : undefined,
+      duration: typeof payload.duration === 'string' ? payload.duration : undefined,
+      mood: typeof payload.mood === 'string' ? payload.mood : 'natural',
+      mustHaveShots: typeof payload.mustHaveShots === 'string' ? payload.mustHaveShots : undefined,
+      constraints: typeof payload.constraints === 'string' ? payload.constraints : undefined,
+      locationCandidates,
+    });
 
     const initialLocations = await geocodeLocations(
       plan.locationSuggestions ?? [],
@@ -122,20 +146,37 @@ export async function POST(request: NextRequest) {
 
     const finalizedLocations = enrichedLocations.map(location => {
       const hasDisplayName = typeof location.displayName === 'string' && location.displayName.trim().length > 0;
-      const finalName = hasDisplayName && isGenericAiLabel(location.name)
-        ? location.displayName!.split(',').slice(0, 3).join(',').trim()
-        : location.name;
+      const fallbackCandidate = locationCandidates.find(candidate => {
+        const candidateName = candidate.name.toLowerCase();
+        const displayName = (candidate.displayName || '').toLowerCase();
+        const locationName = location.name.toLowerCase();
+        return candidateName.includes(locationName) || locationName.includes(candidateName) || displayName.includes(locationName);
+      });
+      const finalName = fallbackCandidate?.displayName?.split(',').slice(0, 3).join(',').trim() ||
+        (hasDisplayName && isGenericAiLabel(location.name)
+          ? location.displayName!.split(',').slice(0, 3).join(',').trim()
+          : location.name);
+      const finalLatitude = fallbackCandidate?.latitude ?? location.latitude;
+      const finalLongitude = fallbackCandidate?.longitude ?? location.longitude;
+      const finalDisplayName = fallbackCandidate?.displayName ?? location.displayName;
 
       return {
         ...location,
         name: finalName,
+        latitude: finalLatitude,
+        longitude: finalLongitude,
+        displayName: finalDisplayName,
         googleMapsUrl: getGoogleMapsUrl({
-          latitude: location.latitude,
-          longitude: location.longitude,
-          query: location.displayName || location.name,
+          latitude: finalLatitude,
+          longitude: finalLongitude,
+          query: finalDisplayName || finalName,
         }),
       };
     });
+
+    const candidateNames = new Set(
+      locationCandidates.map(candidate => normalizeLocationName(candidate.displayName || candidate.name))
+    );
 
     const locationByName = new Map(
       finalizedLocations.flatMap(location => {
@@ -155,12 +196,15 @@ export async function POST(request: NextRequest) {
         });
 
       const match = fuzzyMatch ?? null;
+      const fallbackLocation = finalizedLocations[0]?.name || city || shot.location || 'Primary location';
+      const needsReplacement = !shotLocation || isGenericLocationLabel(shot.location ?? '') || (!match && candidateNames.size > 0);
 
       return {
         ...shot,
+        location: needsReplacement ? fallbackLocation : shot.location,
         latitude: match?.latitude ?? null,
         longitude: match?.longitude ?? null,
-        geocodedLocationName: match?.displayName ?? null,
+        geocodedLocationName: match?.displayName ?? fallbackLocation,
       };
     });
 

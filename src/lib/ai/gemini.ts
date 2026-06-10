@@ -1,3 +1,5 @@
+import type { LocationCandidate } from '@/lib/geo/geocode';
+
 interface ProjectContext {
   title: string;
   description: string;
@@ -143,9 +145,280 @@ function buildTimelineForDuration(durationMinutes: number): SessionPlanTimelineI
   ];
 }
 
+function buildClientPrepChecklist(input: {
+  sessionCategory: SessionCategory;
+  durationMinutes: number;
+}): string[] {
+  const common = [
+    'Arrive 10 minutes early so the session can start on time.',
+    input.durationMinutes <= 45
+      ? 'Keep the wardrobe simple and move-ready for a short session.'
+      : 'Bring comfortable shoes for movement between micro-locations.',
+    'Share any must-have shots or no-go ideas before arrival.',
+  ];
+
+  if (input.sessionCategory === 'engagement') {
+    return [
+      ...common,
+      'Bring rings cleaned and ready for close-up detail shots.',
+      'Keep hands groomed and pockets clear for clean posing.',
+      'If changing outfits, bring a compact backup and a place to change.',
+    ].slice(0, 6);
+  }
+
+  if (input.sessionCategory === 'family') {
+    return [
+      ...common,
+      'Pack snacks, water, and any comfort items for kids.',
+      'Bring wipes, tissues, and a backup outfit for small messes.',
+      'Let everyone wear shoes they can walk in comfortably.',
+    ].slice(0, 6);
+  }
+
+  if (input.sessionCategory === 'event') {
+    return [
+      ...common,
+      'Send any logos, speakers, or VIP names that need to be captured.',
+      'Confirm any venue or permit constraints before arrival.',
+      'Bring a shot priority list for key moments and must-have people.',
+    ].slice(0, 6);
+  }
+
+  return [
+    ...common,
+    'Bring outfit options that read cleanly on camera without heavy pattern clashes.',
+    'Confirm preferred focal length / framing style if you have one.',
+    'Share any accessibility or mobility needs before the session begins.',
+  ].slice(0, 6);
+}
+
+function buildContingencyPlans(input: { sessionCategory: SessionCategory; durationMinutes: number }): string[] {
+  const plans = [
+    'If weather shifts, move to covered walkways or nearby indoor public spaces.',
+    'If the location is crowded, switch to tighter compositions and alternate micro-spots.',
+  ];
+
+  if (input.sessionCategory === 'family') {
+    plans.unshift('If energy drops, switch to quick movement prompts and short burst cycles.');
+  } else if (input.sessionCategory === 'engagement') {
+    plans.unshift('If energy feels stiff, switch to walking prompts and close interactive poses.');
+  } else {
+    plans.unshift('If the light becomes harsh, move to open shade and use reflective backgrounds.');
+  }
+
+  if (input.durationMinutes <= 45) {
+    plans.push('If time runs short, prioritize the hero shot, detail shot, and one closing frame.');
+  }
+
+  return plans.slice(0, 4);
+}
+
+function buildRequiredShotTemplates(input: {
+  sessionCategory: SessionCategory;
+  durationMinutes: number;
+}): SessionPlanShot[] {
+  if (input.sessionCategory === 'engagement') {
+    return [
+      {
+        title: 'Hero couple portrait',
+        description: 'Clean anchor frame with natural connection.',
+        location: '',
+        microSpot: 'Primary scenic spot',
+        poseSuggestion: 'Close stance with soft touch points and relaxed eye lines.',
+        compositionSuggestion: 'Eye-level frame with separation from background.',
+        timingHint: 'Start of session',
+        notes: 'Use this as the primary portfolio frame.',
+      },
+      {
+        title: 'Walking handhold',
+        description: 'Movement-based candid that feels effortless.',
+        location: '',
+        microSpot: 'Pathway or promenade',
+        poseSuggestion: 'Walk slowly, look at each other, and keep the pace natural.',
+        compositionSuggestion: 'Slightly wide framing with room to move through the scene.',
+        timingHint: 'Early-mid session',
+        notes: 'Great for reducing stiffness.',
+      },
+      {
+        title: 'Forehead to forehead',
+        description: 'Intimate portrait with a soft emotional tone.',
+        location: '',
+        microSpot: 'Open shade',
+        poseSuggestion: 'Foreheads together, shoulders relaxed, hands connected.',
+        compositionSuggestion: 'Medium-tight crop with shallow background separation.',
+        timingHint: 'Mid-session',
+        notes: 'Keep it calm and minimal.',
+      },
+      {
+        title: 'Ring detail close-up',
+        description: 'Close-up of the ring and hand connection.',
+        location: '',
+        microSpot: 'Any clean background',
+        poseSuggestion: 'Hold hands naturally and rotate slightly toward the light.',
+        compositionSuggestion: 'Tight detail crop with shallow depth of field.',
+        timingHint: 'Any time',
+        notes: 'Make sure nails and hands are clean and natural.',
+      },
+      {
+        title: 'Laughing candid',
+        description: 'Natural laugh frame for a lively expression.',
+        location: '',
+        microSpot: 'Flexible scenic spot',
+        poseSuggestion: 'Prompt a quick inside joke or movement cue.',
+        compositionSuggestion: 'Loose composition that leaves room for motion.',
+        timingHint: 'Mid-session',
+        notes: 'Use burst mode to catch real expressions.',
+      },
+      {
+        title: 'Wide environmental portrait',
+        description: 'Contextual frame that shows the setting and mood.',
+        location: '',
+        microSpot: 'Scenic overview',
+        poseSuggestion: 'Keep the couple small in frame with strong environment lines.',
+        compositionSuggestion: 'Wide framing with layers and leading lines.',
+        timingHint: 'Late session',
+        notes: 'A strong finale or opener depending on light.',
+      },
+    ].slice(0, input.durationMinutes <= 35 ? 5 : 6);
+  }
+
+  if (input.sessionCategory === 'family') {
+    return [
+      {
+        title: 'Whole family portrait',
+        description: 'Anchor frame with everyone visible and connected.',
+        location: '',
+        microSpot: 'Open family-friendly area',
+        poseSuggestion: 'Triangular grouping with staggered heights and connected hands.',
+        compositionSuggestion: 'Centered frame with clean background separation.',
+        timingHint: 'Start of session',
+        notes: 'Get the hardest shot first.',
+      },
+      {
+        title: 'Parents together',
+        description: 'Couple-focused frame to give the gallery variety.',
+        location: '',
+        microSpot: 'Open shade or clean backdrop',
+        poseSuggestion: 'Close stance, subtle touch points, relaxed expressions.',
+        compositionSuggestion: 'Medium-tight crop with soft background blur.',
+        timingHint: 'Early session',
+        notes: 'Provides a polished adult-only frame.',
+      },
+      {
+        title: 'Kids together candid',
+        description: 'Natural sibling interaction or group play frame.',
+        location: '',
+        microSpot: 'Path or open lawn',
+        poseSuggestion: 'Prompt a short interaction game or movement cue.',
+        compositionSuggestion: 'Horizontal framing with room for motion.',
+        timingHint: 'Mid-session',
+        notes: 'Keep directions short and playful.',
+      },
+      {
+        title: 'Individual child portrait',
+        description: 'One clean portrait per child for variety.',
+        location: '',
+        microSpot: 'Calm, quiet background',
+        poseSuggestion: 'Simple sitting or standing pose with natural expression.',
+        compositionSuggestion: 'Tight framing for expression focus.',
+        timingHint: 'Mid-session',
+        notes: 'Rotate quickly to keep attention high.',
+      },
+      {
+        title: 'Walking candid sequence',
+        description: 'Movement frame to capture real family energy.',
+        location: '',
+        microSpot: 'Trail or walkway',
+        poseSuggestion: 'Walk together and prompt conversation.',
+        compositionSuggestion: 'Slightly wide framing with directional flow.',
+        timingHint: 'Any time',
+        notes: 'Great if kids need a reset.',
+      },
+      {
+        title: 'Closing connection frame',
+        description: 'Final shot with everyone together for a strong ender.',
+        location: '',
+        microSpot: 'Best remaining scenic spot',
+        poseSuggestion: 'Tight connected grouping with relaxed smiles.',
+        compositionSuggestion: 'Balanced composition with a clean edge.',
+        timingHint: 'End of session',
+        notes: 'Use as your final keep-safe frame.',
+      },
+    ].slice(0, input.durationMinutes <= 35 ? 5 : 6);
+  }
+
+  return [
+    {
+      title: 'Hero portrait',
+      description: 'Main subject portrait with clean framing.',
+      location: '',
+      microSpot: 'Primary scenic spot',
+      poseSuggestion: 'Relaxed posture with a slight shoulder turn.',
+      compositionSuggestion: 'Medium framing with good separation.',
+      timingHint: 'Start of session',
+      notes: 'This should be the most reliable frame.',
+    },
+    {
+      title: 'Environmental portrait',
+      description: 'Subject framed by the setting for context.',
+      location: '',
+      microSpot: 'Best scenic backdrop',
+      poseSuggestion: 'Stand or sit naturally in the environment.',
+      compositionSuggestion: 'Wide-to-medium framing with leading lines.',
+      timingHint: 'Mid-session',
+      notes: 'Use a clean background with visual depth.',
+    },
+    {
+      title: 'Movement variation',
+      description: 'A candid action frame with motion.',
+      location: '',
+      microSpot: 'Pathway or open area',
+      poseSuggestion: 'Walk slowly or shift weight to create natural movement.',
+      compositionSuggestion: 'Loose framing with a bit of room to move.',
+      timingHint: 'Mid-session',
+      notes: 'Use to avoid a static gallery.',
+    },
+    {
+      title: 'Detail close-up',
+      description: 'Hands, accessories, textures, or meaningful details.',
+      location: '',
+      microSpot: 'Clean detail spot',
+      poseSuggestion: 'Hold or angle the details toward the light.',
+      compositionSuggestion: 'Tight crop and shallow depth of field.',
+      timingHint: 'Any time',
+      notes: 'Great for album pacing.',
+    },
+    {
+      title: 'Closing signature frame',
+      description: 'The final polished frame to end the sequence.',
+      location: '',
+      microSpot: 'Best remaining spot',
+      poseSuggestion: 'Confident, connected, and relaxed.',
+      compositionSuggestion: 'Cinematic framing with strong composition.',
+      timingHint: 'End of session',
+      notes: 'Leave with one portfolio-level image.',
+    },
+  ].slice(0, input.durationMinutes <= 35 ? 4 : 5);
+}
+
+function mergeShots(primary: SessionPlanShot[], secondary: SessionPlanShot[], maxItems: number) {
+  const seen = new Set<string>();
+  const output: SessionPlanShot[] = [];
+
+  for (const shot of [...primary, ...secondary]) {
+    const key = shot.title.toLowerCase().trim();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    output.push(shot);
+    if (output.length >= maxItems) break;
+  }
+
+  return output;
+}
+
 function getGeminiConfig() {
   const apiKey = process.env.GEMINI_API_KEY;
-  const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+  const model = process.env.GEMINI_MODEL || 'gemini-3.1-pro-preview';
   if (!apiKey) throw new Error('Missing GEMINI_API_KEY');
   return { apiKey, model };
 }
@@ -530,11 +803,19 @@ export async function generateSessionPlan(input: {
   mood: string;
   mustHaveShots?: string;
   constraints?: string;
+  locationCandidates?: LocationCandidate[];
 }) {
   const { apiKey, model } = getGeminiConfig();
   const durationMinutes = parseDurationMinutes(input.duration);
   const shotCountTarget = getShotCountTarget(durationMinutes);
   const sessionCategory = getSessionCategory(input.shootType);
+  const locationCandidates = input.locationCandidates ?? [];
+  const locationCandidateBlock = locationCandidates.length > 0
+    ? locationCandidates
+        .slice(0, 8)
+        .map((candidate, index) => `${index + 1}. ${candidate.name} — ${candidate.displayName || 'no display name'} (${candidate.latitude?.toFixed(5) ?? 'n/a'}, ${candidate.longitude?.toFixed(5) ?? 'n/a'})`)
+        .join('\n')
+    : 'No candidate locations available.';
   const prompt = `You are an expert photography pre-production planner.
 
 Build a complete session plan for:
@@ -547,11 +828,20 @@ Build a complete session plan for:
 - Must-have shots: ${input.mustHaveShots || 'None'}
 - Constraints: ${input.constraints || 'None'}
 
+Session type rules:
+- Session category is: ${sessionCategory}
+- ${sessionCategory === 'engagement' ? 'This is a couple session. Focus on romantic, connected, editorial, and ring-focused frames. Do not suggest kids or sibling shots.' : ''}
+- ${sessionCategory === 'family' ? 'This is a family session. Prioritize multi-person, child-friendly, low-walk, low-stress concepts.' : ''}
+- ${sessionCategory === 'portrait' ? 'This is a portrait session. Prioritize solo or small-group posing, not child-specific frames.' : ''}
+
+Real location candidates you may choose from:
+${locationCandidateBlock}
+
 Location rules:
-- Use only real, publicly searchable places in/near ${input.city}.
+- Use only exact names from the location candidate list above.
 - Do NOT invent names like "Urban Edge" or "Open Green Space".
-- Prefer specific places (parks, plazas, streets, landmarks, trails, venues) that can be pinned on maps.
-- Keep each location name concise but real.
+- If none of the candidates work, return fewer location suggestions rather than inventing places.
+- Prefer the safest, shortest-walk options that fit the session type.
 
 Return JSON only with schema:
 {
@@ -594,14 +884,31 @@ Quality requirements:
     const text = payload.candidates?.[0]?.content?.parts?.map(part => part.text ?? '').join('') ?? '';
     if (!text) throw new Error('Empty AI response');
     const parsed = extractJsonObject<SessionPlan>(text);
+    const requiredShots = buildRequiredShotTemplates({
+      sessionCategory,
+      durationMinutes,
+    });
     const normalizedPlan = {
       projectTitle: parsed.projectTitle?.trim() || `${input.shootType} Session Plan`,
       creativeDirection: parsed.creativeDirection?.trim() || '',
       timeline: buildTimelineForDuration(durationMinutes),
       locationSuggestions: Array.isArray(parsed.locationSuggestions) ? parsed.locationSuggestions.slice(0, 6) : [],
-      shotList: Array.isArray(parsed.shotList) ? parsed.shotList.slice(0, shotCountTarget.max) : [],
-      clientPrepChecklist: Array.isArray(parsed.clientPrepChecklist) ? parsed.clientPrepChecklist.slice(0, 12) : [],
-      contingencyPlans: Array.isArray(parsed.contingencyPlans) ? parsed.contingencyPlans.slice(0, 12) : [],
+      shotList: mergeShots(
+        requiredShots,
+        Array.isArray(parsed.shotList) ? parsed.shotList : [],
+        shotCountTarget.max
+      ).map(shot => ({
+        ...shot,
+        location: shot.location?.trim() || parsed.locationSuggestions?.[0]?.name?.trim() || input.city || 'Primary location',
+      })),
+      clientPrepChecklist: buildClientPrepChecklist({
+        sessionCategory,
+        durationMinutes,
+      }),
+      contingencyPlans: buildContingencyPlans({
+        sessionCategory,
+        durationMinutes,
+      }),
     };
 
     const disallowedShotPattern = sessionCategory === 'family' ? null : /\b(kid|kids|child|children|sibling|toddler|newborn|baby)\b/i;
