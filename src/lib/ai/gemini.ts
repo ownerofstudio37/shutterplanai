@@ -180,6 +180,177 @@ function getFallbackSessionPlan(input: {
   constraints?: string;
 }): SessionPlan {
   const cityLabel = input.city || 'your area';
+  const isFamilySession = /family|newborn|maternity|kids|children/i.test(input.shootType);
+
+  const fallbackLocations = isFamilySession
+    ? [
+        {
+          name: `${cityLabel} Botanical Garden`,
+          whyItWorks: 'Safe walking paths, shade variety, and soft natural backdrops suited for families.',
+          microLocations: ['Tree canopy path', 'Garden archway', 'Bench with open shade'],
+          logistics: {
+            parking: 'Main visitor lot near entrance.',
+            restroom: 'Visitor center facilities available.',
+            walkingDistance: '2-6 minutes between spots.',
+          },
+        },
+        {
+          name: `${cityLabel} Historic Town Square`,
+          whyItWorks: 'Textured architecture and flexible composition options without long walks.',
+          microLocations: ['Brick storefront corner', 'Courthouse steps', 'Arcade walkway'],
+          logistics: {
+            parking: 'Street parking plus nearby public lot.',
+            restroom: 'Public facilities or nearby cafe.',
+            walkingDistance: '1-4 minutes between spots.',
+          },
+        },
+        {
+          name: `${cityLabel} Community Park`,
+          whyItWorks: 'Open space for movement prompts and candid family interactions.',
+          microLocations: ['Open lawn edge', 'Tree-lined trail', 'Pond overlook'],
+          logistics: {
+            parking: 'Central lot adjacent to main path.',
+            restroom: 'Park restroom near pavilion.',
+            walkingDistance: '3-8 minutes between spots.',
+          },
+        },
+      ]
+    : [
+        {
+          name: `${cityLabel} Downtown Arts District`,
+          whyItWorks: 'Clean lines and visual variety for polished hero frames.',
+          microLocations: ['Murals wall', 'Neutral facade', 'Leading-line corridor'],
+          logistics: {
+            parking: 'Metered parking and nearby garage.',
+            restroom: 'Nearby coffee shop or public venue.',
+            walkingDistance: '2-5 minutes between spots.',
+          },
+        },
+        {
+          name: `${cityLabel} Waterfront Promenade`,
+          whyItWorks: 'Depth, light direction options, and layered backgrounds.',
+          microLocations: ['Railing overlook', 'Stone steps', 'Tree-lined stretch'],
+          logistics: {
+            parking: 'Public lot near promenade entrance.',
+            restroom: 'Restroom near visitor area.',
+            walkingDistance: '3-7 minutes between spots.',
+          },
+        },
+        {
+          name: `${cityLabel} Civic Plaza`,
+          whyItWorks: 'Open geometry and repeatable composition anchors.',
+          microLocations: ['Symmetrical staircase', 'Pillar corridor', 'Open concrete plane'],
+          logistics: {
+            parking: 'Parking garage within one block.',
+            restroom: 'Nearby municipal/public building.',
+            walkingDistance: '1-4 minutes between spots.',
+          },
+        },
+      ];
+
+  const fallbackShots: SessionPlanShot[] = [
+    {
+      title: 'Hero group portrait',
+      description: 'Balanced, polished anchor frame for the full session.',
+      location: fallbackLocations[0].name,
+      microSpot: fallbackLocations[0].microLocations[0],
+      poseSuggestion: 'Triangular grouping with slight stagger and connected hands.',
+      compositionSuggestion: 'Eye-level, centered with negative space for print crops.',
+      timingHint: 'Start of session',
+      notes: 'Capture this first as a guaranteed keeper.',
+    },
+    {
+      title: 'Parents / couple portrait',
+      description: 'Connection-focused portrait with soft depth and clean background.',
+      location: fallbackLocations[0].name,
+      microSpot: fallbackLocations[0].microLocations[1],
+      poseSuggestion: 'Close stance, foreheads near, natural interaction prompt.',
+      compositionSuggestion: 'Medium-tight crop at 85mm equivalent with foreground blur.',
+      timingHint: 'Early-mid session',
+      notes: 'Prioritize natural expressions over rigid posing.',
+    },
+    {
+      title: 'Walking candid sequence',
+      description: 'Natural interaction and movement for authentic emotion.',
+      location: fallbackLocations[0].name,
+      microSpot: fallbackLocations[0].microLocations[2],
+      poseSuggestion: 'Prompt conversation while walking shoulder-to-shoulder.',
+      compositionSuggestion: 'Slightly low angle, shallow depth for subject separation.',
+      timingHint: 'Mid-session',
+      notes: 'Shoot bursts across 10-15 second prompts.',
+    },
+    {
+      title: 'Sibling / child connection',
+      description: 'Playful interaction frame with layered depth.',
+      location: fallbackLocations[1].name,
+      microSpot: fallbackLocations[1].microLocations[0],
+      poseSuggestion: 'Prompt a short game or shared joke to trigger natural expression.',
+      compositionSuggestion: 'Horizontal framing with environmental context.',
+      timingHint: 'Mid-session',
+      notes: 'Use continuous AF for movement.',
+    },
+    {
+      title: 'Seated storytelling portrait',
+      description: 'Calmer frame for variety and album pacing.',
+      location: fallbackLocations[1].name,
+      microSpot: fallbackLocations[1].microLocations[1],
+      poseSuggestion: 'Layered seated positions with subtle hand connection.',
+      compositionSuggestion: 'Symmetry-forward framing with slight angle break.',
+      timingHint: 'Mid-session reset',
+      notes: 'Great when kids need a brief pause.',
+    },
+    {
+      title: 'Individual portrait A',
+      description: 'Confident solo frame with clean separation.',
+      location: fallbackLocations[1].name,
+      microSpot: fallbackLocations[1].microLocations[2],
+      poseSuggestion: 'Relaxed stance, shoulder turn, weight on back foot.',
+      compositionSuggestion: 'Vertical portrait with architectural leading lines.',
+      timingHint: 'Mid-late session',
+      notes: 'Capture both smiling and neutral expression.',
+    },
+    {
+      title: 'Individual portrait B',
+      description: 'Second solo portrait style for visual variety.',
+      location: fallbackLocations[2].name,
+      microSpot: fallbackLocations[2].microLocations[0],
+      poseSuggestion: 'Walking or gentle movement to reduce stiffness.',
+      compositionSuggestion: 'Off-center composition with negative space.',
+      timingHint: 'Mid-late session',
+      notes: 'Use burst mode for natural cadence.',
+    },
+    {
+      title: 'Detail close-up set',
+      description: 'Hands, accessories, expressions, and texture-based details.',
+      location: fallbackLocations[2].name,
+      microSpot: fallbackLocations[2].microLocations[1],
+      poseSuggestion: 'Hands together, subtle turns, relaxed shoulders.',
+      compositionSuggestion: 'Tight crop with diagonal framing.',
+      timingHint: 'Any stable light window',
+      notes: 'Use for album pacing and storytelling transitions.',
+    },
+    {
+      title: 'Wide environmental portrait',
+      description: 'Scene-setting frame that anchors location and mood.',
+      location: fallbackLocations[2].name,
+      microSpot: fallbackLocations[2].microLocations[2],
+      poseSuggestion: 'Small-in-frame placement with connected body language.',
+      compositionSuggestion: 'Wide lens with strong foreground-background layering.',
+      timingHint: 'Golden hour if available',
+      notes: 'Keep horizon and verticals clean.',
+    },
+    {
+      title: 'Closing signature frame',
+      description: 'Final high-impact shot to end the session.',
+      location: fallbackLocations[0].name,
+      microSpot: fallbackLocations[0].microLocations[0],
+      poseSuggestion: 'Confident, connected stance with direct engagement.',
+      compositionSuggestion: 'Cinematic crop with controlled negative space.',
+      timingHint: 'End of session',
+      notes: 'Leave with one guaranteed portfolio-level frame.',
+    },
+  ];
+
   return {
     projectTitle: `${input.shootType} Session Plan`,
     creativeDirection: `A ${input.mood || 'balanced'} visual approach for ${input.subjectDetails || 'the subject'} with practical pacing and flexible backup options.`,
@@ -189,60 +360,8 @@ function getFallbackSessionPlan(input: {
       { timeBlock: 'Variety + Movement (30-50 min)', focus: 'Lifestyle and candid variety', notes: 'Use prompts and transitions between micro-locations.' },
       { timeBlock: 'Final Highlights (50-60 min)', focus: 'Signature closing shots', notes: 'Finish with 1-2 bold compositions and backup safety frame.' },
     ],
-    locationSuggestions: [
-      {
-        name: `${cityLabel} Park / Open Green Space`,
-        whyItWorks: 'Reliable backgrounds, room for movement, family-friendly flexibility.',
-        microLocations: ['Tree-lined path', 'Open shade edge', 'Textured wall or fence'],
-        logistics: {
-          parking: 'Use main lot and arrive 10 minutes early.',
-          restroom: 'Check visitor center or nearest public facility.',
-          walkingDistance: '3-7 minutes between key spots.',
-        },
-      },
-      {
-        name: `${cityLabel} Urban Edge`,
-        whyItWorks: 'Architectural lines for modern compositions and clean framing.',
-        microLocations: ['Leading-line sidewalk', 'Neutral wall', 'Corner with depth layers'],
-        logistics: {
-          parking: 'Street parking with backup lot nearby.',
-          restroom: 'Use nearby cafe/public venue.',
-          walkingDistance: '2-5 minutes between spots.',
-        },
-      },
-    ],
-    shotList: [
-      {
-        title: 'Hero group portrait',
-        description: 'Balanced, polished anchor frame for the full session.',
-        location: `${cityLabel} Park / Open Green Space`,
-        microSpot: 'Open shade edge',
-        poseSuggestion: 'Triangular grouping with slight stagger and connected hands.',
-        compositionSuggestion: 'Eye-level, centered with negative space for print crops.',
-        timingHint: 'Early in session',
-        notes: 'Capture this first as a guaranteed keeper.',
-      },
-      {
-        title: 'Walking candid sequence',
-        description: 'Natural interaction and movement for authentic emotion.',
-        location: `${cityLabel} Park / Open Green Space`,
-        microSpot: 'Tree-lined path',
-        poseSuggestion: 'Prompt conversation while walking shoulder-to-shoulder.',
-        compositionSuggestion: 'Slightly low angle, shallow depth for subject separation.',
-        timingHint: 'Mid-session',
-        notes: 'Shoot bursts across 10-15 second prompts.',
-      },
-      {
-        title: 'Detail close-up set',
-        description: 'Hands, accessories, expressions, and texture-based details.',
-        location: `${cityLabel} Urban Edge`,
-        microSpot: 'Textured wall',
-        poseSuggestion: 'Hands together, subtle turns, relaxed shoulders.',
-        compositionSuggestion: 'Tight crop with diagonal framing.',
-        timingHint: 'Any time with stable light',
-        notes: 'Use for album pacing and storytelling transitions.',
-      },
-    ],
+    locationSuggestions: fallbackLocations,
+    shotList: fallbackShots,
     clientPrepChecklist: [
       'Arrive 10 minutes early to avoid rushing the first setup.',
       'Bring comfortable walking shoes between micro-locations.',
@@ -361,6 +480,15 @@ Return JSON only with schema:
 "contingencyPlans":["string"]
 }`;
 
+  const qualityGuardrails = `
+
+Quality requirements:
+- Return 4-6 locationSuggestions.
+- Return 10-16 shotList items.
+- No generic placeholders (e.g., "Urban Edge", "Open Green Space").
+- Locations must be family-safe if shoot type implies family/newborn/kids.
+- Every shot must reference one of the listed locationSuggestions.`;
+
   try {
     const response = await fetchWithRetry(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
@@ -368,7 +496,7 @@ Return JSON only with schema:
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
+          contents: [{ parts: [{ text: `${prompt}${qualityGuardrails}` }] }],
           generationConfig: { temperature: 0.7, responseMimeType: 'application/json' },
         }),
       }
@@ -381,7 +509,7 @@ Return JSON only with schema:
     const text = payload.candidates?.[0]?.content?.parts?.map(part => part.text ?? '').join('') ?? '';
     if (!text) throw new Error('Empty AI response');
     const parsed = extractJsonObject<SessionPlan>(text);
-    return {
+    const normalizedPlan = {
       projectTitle: parsed.projectTitle?.trim() || `${input.shootType} Session Plan`,
       creativeDirection: parsed.creativeDirection?.trim() || '',
       timeline: Array.isArray(parsed.timeline) ? parsed.timeline.slice(0, 8) : [],
@@ -390,6 +518,12 @@ Return JSON only with schema:
       clientPrepChecklist: Array.isArray(parsed.clientPrepChecklist) ? parsed.clientPrepChecklist.slice(0, 12) : [],
       contingencyPlans: Array.isArray(parsed.contingencyPlans) ? parsed.contingencyPlans.slice(0, 12) : [],
     };
+
+    if (normalizedPlan.locationSuggestions.length < 3 || normalizedPlan.shotList.length < 8) {
+      throw new Error('Plan quality below threshold');
+    }
+
+    return normalizedPlan;
   } catch {
     return getFallbackSessionPlan(input);
   }

@@ -39,6 +39,8 @@ export async function POST(request: NextRequest) {
     }
 
     const payload = await request.json();
+    const shootType = typeof payload.shootType === 'string' ? payload.shootType : '';
+    const isFamilySession = /family|newborn|maternity|kids|children/i.test(shootType);
 
     if (!payload?.shootType || typeof payload.shootType !== 'string') {
       return NextResponse.json(
@@ -58,13 +60,28 @@ export async function POST(request: NextRequest) {
     });
 
     const city = typeof payload.city === 'string' ? payload.city : undefined;
+    const bannedTerms = isFamilySession
+      ? ['high school', 'jail', 'prison', 'cemetery', 'hospital', 'industrial', 'warehouse']
+      : [];
+
+    const cityFallbackGeo = city ? await geocodePlace({ place: city }) : { latitude: null, longitude: null };
+    const nearCity =
+      cityFallbackGeo.latitude != null && cityFallbackGeo.longitude != null
+        ? {
+            latitude: cityFallbackGeo.latitude,
+            longitude: cityFallbackGeo.longitude,
+            maxDistanceKm: 45,
+          }
+        : undefined;
 
     const initialLocations = await geocodeLocations(
       plan.locationSuggestions ?? [],
-      city
+      city,
+      {
+        near: nearCity,
+        bannedTerms,
+      }
     );
-
-    const cityFallbackGeo = city ? await geocodePlace({ place: city }) : { latitude: null, longitude: null };
 
     const enrichedLocations = await Promise.all(
       initialLocations.map(async location => {
@@ -73,7 +90,12 @@ export async function POST(request: NextRequest) {
         }
 
         const simplified = simplifyLocationName(location.name);
-        const retryGeo = await geocodePlace({ place: simplified || location.name, city });
+        const retryGeo = await geocodePlace({
+          place: simplified || location.name,
+          city,
+          near: nearCity,
+          bannedTerms,
+        });
 
         if (retryGeo.latitude != null && retryGeo.longitude != null) {
           return {
