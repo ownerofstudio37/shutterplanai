@@ -55,12 +55,17 @@ export default function Dashboard() {
         <Card>
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
           <div className="space-y-3">
-            <Link href="/dashboard/projects/new">
+            <Link href="/dashboard/projects">
               <Button variant="primary" className="w-full text-left">
                 ✨ Create New Project
               </Button>
             </Link>
-            <Link href="/dashboard/shots/new">
+            <Link href="/dashboard/projects">
+              <Button variant="secondary" className="w-full text-left">
+                📁 Manage Projects
+              </Button>
+            </Link>
+            <Link href="/dashboard/shots">
               <Button variant="secondary" className="w-full text-left">
                 📸 Plan New Shot
               </Button>
