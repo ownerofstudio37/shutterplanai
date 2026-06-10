@@ -34,6 +34,24 @@ interface SearchCandidateInput {
   limit?: number;
 }
 
+function isLikelyUsZip(value?: string) {
+  if (!value) return false;
+  return /^\d{5}(?:-\d{4})?$/.test(value.trim());
+}
+
+function isLikelyUsLocation(value?: string) {
+  if (!value) return false;
+
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return false;
+  if (/(\busa\b|\bu\.s\.a\b|\bunited states\b|\bus\b)/i.test(normalized)) return true;
+
+  // Detect "City, TX" / "Austin TX" style input.
+  const stateAbbrev = '(al|ak|az|ar|ca|co|ct|de|fl|ga|hi|ia|id|il|in|ks|ky|la|ma|md|me|mi|mn|mo|ms|mt|nc|nd|ne|nh|nj|nm|nv|ny|oh|ok|or|pa|ri|sc|sd|tn|tx|ut|va|vt|wa|wi|wv|wy|dc)';
+  const usStatePattern = new RegExp(`(?:,|\\s)${stateAbbrev}(?:\\b|\\s|$)`, 'i');
+  return usStatePattern.test(normalized);
+}
+
 function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -53,8 +71,27 @@ export async function geocodePlace(input: {
     return { latitude: null, longitude: null };
   }
 
-  const query = [place, input.city?.trim()].filter(Boolean).join(', ');
-  const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&q=${encodeURIComponent(query)}`;
+  const shouldBiasUs =
+    isLikelyUsZip(place) ||
+    isLikelyUsZip(input.city) ||
+    isLikelyUsLocation(place) ||
+    isLikelyUsLocation(input.city);
+
+  const query = [place, input.city?.trim(), shouldBiasUs && isLikelyUsZip(place) ? 'United States' : null]
+    .filter(Boolean)
+    .join(', ');
+
+  const params = new URLSearchParams({
+    format: 'jsonv2',
+    limit: '5',
+    q: query,
+  });
+
+  if (shouldBiasUs) {
+    params.set('countrycodes', 'us');
+  }
+
+  const url = `https://nominatim.openstreetmap.org/search?${params.toString()}`;
 
   const toRadians = (value: number) => (value * Math.PI) / 180;
   const haversineKm = (aLat: number, aLon: number, bLat: number, bLon: number) => {
