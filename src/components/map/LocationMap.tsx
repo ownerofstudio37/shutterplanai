@@ -28,6 +28,15 @@ const getMarkerColor = (status: ShotItem['status']) => {
   return '#6B7280';
 };
 
+function isMappableCoordinate(lat: number, lng: number) {
+  const isFinitePair = Number.isFinite(lat) && Number.isFinite(lng);
+  if (!isFinitePair) return false;
+
+  const isWithinBounds = lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
+  const isLikelyNullIsland = Math.abs(lat) < 0.05 && Math.abs(lng) < 0.05;
+  return isWithinBounds && !isLikelyNullIsland;
+}
+
 export default function LocationMap({ shots, onSelectShot }: LocationMapProps) {
   const tileProviders = useMemo(
     () => [
@@ -53,7 +62,7 @@ export default function LocationMap({ shots, onSelectShot }: LocationMapProps) {
           lat: Number(shot.latitude),
           lng: Number(shot.longitude),
         }))
-        .filter(item => Number.isFinite(item.lat) && Number.isFinite(item.lng)),
+        .filter(item => isMappableCoordinate(item.lat, item.lng)),
     [shots]
   );
 

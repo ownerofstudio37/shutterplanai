@@ -48,6 +48,15 @@ function getAuthHeader() {
   return headers;
 }
 
+function isMappableCoordinate(lat: number, lng: number) {
+  const isFinitePair = Number.isFinite(lat) && Number.isFinite(lng);
+  if (!isFinitePair) return false;
+
+  const isWithinBounds = lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
+  const isLikelyNullIsland = Math.abs(lat) < 0.05 && Math.abs(lng) < 0.05;
+  return isWithinBounds && !isLikelyNullIsland;
+}
+
 export default function LocationsPage() {
   const [projects, setProjects] = useState<ProjectOption[]>([]);
   const [shots, setShots] = useState<ShotItem[]>([]);
@@ -90,7 +99,7 @@ export default function LocationsPage() {
       const matchesProject = projectFilter === 'all' || shot.project_id === projectFilter;
       const lat = Number(shot.latitude);
       const lng = Number(shot.longitude);
-      const hasCoordinates = Number.isFinite(lat) && Number.isFinite(lng);
+      const hasCoordinates = isMappableCoordinate(lat, lng);
       return matchesProject && hasCoordinates;
     });
   }, [shots, projectFilter]);
@@ -100,7 +109,7 @@ export default function LocationsPage() {
       const matchesProject = projectFilter === 'all' || shot.project_id === projectFilter;
       const lat = Number(shot.latitude);
       const lng = Number(shot.longitude);
-      const noCoordinates = !Number.isFinite(lat) || !Number.isFinite(lng);
+      const noCoordinates = !isMappableCoordinate(lat, lng);
       return matchesProject && noCoordinates;
     });
   }, [shots, projectFilter]);

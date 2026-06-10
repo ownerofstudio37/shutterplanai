@@ -77,6 +77,25 @@ function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function sanitizeCoordinates(latitude: unknown, longitude: unknown) {
+  const lat = typeof latitude === 'number' ? latitude : Number(latitude);
+  const lng = typeof longitude === 'number' ? longitude : Number(longitude);
+
+  const hasFinite = Number.isFinite(lat) && Number.isFinite(lng);
+  if (!hasFinite) {
+    return { latitude: null, longitude: null };
+  }
+
+  const isWithinBounds = lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
+  const isLikelyNullIsland = Math.abs(lat) < 0.05 && Math.abs(lng) < 0.05;
+
+  if (!isWithinBounds || isLikelyNullIsland) {
+    return { latitude: null, longitude: null };
+  }
+
+  return { latitude: lat, longitude: lng };
+}
+
 export default function PlannerPage() {
   const router = useRouter();
 
@@ -224,12 +243,15 @@ export default function PlannerPage() {
 
       let createdShots = 0;
       const failedShots: string[] = [];
+      const failedReasons: string[] = [];
 
       for (const shot of plan.shotList) {
         const location = locationIndex.get((shot.location || '').toLowerCase());
         const refinement = refinementIndex.get((shot.location || '').toLowerCase());
-        const latitude = shot.latitude ?? location?.latitude ?? null;
-        const longitude = shot.longitude ?? location?.longitude ?? null;
+        const sanitizedCoordinates = sanitizeCoordinates(
+          shot.latitude ?? location?.latitude ?? null,
+          shot.longitude ?? location?.longitude ?? null
+        );
 
         const notes = [
           shot.notes,
@@ -257,8 +279,8 @@ export default function PlannerPage() {
           description: shot.description,
           location: shot.location,
           plannedTime: shootDate || null,
-          latitude,
-          longitude,
+          latitude: sanitizedCoordinates.latitude,
+          longitude: sanitizedCoordinates.longitude,
           notes,
           microSpotName: shot.microSpot,
           parkingNotes: location?.logistics?.parking ?? '',
@@ -271,19 +293,21 @@ export default function PlannerPage() {
         if (shotResult.success) {
           createdShots += 1;
         } else {
-          failedShots.push(shot.title || 'Untitled Shot');
+          const shotTitle = shot.title || 'Untitled Shot';
+          failedShots.push(shotTitle);
+          failedReasons.push(`${shotTitle}: ${shotResult.error || 'Unknown error'}`);
         }
       }
 
       if (createdShots === 0) {
         setError(
-          `Project was created, but no shots were saved. ${failedShots.length > 0 ? `Failed: ${failedShots.slice(0, 3).join(', ')}` : ''}`.trim()
+          `Project was created, but no shots were saved. ${failedReasons.length > 0 ? `Errors: ${failedReasons.slice(0, 2).join(' | ')}` : ''}`.trim()
         );
         return;
       }
 
       if (failedShots.length > 0) {
-        setError(`Created ${createdShots} shots, but ${failedShots.length} failed.`);
+        setError(`Created ${createdShots} shots, but ${failedShots.length} failed. ${failedReasons.slice(0, 2).join(' | ')}`);
       }
 
       router.push(`/dashboard/shot-board?project=${projectId}`);

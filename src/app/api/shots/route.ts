@@ -20,8 +20,15 @@ function toNullableNumber(value: unknown) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function isMissingColumnError(message?: string) {
-  return typeof message === 'string' && /column .* does not exist/i.test(message);
+function isMissingColumnError(error?: { message?: string; code?: string | null }) {
+  if (!error) return false;
+
+  if (error.code === 'PGRST204' || error.code === '42703') {
+    return true;
+  }
+
+  const message = error.message ?? '';
+  return /(column .* does not exist|schema cache|could not find the .* column)/i.test(message);
 }
 
 export async function GET(request: NextRequest) {
@@ -48,7 +55,7 @@ export async function GET(request: NextRequest) {
     let data: Array<Record<string, unknown>> | null = primaryResult.data as Array<Record<string, unknown>> | null;
     let error = primaryResult.error;
 
-    if (error && isMissingColumnError(error.message)) {
+    if (error && isMissingColumnError(error)) {
       let fallbackQuery = admin
         .from('shots')
         .select(BASE_SELECT)
@@ -181,7 +188,7 @@ export async function POST(request: NextRequest) {
     let data: Record<string, unknown> | null = primaryInsert.data as Record<string, unknown> | null;
     let error = primaryInsert.error;
 
-    if (error && isMissingColumnError(error.message)) {
+    if (error && isMissingColumnError(error)) {
       const fallback = await admin
         .from('shots')
         .insert(baseInsert)
