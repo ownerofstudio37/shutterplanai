@@ -10,8 +10,8 @@ interface ShotItem {
   description: string;
   location?: string;
   status: 'planned' | 'taken' | 'approved' | 'rejected';
-  latitude?: number | null;
-  longitude?: number | null;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
   micro_spot_name?: string;
   parking_notes?: string;
 }
@@ -29,16 +29,26 @@ const getMarkerColor = (status: ShotItem['status']) => {
 };
 
 export default function LocationMap({ shots, onSelectShot }: LocationMapProps) {
+  const withParsedCoordinates = useMemo(
+    () =>
+      shots
+        .map(shot => ({
+          shot,
+          lat: Number(shot.latitude),
+          lng: Number(shot.longitude),
+        }))
+        .filter(item => Number.isFinite(item.lat) && Number.isFinite(item.lng)),
+    [shots]
+  );
+
   // Calculate map center from shots with valid coordinates
   const mapCenter = useMemo(() => {
-    const validShots = shots.filter(s => s.latitude !== null && s.latitude !== undefined && s.longitude !== null && s.longitude !== undefined);
-    
-    if (validShots.length === 0) {
+    if (withParsedCoordinates.length === 0) {
       return [40, -95] as const; // Default to center of US
     }
 
-    const avgLat = validShots.reduce((sum, s) => sum + (s.latitude as number), 0) / validShots.length;
-    const avgLng = validShots.reduce((sum, s) => sum + (s.longitude as number), 0) / validShots.length;
+    const avgLat = withParsedCoordinates.reduce((sum, item) => sum + item.lat, 0) / withParsedCoordinates.length;
+    const avgLng = withParsedCoordinates.reduce((sum, item) => sum + item.lng, 0) / withParsedCoordinates.length;
 
     // Ensure values are valid numbers
     if (!isFinite(avgLat) || !isFinite(avgLng)) {
@@ -46,7 +56,7 @@ export default function LocationMap({ shots, onSelectShot }: LocationMapProps) {
     }
 
     return [avgLat, avgLng] as const;
-  }, [shots]);
+  }, [withParsedCoordinates]);
 
   const handleMarkerClick = useCallback(
     (shot: ShotItem) => {
@@ -54,9 +64,6 @@ export default function LocationMap({ shots, onSelectShot }: LocationMapProps) {
     },
     [onSelectShot]
   );
-
-  // Only render markers for shots with valid coordinates
-  const validShots = shots.filter(s => s.latitude !== null && s.latitude !== undefined && s.longitude !== null && s.longitude !== undefined);
 
   return (
     <MapContainer
@@ -71,39 +78,39 @@ export default function LocationMap({ shots, onSelectShot }: LocationMapProps) {
         attribution="&copy; <a href='https://www.openstreetmap.org/copyright'>OpenStreetMap</a>"
       />
 
-      {validShots.map(shot => (
+      {withParsedCoordinates.map(item => (
         <CircleMarker
-          key={shot.id}
-          center={[shot.latitude as number, shot.longitude as number] as L.LatLngExpression}
+          key={item.shot.id}
+          center={[item.lat, item.lng] as L.LatLngExpression}
           radius={8}
           pathOptions={{
             color: '#ffffff',
             weight: 2,
-            fillColor: getMarkerColor(shot.status),
+            fillColor: getMarkerColor(item.shot.status),
             fillOpacity: 1,
           }}
           eventHandlers={{
-            click: () => handleMarkerClick(shot),
+            click: () => handleMarkerClick(item.shot),
           }}
         >
           <Popup>
             <div className="space-y-2 text-sm">
-              <h4 className="font-semibold text-gray-900">{shot.title}</h4>
-              <p className="text-xs text-gray-600">{shot.project_title}</p>
-              {shot.location && <p className="text-xs text-gray-700">{shot.location}</p>}
-              {shot.micro_spot_name && <p className="text-xs font-medium text-blue-600">🎯 {shot.micro_spot_name}</p>}
+              <h4 className="font-semibold text-gray-900">{item.shot.title}</h4>
+              <p className="text-xs text-gray-600">{item.shot.project_title}</p>
+              {item.shot.location && <p className="text-xs text-gray-700">{item.shot.location}</p>}
+              {item.shot.micro_spot_name && <p className="text-xs font-medium text-blue-600">🎯 {item.shot.micro_spot_name}</p>}
               <span
                 className={`inline-block px-2 py-1 rounded text-xs font-medium ${
-                  shot.status === 'taken'
+                  item.shot.status === 'taken'
                     ? 'bg-green-100 text-green-700'
-                    : shot.status === 'approved'
+                    : item.shot.status === 'approved'
                       ? 'bg-blue-100 text-blue-700'
-                      : shot.status === 'rejected'
+                      : item.shot.status === 'rejected'
                         ? 'bg-red-100 text-red-700'
                         : 'bg-gray-100 text-gray-700'
                 }`}
               >
-                {shot.status.charAt(0).toUpperCase() + shot.status.slice(1)}
+                {item.shot.status.charAt(0).toUpperCase() + item.shot.status.slice(1)}
               </span>
             </div>
           </Popup>

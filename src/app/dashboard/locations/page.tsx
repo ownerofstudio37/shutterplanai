@@ -30,8 +30,8 @@ interface ShotItem {
   planned_time?: string | null;
   notes?: string;
   status: 'planned' | 'taken' | 'approved' | 'rejected';
-  latitude?: number | null;
-  longitude?: number | null;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
   micro_spot_name?: string;
   parking_notes?: string;
   background_description?: string;
@@ -88,7 +88,9 @@ export default function LocationsPage() {
   const filteredShots = useMemo(() => {
     return shots.filter(shot => {
       const matchesProject = projectFilter === 'all' || shot.project_id === projectFilter;
-      const hasCoordinates = shot.latitude !== null && shot.longitude !== null;
+      const lat = Number(shot.latitude);
+      const lng = Number(shot.longitude);
+      const hasCoordinates = Number.isFinite(lat) && Number.isFinite(lng);
       return matchesProject && hasCoordinates;
     });
   }, [shots, projectFilter]);
@@ -96,7 +98,9 @@ export default function LocationsPage() {
   const shotsWithoutLocation = useMemo(() => {
     return shots.filter(shot => {
       const matchesProject = projectFilter === 'all' || shot.project_id === projectFilter;
-      const noCoordinates = shot.latitude === null || shot.longitude === null;
+      const lat = Number(shot.latitude);
+      const lng = Number(shot.longitude);
+      const noCoordinates = !Number.isFinite(lat) || !Number.isFinite(lng);
       return matchesProject && noCoordinates;
     });
   }, [shots, projectFilter]);
@@ -238,11 +242,11 @@ export default function LocationsPage() {
                 </div>
               )}
 
-              {selectedShot.latitude && selectedShot.longitude && (
+              {selectedShot.latitude != null && selectedShot.longitude != null && (
                 <div className="pt-3 border-t">
                   <p className="text-xs font-medium text-gray-700 mb-1">Coordinates</p>
                   <p className="text-xs text-gray-600">
-                    {selectedShot.latitude.toFixed(6)}, {selectedShot.longitude.toFixed(6)}
+                    {Number(selectedShot.latitude).toFixed(6)}, {Number(selectedShot.longitude).toFixed(6)}
                   </p>
                 </div>
               )}

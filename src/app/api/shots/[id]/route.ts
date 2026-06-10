@@ -2,6 +2,22 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdminClient } from '@/lib/supabase/server';
 import { requireAuth } from '@/lib/auth/serverAuth';
 
+function toNullableTrimmedString(value: unknown) {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function toNullableNumber(value: unknown) {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function isMissingColumnError(message?: string) {
+  return typeof message === 'string' && /column .* does not exist/i.test(message);
+}
+
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const auth = await requireAuth(request);
@@ -39,19 +55,48 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       return NextResponse.json({ success: false, error: 'Not authorized' }, { status: 403 });
     }
 
-    const { data, error } = await admin
+    const baseUpdate = {
+      title: typeof payload.title === 'string' ? payload.title.trim() : undefined,
+      description: typeof payload.description === 'string' ? payload.description.trim() : undefined,
+      location: typeof payload.location === 'string' ? payload.location.trim() : null,
+      planned_time: typeof payload.plannedTime === 'string' ? payload.plannedTime : null,
+      notes: typeof payload.notes === 'string' ? payload.notes.trim() : undefined,
+      status: typeof payload.status === 'string' ? payload.status : undefined,
+    };
+
+    const extendedUpdate = {
+      ...baseUpdate,
+      latitude: toNullableNumber(payload.latitude),
+      longitude: toNullableNumber(payload.longitude),
+      micro_spot_name: toNullableTrimmedString(payload.microSpotName),
+      parking_notes: toNullableTrimmedString(payload.parkingNotes),
+      background_description: toNullableTrimmedString(payload.backgroundDescription),
+      walking_distance: toNullableTrimmedString(payload.walkingDistance),
+      restroom_location: toNullableTrimmedString(payload.restroomLocation),
+    };
+
+    const primaryResult = await admin
       .from('shots')
-      .update({
-        title: typeof payload.title === 'string' ? payload.title.trim() : undefined,
-        description: typeof payload.description === 'string' ? payload.description.trim() : undefined,
-        location: typeof payload.location === 'string' ? payload.location.trim() : null,
-        planned_time: typeof payload.plannedTime === 'string' ? payload.plannedTime : null,
-        notes: typeof payload.notes === 'string' ? payload.notes.trim() : undefined,
-        status: typeof payload.status === 'string' ? payload.status : undefined,
-      })
+      .update(extendedUpdate)
       .eq('id', id)
-      .select('id, project_id, title, description, location, planned_time, status, notes, image_url, created_at, updated_at')
+      .select(
+        'id, project_id, title, description, location, planned_time, status, notes, image_url, latitude, longitude, micro_spot_name, parking_notes, background_description, walking_distance, restroom_location, created_at, updated_at'
+      )
       .single();
+
+    let data: Record<string, unknown> | null = primaryResult.data as Record<string, unknown> | null;
+    let error = primaryResult.error;
+
+    if (error && isMissingColumnError(error.message)) {
+      const fallback = await admin
+        .from('shots')
+        .update(baseUpdate)
+        .eq('id', id)
+        .select('id, project_id, title, description, location, planned_time, status, notes, image_url, created_at, updated_at')
+        .single();
+      data = fallback.data as Record<string, unknown> | null;
+      error = fallback.error;
+    }
 
     if (error) {
       return NextResponse.json({ success: false, error: error.message }, { status: 400 });

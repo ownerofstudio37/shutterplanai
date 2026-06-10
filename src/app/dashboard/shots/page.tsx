@@ -71,6 +71,13 @@ export default function ShotsPage() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [location, setLocation] = useState('');
+  const [latitude, setLatitude] = useState('');
+  const [longitude, setLongitude] = useState('');
+  const [microSpotName, setMicroSpotName] = useState('');
+  const [parkingNotes, setParkingNotes] = useState('');
+  const [backgroundDescription, setBackgroundDescription] = useState('');
+  const [walkingDistance, setWalkingDistance] = useState('');
+  const [restroomLocation, setRestroomLocation] = useState('');
   const [creativeBrief, setCreativeBrief] = useState('');
   const [aiProjectId, setAiProjectId] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -171,6 +178,13 @@ export default function ShotsPage() {
           title,
           description,
           location,
+          latitude,
+          longitude,
+          microSpotName,
+          parkingNotes,
+          backgroundDescription,
+          walkingDistance,
+          restroomLocation,
           status: 'planned',
         }),
       });
@@ -184,6 +198,13 @@ export default function ShotsPage() {
       setTitle('');
       setDescription('');
       setLocation('');
+      setLatitude('');
+      setLongitude('');
+      setMicroSpotName('');
+      setParkingNotes('');
+      setBackgroundDescription('');
+      setWalkingDistance('');
+      setRestroomLocation('');
       await loadShots();
     } catch {
       setError('Failed to create shot');
@@ -252,6 +273,13 @@ export default function ShotsPage() {
           plannedTime: editForm.plannedTime || null,
           notes: editForm.notes,
           status: editForm.status,
+          latitude: editForm.latitude,
+          longitude: editForm.longitude,
+          microSpotName: editForm.microSpotName,
+          parkingNotes: editForm.parkingNotes,
+          backgroundDescription: editForm.backgroundDescription,
+          walkingDistance: editForm.walkingDistance,
+          restroomLocation: editForm.restroomLocation,
         }),
       });
 
@@ -527,6 +555,68 @@ export default function ShotsPage() {
             placeholder="Location (optional)"
             disabled={isCreating}
           />
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <input
+              className="w-full rounded-lg border border-gray-300 px-4 py-2"
+              value={latitude}
+              onChange={event => setLatitude(event.target.value)}
+              placeholder="Latitude (e.g. 30.2672)"
+              disabled={isCreating}
+            />
+            <input
+              className="w-full rounded-lg border border-gray-300 px-4 py-2"
+              value={longitude}
+              onChange={event => setLongitude(event.target.value)}
+              placeholder="Longitude (e.g. -97.7431)"
+              disabled={isCreating}
+            />
+          </div>
+
+          <input
+            className="w-full rounded-lg border border-gray-300 px-4 py-2"
+            value={microSpotName}
+            onChange={event => setMicroSpotName(event.target.value)}
+            placeholder="Micro-spot name (e.g. Weeping willow by lake)"
+            disabled={isCreating}
+          />
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <input
+              className="w-full rounded-lg border border-gray-300 px-4 py-2"
+              value={walkingDistance}
+              onChange={event => setWalkingDistance(event.target.value)}
+              placeholder="Walking distance (e.g. 4 min from lot)"
+              disabled={isCreating}
+            />
+            <input
+              className="w-full rounded-lg border border-gray-300 px-4 py-2"
+              value={restroomLocation}
+              onChange={event => setRestroomLocation(event.target.value)}
+              placeholder="Nearest restroom location"
+              disabled={isCreating}
+            />
+          </div>
+
+          <textarea
+            className="min-h-20 w-full rounded-lg border border-gray-300 px-4 py-2"
+            value={parkingNotes}
+            onChange={event => setParkingNotes(event.target.value)}
+            placeholder="Parking notes"
+            disabled={isCreating}
+          />
+          <textarea
+            className="min-h-20 w-full rounded-lg border border-gray-300 px-4 py-2"
+            value={backgroundDescription}
+            onChange={event => setBackgroundDescription(event.target.value)}
+            placeholder="Background description"
+            disabled={isCreating}
+          />
+
+          <p className="text-xs text-gray-500">
+            Tip: Add coordinates now so this shot appears on the Locations map immediately.
+          </p>
+
           <Button type="submit" isLoading={isCreating} disabled={projects.length === 0}>
             {isCreating ? 'Adding...' : 'Add Shot'}
           </Button>
@@ -607,6 +697,14 @@ export default function ShotsPage() {
                       Project: {shot.project_title ?? 'Unknown'} · Status: {shot.status}
                       {shot.location ? ` · ${shot.location}` : ''}
                     </p>
+                    {(shot.micro_spot_name || (shot.latitude != null && shot.longitude != null)) && (
+                      <p className="mt-1 text-xs text-blue-600">
+                        {shot.micro_spot_name ? `Micro-spot: ${shot.micro_spot_name}` : 'Map pin ready'}
+                        {shot.latitude != null && shot.longitude != null
+                          ? ` · ${Number(shot.latitude).toFixed(5)}, ${Number(shot.longitude).toFixed(5)}`
+                          : ''}
+                      </p>
+                    )}
                   </div>
                   <div className="flex gap-2">
                     <Button variant="secondary" size="sm" onClick={() => openEditModal(shot)}>
@@ -657,6 +755,26 @@ export default function ShotsPage() {
             className="w-full rounded-lg border border-gray-300 px-4 py-2"
             placeholder="Location"
           />
+          <div className="grid gap-3 md:grid-cols-2">
+            <input
+              value={editForm.latitude}
+              onChange={event => setEditForm(prev => ({ ...prev, latitude: event.target.value }))}
+              className="w-full rounded-lg border border-gray-300 px-4 py-2"
+              placeholder="Latitude"
+            />
+            <input
+              value={editForm.longitude}
+              onChange={event => setEditForm(prev => ({ ...prev, longitude: event.target.value }))}
+              className="w-full rounded-lg border border-gray-300 px-4 py-2"
+              placeholder="Longitude"
+            />
+          </div>
+          <input
+            value={editForm.microSpotName}
+            onChange={event => setEditForm(prev => ({ ...prev, microSpotName: event.target.value }))}
+            className="w-full rounded-lg border border-gray-300 px-4 py-2"
+            placeholder="Micro-spot name"
+          />
           <input
             type="datetime-local"
             aria-label="Planned shoot time"
@@ -669,6 +787,32 @@ export default function ShotsPage() {
             onChange={event => setEditForm(prev => ({ ...prev, notes: event.target.value }))}
             className="min-h-24 w-full rounded-lg border border-gray-300 px-4 py-2"
             placeholder="Shot notes"
+          />
+          <div className="grid gap-3 md:grid-cols-2">
+            <input
+              value={editForm.walkingDistance}
+              onChange={event => setEditForm(prev => ({ ...prev, walkingDistance: event.target.value }))}
+              className="w-full rounded-lg border border-gray-300 px-4 py-2"
+              placeholder="Walking distance"
+            />
+            <input
+              value={editForm.restroomLocation}
+              onChange={event => setEditForm(prev => ({ ...prev, restroomLocation: event.target.value }))}
+              className="w-full rounded-lg border border-gray-300 px-4 py-2"
+              placeholder="Nearest restroom"
+            />
+          </div>
+          <textarea
+            value={editForm.parkingNotes}
+            onChange={event => setEditForm(prev => ({ ...prev, parkingNotes: event.target.value }))}
+            className="min-h-20 w-full rounded-lg border border-gray-300 px-4 py-2"
+            placeholder="Parking notes"
+          />
+          <textarea
+            value={editForm.backgroundDescription}
+            onChange={event => setEditForm(prev => ({ ...prev, backgroundDescription: event.target.value }))}
+            className="min-h-20 w-full rounded-lg border border-gray-300 px-4 py-2"
+            placeholder="Background description"
           />
           <select
             aria-label="Shot status"

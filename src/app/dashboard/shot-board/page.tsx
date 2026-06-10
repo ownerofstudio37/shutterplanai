@@ -28,6 +28,13 @@ interface ShotItem {
   notes?: string;
   image_url?: string | null;
   status: 'planned' | 'taken' | 'approved' | 'rejected';
+  latitude?: number | null;
+  longitude?: number | null;
+  micro_spot_name?: string | null;
+  parking_notes?: string | null;
+  background_description?: string | null;
+  walking_distance?: string | null;
+  restroom_location?: string | null;
 }
 
 function getAuthHeader() {
@@ -275,6 +282,52 @@ export default function ShotBoardPage() {
                         <dd className="mt-1 text-sm text-gray-800">{formatDate(shot.planned_time)}</dd>
                       </div>
                     </dl>
+
+                    {(shot.micro_spot_name || shot.walking_distance || shot.restroom_location) && (
+                      <dl className="grid gap-3 sm:grid-cols-2">
+                        {shot.micro_spot_name && (
+                          <div className="rounded-lg bg-slate-50 p-3">
+                            <dt className="text-xs uppercase tracking-wide text-gray-500">Micro-Spot</dt>
+                            <dd className="mt-1 text-sm text-gray-800">{shot.micro_spot_name}</dd>
+                          </div>
+                        )}
+                        {shot.walking_distance && (
+                          <div className="rounded-lg bg-slate-50 p-3">
+                            <dt className="text-xs uppercase tracking-wide text-gray-500">Walking Distance</dt>
+                            <dd className="mt-1 text-sm text-gray-800">{shot.walking_distance}</dd>
+                          </div>
+                        )}
+                        {shot.restroom_location && (
+                          <div className="rounded-lg bg-slate-50 p-3">
+                            <dt className="text-xs uppercase tracking-wide text-gray-500">Restroom</dt>
+                            <dd className="mt-1 text-sm text-gray-800">{shot.restroom_location}</dd>
+                          </div>
+                        )}
+                        {shot.latitude != null && shot.longitude != null && (
+                          <div className="rounded-lg bg-slate-50 p-3">
+                            <dt className="text-xs uppercase tracking-wide text-gray-500">Coordinates</dt>
+                            <dd className="mt-1 text-sm text-gray-800">
+                              {Number(shot.latitude).toFixed(6)}, {Number(shot.longitude).toFixed(6)}
+                            </dd>
+                          </div>
+                        )}
+                      </dl>
+                    )}
+
+                    {(shot.parking_notes || shot.background_description) && (
+                      <div className="rounded-lg bg-slate-50 p-3">
+                        {shot.parking_notes && (
+                          <p className="text-sm text-gray-700">
+                            <span className="font-medium text-gray-900">Parking:</span> {shot.parking_notes}
+                          </p>
+                        )}
+                        {shot.background_description && (
+                          <p className="mt-1 text-sm text-gray-700">
+                            <span className="font-medium text-gray-900">Background:</span> {shot.background_description}
+                          </p>
+                        )}
+                      </div>
+                    )}
 
                     <div className="rounded-lg bg-slate-50 p-3">
                       <p className="text-xs uppercase tracking-wide text-gray-500">Notes</p>
