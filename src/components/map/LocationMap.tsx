@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from 'react';
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
-import L from 'leaflet';
+import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet';
+import type L from 'leaflet';
 
 interface ShotItem {
   id: string;
@@ -21,27 +21,11 @@ interface LocationMapProps {
   onSelectShot: (shot: ShotItem) => void;
 }
 
-// Create custom icons for different statuses
-const getMarkerIcon = (status: string) => {
-  const iconColors: Record<string, string> = {
-    planned: '#6B7280', // gray
-    taken: '#10B981', // green
-    approved: '#3B82F6', // blue
-    rejected: '#EF4444', // red
-  };
-
-  const color = iconColors[status] || '#6B7280';
-
-  return new L.Icon({
-    iconUrl: `data:image/svg+xml;base64,${Buffer.from(
-      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="${encodeURIComponent(color)}">
-        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
-      </svg>`
-    ).toString('base64')}`,
-    iconSize: [32, 32],
-    iconAnchor: [16, 32],
-    popupAnchor: [0, -32],
-  });
+const getMarkerColor = (status: ShotItem['status']) => {
+  if (status === 'taken') return '#10B981';
+  if (status === 'approved') return '#3B82F6';
+  if (status === 'rejected') return '#EF4444';
+  return '#6B7280';
 };
 
 export default function LocationMap({ shots, onSelectShot }: LocationMapProps) {
@@ -88,10 +72,16 @@ export default function LocationMap({ shots, onSelectShot }: LocationMapProps) {
       />
 
       {validShots.map(shot => (
-        <Marker
+        <CircleMarker
           key={shot.id}
-          position={[shot.latitude as number, shot.longitude as number] as L.LatLngExpression}
-          icon={getMarkerIcon(shot.status)}
+          center={[shot.latitude as number, shot.longitude as number] as L.LatLngExpression}
+          radius={8}
+          pathOptions={{
+            color: '#ffffff',
+            weight: 2,
+            fillColor: getMarkerColor(shot.status),
+            fillOpacity: 1,
+          }}
           eventHandlers={{
             click: () => handleMarkerClick(shot),
           }}
@@ -117,7 +107,7 @@ export default function LocationMap({ shots, onSelectShot }: LocationMapProps) {
               </span>
             </div>
           </Popup>
-        </Marker>
+        </CircleMarker>
       ))}
     </MapContainer>
   );
