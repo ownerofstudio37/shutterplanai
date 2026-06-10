@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet';
 import type L from 'leaflet';
 
@@ -29,6 +29,22 @@ const getMarkerColor = (status: ShotItem['status']) => {
 };
 
 export default function LocationMap({ shots, onSelectShot }: LocationMapProps) {
+  const tileProviders = useMemo(
+    () => [
+      {
+        url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+        attribution: "&copy; <a href='https://www.openstreetmap.org/copyright'>OpenStreetMap</a>",
+      },
+      {
+        url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+        attribution:
+          "&copy; <a href='https://www.openstreetmap.org/copyright'>OpenStreetMap</a> &copy; <a href='https://carto.com/attributions'>CARTO</a>",
+      },
+    ],
+    []
+  );
+  const [tileProviderIndex, setTileProviderIndex] = useState(0);
+
   const withParsedCoordinates = useMemo(
     () =>
       shots
@@ -74,8 +90,18 @@ export default function LocationMap({ shots, onSelectShot }: LocationMapProps) {
       className="rounded-lg"
     >
       <TileLayer
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        attribution="&copy; <a href='https://www.openstreetmap.org/copyright'>OpenStreetMap</a>"
+        key={tileProviders[tileProviderIndex].url}
+        url={tileProviders[tileProviderIndex].url}
+        attribution={tileProviders[tileProviderIndex].attribution}
+        maxZoom={20}
+        eventHandlers={{
+          tileerror: () => {
+            setTileProviderIndex(current => {
+              if (current >= tileProviders.length - 1) return current;
+              return current + 1;
+            });
+          },
+        }}
       />
 
       {withParsedCoordinates.map(item => (
