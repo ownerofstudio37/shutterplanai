@@ -481,6 +481,250 @@ function buildSessionPlanningDataPackage(input: {
   };
 }
 
+function buildCreativeDirection(input: {
+  sessionCategory: SessionCategory;
+  subjectDetails: string;
+  mood: string;
+  durationMinutes: number;
+  mustHaveShots?: string;
+  constraints?: string;
+}) {
+  const toneMap: Record<SessionCategory, string> = {
+    family: 'warm, playful, and low-pressure',
+    engagement: 'romantic, connected, and editorial',
+    portrait: 'clean, confident, and polished',
+    event: 'observational, flexible, and moment-driven',
+  };
+
+  const focusMap: Record<SessionCategory, string> = {
+    family: 'keep transitions short and prioritize group connection frames first',
+    engagement: 'keep the couple moving, interacting, and close to each other',
+    portrait: 'create strong subject separation and clean posture variations',
+    event: 'cover the must-have moments, then build supporting detail frames',
+  };
+
+  const detailBits = [
+    input.subjectDetails?.trim(),
+    input.mustHaveShots?.trim() ? `Must-haves: ${input.mustHaveShots.trim()}` : '',
+    input.constraints?.trim() ? `Constraints: ${input.constraints.trim()}` : '',
+  ].filter(Boolean);
+
+  return [
+    `A ${toneMap[input.sessionCategory]} approach tailored for a ${input.durationMinutes}-minute ${input.sessionCategory} session.`,
+    `Visual goal: ${input.mood || 'balanced'} energy with ${focusMap[input.sessionCategory]}.`,
+    detailBits.length > 0 ? detailBits.join(' ') : 'No extra brief provided.',
+  ].join(' ');
+}
+
+function buildSupplementalShotTemplates(input: {
+  sessionCategory: SessionCategory;
+  durationMinutes: number;
+}): SessionPlanShot[] {
+  if (input.sessionCategory === 'engagement') {
+    return [
+      {
+        title: 'Over-the-shoulder close-up',
+        description: 'A tighter framing that adds intimacy and depth.',
+        location: '',
+        microSpot: 'Best close background',
+        poseSuggestion: 'Have one partner look past the other into the light.',
+        compositionSuggestion: 'Tight crop with strong foreground separation.',
+        timingHint: 'Mid-session',
+        notes: 'Useful when you want variety without changing location.',
+      },
+      {
+        title: 'Ring and hands detail',
+        description: 'A detail frame focused on the rings and hand connection.',
+        location: '',
+        microSpot: 'Any clean detail surface',
+        poseSuggestion: 'Interlock hands and rotate slightly toward the camera.',
+        compositionSuggestion: 'Macro-leaning crop with shallow depth of field.',
+        timingHint: 'Any time',
+        notes: 'Keep the hands relaxed and clean.',
+      },
+    ].slice(0, input.durationMinutes <= 45 ? 1 : 2);
+  }
+
+  if (input.sessionCategory === 'family') {
+    return [
+      {
+        title: 'Parent with child close-up',
+        description: 'A softer connection frame that breaks up the gallery.',
+        location: '',
+        microSpot: 'Quiet backdrop',
+        poseSuggestion: 'Have the child sit or lean naturally into a parent.',
+        compositionSuggestion: 'Medium-tight framing with a gentle angle.',
+        timingHint: 'Mid-session',
+        notes: 'Works well for calmer pacing.',
+      },
+      {
+        title: 'Movement burst sequence',
+        description: 'A quick series of walking or playful frames.',
+        location: '',
+        microSpot: 'Open walking path',
+        poseSuggestion: 'Count down, walk, twirl, or play a short game.',
+        compositionSuggestion: 'Loose framing with room for motion blur.',
+        timingHint: 'Mid-session',
+        notes: 'Great for restless kids.',
+      },
+    ].slice(0, input.durationMinutes <= 45 ? 1 : 2);
+  }
+
+  return [
+    {
+      title: 'Environmental variation',
+      description: 'A wider frame that shows the setting and adds pacing.',
+      location: '',
+      microSpot: 'Best scenic background',
+      poseSuggestion: 'Use a simple stance or seated pose with clean lines.',
+      compositionSuggestion: 'Wide framing with the subject slightly off center.',
+      timingHint: 'Mid-session',
+      notes: 'Adds variety for a short list.',
+    },
+    {
+      title: 'Profile or seated portrait',
+      description: 'A quieter framing option for a polished final set.',
+      location: '',
+      microSpot: 'Any clean backdrop',
+      poseSuggestion: 'Turn the body slightly and keep the expression relaxed.',
+      compositionSuggestion: 'Medium crop with soft background separation.',
+      timingHint: 'Late session',
+      notes: 'Useful for ending on a calm frame.',
+    },
+  ].slice(0, input.durationMinutes <= 45 ? 1 : 2);
+}
+
+function buildGroundedLocationSuggestions(input: {
+  sessionCategory: SessionCategory;
+  city: string;
+  locationCandidates: Array<{
+    name: string;
+    displayName?: string;
+    latitude?: number | null;
+    longitude?: number | null;
+    relevanceScore?: number;
+  }>;
+}): SessionPlanLocation[] {
+  const preferred = input.locationCandidates.slice(0, 6);
+
+  if (preferred.length === 0) {
+    return [
+      {
+        name: input.city,
+        whyItWorks: 'Central city fallback when no better real candidates are available.',
+        microLocations: ['Open shade', 'Simple walkway', 'Quiet corner'],
+        logistics: {
+          parking: 'Confirm parking before arrival.',
+          restroom: 'Check a nearby public restroom or venue.',
+          walkingDistance: 'Keep transitions minimal.',
+        },
+      },
+    ];
+  }
+
+  return preferred.map((candidate, index) => {
+    const label = candidate.displayName?.split(',').slice(0, 2).join(',').trim() || candidate.name;
+    const isFirst = index === 0;
+
+    return {
+      name: label,
+      displayName: candidate.displayName || label,
+      latitude: candidate.latitude ?? null,
+      longitude: candidate.longitude ?? null,
+      googleMapsUrl:
+        candidate.latitude != null && candidate.longitude != null
+          ? `https://maps.google.com/?q=${candidate.latitude},${candidate.longitude}`
+          : `https://maps.google.com/?q=${encodeURIComponent(candidate.displayName || label)}`,
+      whyItWorks:
+        input.sessionCategory === 'engagement'
+          ? isFirst
+            ? 'Best anchor spot for a couple session with easy flow and strong visual variety.'
+            : 'Secondary real-world option that keeps the session moving without long travel.'
+          : input.sessionCategory === 'family'
+            ? isFirst
+              ? 'Family-friendly anchor location with the shortest walk and best pacing.'
+              : 'Alternate spot that still supports quick transitions and calmer pacing.'
+            : isFirst
+              ? 'Strong foundational location with reliable composition options.'
+              : 'Supporting location that adds variety without inventing a new venue.',
+      microLocations:
+        input.sessionCategory === 'engagement'
+          ? ['Primary scenic angle', 'Quiet side path', 'Clean backdrop corner']
+          : input.sessionCategory === 'family'
+            ? ['Open shade area', 'Walking path', 'Quiet seated spot']
+            : ['Leading lines', 'Texture wall', 'Open frame'],
+      logistics: {
+        parking: 'Confirm the closest practical parking option before the shoot.',
+        restroom: 'Verify restroom access or nearby public facilities before arrival.',
+        walkingDistance: candidate.latitude != null && candidate.longitude != null
+          ? 'Aim for short transitions between micro-spots.'
+          : 'Confirm access and keep transitions short.',
+      },
+    };
+  });
+}
+
+function buildDeterministicPlan(input: {
+  shootType: string;
+  subjectDetails: string;
+  city: string;
+  duration?: string;
+  mood: string;
+  mustHaveShots?: string;
+  constraints?: string;
+  locationCandidates?: LocationCandidate[];
+}): SessionPlan {
+  const planningData = buildSessionPlanningDataPackage({
+    shootType: input.shootType,
+    city: input.city,
+    duration: input.duration,
+    locationCandidates: input.locationCandidates,
+  });
+
+  const locationSuggestions = buildGroundedLocationSuggestions({
+    sessionCategory: planningData.sessionCategory,
+    city: input.city,
+    locationCandidates: planningData.locationCandidates,
+  });
+
+  const supplementalShots = buildSupplementalShotTemplates({
+    sessionCategory: planningData.sessionCategory,
+    durationMinutes: planningData.durationMinutes,
+  });
+
+  const shotPool = mergeShots(
+    planningData.requiredShots,
+    supplementalShots,
+    planningData.shotCountTarget.max
+  ).map((shot, index) => {
+    const location = locationSuggestions[index % locationSuggestions.length];
+    const microSpot = location.microLocations[index % location.microLocations.length] || shot.microSpot;
+    return {
+      ...shot,
+      location: location.name,
+      microSpot,
+      notes: shot.notes || 'Grounded from session planning data.',
+    };
+  });
+
+  return {
+    projectTitle: `${input.shootType} Session Plan`,
+    creativeDirection: buildCreativeDirection({
+      sessionCategory: planningData.sessionCategory,
+      subjectDetails: input.subjectDetails,
+      mood: input.mood,
+      durationMinutes: planningData.durationMinutes,
+      mustHaveShots: input.mustHaveShots,
+      constraints: input.constraints,
+    }),
+    timeline: planningData.timeline,
+    locationSuggestions,
+    shotList: shotPool,
+    clientPrepChecklist: planningData.clientPrepChecklist,
+    contingencyPlans: planningData.contingencyPlans,
+  };
+}
+
 function getGeminiConfig() {
   const apiKey = process.env.GEMINI_API_KEY;
   const model = process.env.GEMINI_MODEL || 'gemini-3.1-pro-preview';
@@ -870,134 +1114,8 @@ export async function generateSessionPlan(input: {
   constraints?: string;
   locationCandidates?: LocationCandidate[];
 }) {
-  const { apiKey, model } = getGeminiConfig();
-  const planningData = buildSessionPlanningDataPackage({
-    shootType: input.shootType,
-    city: input.city,
-    duration: input.duration,
-    locationCandidates: input.locationCandidates,
-  });
-  const locationCandidateBlock = planningData.locationCandidates.length > 0
-    ? planningData.locationCandidates
-        .slice(0, 8)
-        .map((candidate, index) => `${index + 1}. ${candidate.name} — ${candidate.displayName || 'no display name'} (${candidate.latitude?.toFixed(5) ?? 'n/a'}, ${candidate.longitude?.toFixed(5) ?? 'n/a'})`)
-        .join('\n')
-    : 'No candidate locations available.';
-  const prompt = `You are an expert photography pre-production planner.
-
-Build a complete session plan for:
-- Shoot type: ${input.shootType}
-- Subject details: ${input.subjectDetails}
-- City: ${input.city}
-- Date: ${input.shootDate || 'Not specified'}
-- Duration: ${input.duration || 'Not specified'}
-- Mood: ${input.mood}
-- Must-have shots: ${input.mustHaveShots || 'None'}
-- Constraints: ${input.constraints || 'None'}
-
-Session type rules:
-- Session category is: ${planningData.sessionCategory}
-- ${planningData.sessionCategory === 'engagement' ? 'This is a couple session. Focus on romantic, connected, editorial, and ring-focused frames. Do not suggest kids or sibling shots.' : ''}
-- ${planningData.sessionCategory === 'family' ? 'This is a family session. Prioritize multi-person, child-friendly, low-walk, low-stress concepts.' : ''}
-- ${planningData.sessionCategory === 'portrait' ? 'This is a portrait session. Prioritize solo or small-group posing, not child-specific frames.' : ''}
-
-Real location candidates you may choose from:
-${locationCandidateBlock}
-
-Location rules:
-- Use only exact names from the location candidate list above.
-- Do NOT invent names like "Urban Edge" or "Open Green Space".
-- If none of the candidates work, return fewer location suggestions rather than inventing places.
-- Prefer the safest, shortest-walk options that fit the session type.
-
-Return JSON only with schema:
-{
-"projectTitle":"string",
-"creativeDirection":"string",
-"timeline":[{"timeBlock":"string","focus":"string","notes":"string"}],
-"locationSuggestions":[{"name":"string","whyItWorks":"string","microLocations":["string"],"logistics":{"parking":"string","restroom":"string","walkingDistance":"string"}}],
-"shotList":[{"title":"string","description":"string","location":"string","microSpot":"string","poseSuggestion":"string","compositionSuggestion":"string","timingHint":"string","notes":"string"}],
-"clientPrepChecklist":["string"],
-"contingencyPlans":["string"]
-}`;
-
-  const qualityGuardrails = `
-
-Quality requirements:
-- Return 4-6 locationSuggestions.
-- Return ${planningData.shotCountTarget.min}-${planningData.shotCountTarget.max} shotList items.
-- Timeline should respect session duration ${input.duration || '(if unspecified assume ~90 minutes)'}.
-- No generic placeholders (e.g., "Urban Edge", "Open Green Space").
-- ${planningData.sessionCategory === 'family' ? 'Locations must be family-safe and kid-friendly.' : 'Do not include child/sibling-specific shots unless user explicitly mentioned kids.'}
-- Every shot must reference one of the listed locationSuggestions.`;
-
-  const hardDataPrompt = `
-
-Hard data package:
-${JSON.stringify(planningData, null, 2)}
-
-Creative pass instructions:
-- Use the hard data package as the source of truth.
-- Do not drift outside the required shots or session category rules.
-- Keep the final plan realistic, concise, and specific.
-- If candidate locations are weak, favor fewer location suggestions rather than invented places.`;
-
-  try {
-    const response = await fetchWithRetry(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: `${prompt}${hardDataPrompt}${qualityGuardrails}` }] }],
-          generationConfig: { temperature: 0.25, topP: 0.8, responseMimeType: 'application/json' },
-        }),
-      }
-    );
-    if (!response.ok) {
-      if (response.status >= 500) return getFallbackSessionPlan(input);
-      throw new Error(await response.text());
-    }
-    const payload = (await response.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
-    const text = payload.candidates?.[0]?.content?.parts?.map(part => part.text ?? '').join('') ?? '';
-    if (!text) throw new Error('Empty AI response');
-    const parsed = extractJsonObject<SessionPlan>(text);
-    const requiredShots = planningData.requiredShots;
-    const normalizedPlan = {
-      projectTitle: parsed.projectTitle?.trim() || `${input.shootType} Session Plan`,
-      creativeDirection: parsed.creativeDirection?.trim() || '',
-      timeline: planningData.timeline,
-      locationSuggestions: Array.isArray(parsed.locationSuggestions) ? parsed.locationSuggestions.slice(0, 6) : [],
-      shotList: mergeShots(
-        requiredShots,
-        Array.isArray(parsed.shotList) ? parsed.shotList : [],
-        planningData.shotCountTarget.max
-      ).map(shot => ({
-        ...shot,
-        location: shot.location?.trim() || parsed.locationSuggestions?.[0]?.name?.trim() || input.city || 'Primary location',
-      })),
-      clientPrepChecklist: planningData.clientPrepChecklist,
-      contingencyPlans: planningData.contingencyPlans,
-    };
-
-    const disallowedShotPattern = planningData.sessionCategory === 'family' ? null : /\b(kid|kids|child|children|sibling|toddler|newborn|baby)\b/i;
-    const filteredShotList = disallowedShotPattern
-      ? normalizedPlan.shotList.filter(shot => !disallowedShotPattern.test(`${shot.title} ${shot.description} ${shot.notes}`))
-      : normalizedPlan.shotList;
-
-    const repairedPlan = {
-      ...normalizedPlan,
-      shotList: filteredShotList,
-    };
-
-    if (repairedPlan.locationSuggestions.length < 3 || repairedPlan.shotList.length < planningData.shotCountTarget.min) {
-      throw new Error('Plan quality below threshold');
-    }
-
-    return repairedPlan;
-  } catch {
-    return getFallbackSessionPlan(input);
-  }
+  const plan = buildDeterministicPlan(input);
+  return plan;
 }
 
 export async function refineSessionPlan(input: {
