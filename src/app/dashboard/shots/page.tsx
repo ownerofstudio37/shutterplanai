@@ -33,6 +33,14 @@ interface ShotFormState {
   status: ShotItem['status'];
 }
 
+interface AiSuggestion {
+  title: string;
+  description: string;
+  location: string;
+  notes: string;
+  plannedTimeHint: string;
+}
+
 function getAuthHeader() {
   const token = tokenUtils.getToken();
   const headers: Record<string, string> = {};
@@ -49,6 +57,8 @@ export default function ShotsPage() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [location, setLocation] = useState('');
+  const [creativeBrief, setCreativeBrief] = useState('');
+  const [aiProjectId, setAiProjectId] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | ShotItem['status']>('all');
   const [projectFilter, setProjectFilter] = useState('all');
@@ -56,9 +66,12 @@ export default function ShotsPage() {
   const [isCreating, setIsCreating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [addingSuggestionTitle, setAddingSuggestionTitle] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editingShot, setEditingShot] = useState<ShotItem | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [aiSuggestions, setAiSuggestions] = useState<AiSuggestion[]>([]);
   const [editForm, setEditForm] = useState<ShotFormState>({
     title: '',
     description: '',
@@ -79,6 +92,9 @@ export default function ShotsPage() {
       setProjects(options);
       if (!projectId && options.length > 0) {
         setProjectId(options[0].id);
+      }
+      if (!aiProjectId && options.length > 0) {
+        setAiProjectId(options[0].id);
       }
     }
   };
@@ -262,6 +278,82 @@ export default function ShotsPage() {
     }
   };
 
+  const generateSuggestions = async () => {
+    if (!aiProjectId) {
+      setError('Choose a project for AI suggestions');
+      return;
+    }
+
+    setIsGenerating(true);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/ai/shot-suggestions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeader(),
+        },
+        body: JSON.stringify({
+          projectId: aiProjectId,
+          creativeBrief,
+        }),
+      });
+
+      const result = await response.json();
+      if (!result.success) {
+        setError(result.error ?? 'Failed to generate AI suggestions');
+        return;
+      }
+
+      setAiSuggestions(result.data ?? []);
+    } catch {
+      setError('Failed to generate AI suggestions');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const addSuggestionToShots = async (suggestion: AiSuggestion) => {
+    if (!aiProjectId) {
+      setError('Choose a project before adding a suggestion');
+      return;
+    }
+
+    setAddingSuggestionTitle(suggestion.title);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/shots', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeader(),
+        },
+        body: JSON.stringify({
+          projectId: aiProjectId,
+          title: suggestion.title,
+          description: suggestion.description,
+          location: suggestion.location,
+          notes: `${suggestion.notes}${suggestion.plannedTimeHint ? `\nSuggested timing: ${suggestion.plannedTimeHint}` : ''}`.trim(),
+          status: 'planned',
+        }),
+      });
+
+      const result = await response.json();
+      if (!result.success) {
+        setError(result.error ?? 'Failed to add suggested shot');
+        return;
+      }
+
+      await loadShots();
+    } catch {
+      setError('Failed to add suggested shot');
+    } finally {
+      setAddingSuggestionTitle(null);
+    }
+  };
+
   const filteredShots = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
 
@@ -282,6 +374,79 @@ export default function ShotsPage() {
 
   return (
     <div className="space-y-6">
+      <Card>
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">AI Shot Suggestions</h3>
+            <p className="mt-1 text-sm text-gray-600">
+              Generate fresh shot ideas for a project from Gemini and add them to your shot list.
+            </p>
+          </div>
+          <Button type="button" onClick={() => void generateSuggestions()} isLoading={isGenerating}>
+            {isGenerating ? 'Generating...' : 'Generate Ideas'}
+          </Button>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-2">
+          <select
+            aria-label="Project for AI shot suggestions"
+            className="w-full rounded-lg border border-gray-300 px-4 py-2"
+            value={aiProjectId}
+            onChange={event => setAiProjectId(event.target.value)}
+            disabled={isGenerating || projects.length === 0}
+          >
+            {projects.length === 0 ? (
+              <option value="">Create a project first</option>
+            ) : (
+              projects.map(project => (
+                <option key={project.id} value={project.id}>
+                  {project.title}
+                </option>
+              ))
+            )}
+          </select>
+          <textarea
+            value={creativeBrief}
+            onChange={event => setCreativeBrief(event.target.value)}
+            className="min-h-24 w-full rounded-lg border border-gray-300 px-4 py-2"
+            placeholder="Optional creative brief: mood, lens, lighting, story, subject, brand direction..."
+          />
+        </div>
+
+        {aiSuggestions.length > 0 && (
+          <div className="mt-6 grid gap-4 lg:grid-cols-2">
+            {aiSuggestions.map(suggestion => (
+              <div key={suggestion.title} className="rounded-lg border border-violet-200 bg-violet-50/50 p-4">
+                <h4 className="font-semibold text-gray-900">{suggestion.title}</h4>
+                <p className="mt-2 text-sm text-gray-700">{suggestion.description}</p>
+                <dl className="mt-3 space-y-2 text-sm text-gray-600">
+                  <div>
+                    <dt className="font-medium text-gray-800">Location</dt>
+                    <dd>{suggestion.location || 'Flexible'}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-medium text-gray-800">Notes</dt>
+                    <dd>{suggestion.notes || 'None'}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-medium text-gray-800">Timing hint</dt>
+                    <dd>{suggestion.plannedTimeHint || 'No timing hint'}</dd>
+                  </div>
+                </dl>
+                <Button
+                  type="button"
+                  className="mt-4"
+                  isLoading={addingSuggestionTitle === suggestion.title}
+                  onClick={() => void addSuggestionToShots(suggestion)}
+                >
+                  {addingSuggestionTitle === suggestion.title ? 'Adding...' : 'Add to Shots'}
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
       <Card>
         <h3 className="mb-4 text-lg font-semibold text-gray-900">Add Shot</h3>
         <form onSubmit={createShot} className="space-y-3">
