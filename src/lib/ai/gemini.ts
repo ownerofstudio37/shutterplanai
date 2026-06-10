@@ -77,6 +77,24 @@ export interface SessionPlanRefinement {
 
 type SessionCategory = 'family' | 'engagement' | 'portrait' | 'event';
 
+interface SessionPlanningDataPackage {
+  sessionCategory: SessionCategory;
+  durationMinutes: number;
+  shotCountTarget: { min: number; max: number };
+  locationCandidates: Array<{
+    name: string;
+    displayName?: string;
+    latitude?: number | null;
+    longitude?: number | null;
+    relevanceScore?: number;
+  }>;
+  requiredShots: SessionPlanShot[];
+  clientPrepChecklist: string[];
+  contingencyPlans: string[];
+  timeline: SessionPlanTimelineItem[];
+  hardRules: string[];
+}
+
 function getSessionCategory(shootType: string): SessionCategory {
   const value = shootType.toLowerCase();
   if (/family|newborn|maternity|kids|children/.test(value)) return 'family';
@@ -414,6 +432,49 @@ function mergeShots(primary: SessionPlanShot[], secondary: SessionPlanShot[], ma
   }
 
   return output;
+}
+
+function buildSessionPlanningDataPackage(input: {
+  shootType: string;
+  city: string;
+  duration?: string;
+  locationCandidates?: LocationCandidate[];
+}) : SessionPlanningDataPackage {
+  const sessionCategory = getSessionCategory(input.shootType);
+  const durationMinutes = parseDurationMinutes(input.duration);
+  const shotCountTarget = getShotCountTarget(durationMinutes);
+  const requiredShots = buildRequiredShotTemplates({
+    sessionCategory,
+    durationMinutes,
+  });
+
+  return {
+    sessionCategory,
+    durationMinutes,
+    shotCountTarget,
+    locationCandidates: (input.locationCandidates ?? []).map(candidate => ({
+      name: candidate.name,
+      displayName: candidate.displayName,
+      latitude: candidate.latitude,
+      longitude: candidate.longitude,
+      relevanceScore: candidate.relevanceScore,
+    })),
+    requiredShots,
+    clientPrepChecklist: buildClientPrepChecklist({ sessionCategory, durationMinutes }),
+    contingencyPlans: buildContingencyPlans({ sessionCategory, durationMinutes }),
+    timeline: buildTimelineForDuration(durationMinutes),
+    hardRules: [
+      sessionCategory === 'engagement'
+        ? 'Couple-only session. No kid, sibling, or family-group shots.'
+        : '',
+      sessionCategory === 'family'
+        ? 'Family-friendly pacing, low-walk, and child-safe location choices only.'
+        : '',
+      `Use ${durationMinutes} minutes as the session length target.`,
+      `Generate between ${shotCountTarget.min} and ${shotCountTarget.max} shots.`,
+      'Use only real location candidates and do not invent locations.',
+    ].filter(Boolean),
+  };
 }
 
 function getGeminiConfig() {
@@ -806,12 +867,14 @@ export async function generateSessionPlan(input: {
   locationCandidates?: LocationCandidate[];
 }) {
   const { apiKey, model } = getGeminiConfig();
-  const durationMinutes = parseDurationMinutes(input.duration);
-  const shotCountTarget = getShotCountTarget(durationMinutes);
-  const sessionCategory = getSessionCategory(input.shootType);
-  const locationCandidates = input.locationCandidates ?? [];
-  const locationCandidateBlock = locationCandidates.length > 0
-    ? locationCandidates
+  const planningData = buildSessionPlanningDataPackage({
+    shootType: input.shootType,
+    city: input.city,
+    duration: input.duration,
+    locationCandidates: input.locationCandidates,
+  });
+  const locationCandidateBlock = planningData.locationCandidates.length > 0
+    ? planningData.locationCandidates
         .slice(0, 8)
         .map((candidate, index) => `${index + 1}. ${candidate.name} — ${candidate.displayName || 'no display name'} (${candidate.latitude?.toFixed(5) ?? 'n/a'}, ${candidate.longitude?.toFixed(5) ?? 'n/a'})`)
         .join('\n')
@@ -829,10 +892,10 @@ Build a complete session plan for:
 - Constraints: ${input.constraints || 'None'}
 
 Session type rules:
-- Session category is: ${sessionCategory}
-- ${sessionCategory === 'engagement' ? 'This is a couple session. Focus on romantic, connected, editorial, and ring-focused frames. Do not suggest kids or sibling shots.' : ''}
-- ${sessionCategory === 'family' ? 'This is a family session. Prioritize multi-person, child-friendly, low-walk, low-stress concepts.' : ''}
-- ${sessionCategory === 'portrait' ? 'This is a portrait session. Prioritize solo or small-group posing, not child-specific frames.' : ''}
+- Session category is: ${planningData.sessionCategory}
+- ${planningData.sessionCategory === 'engagement' ? 'This is a couple session. Focus on romantic, connected, editorial, and ring-focused frames. Do not suggest kids or sibling shots.' : ''}
+- ${planningData.sessionCategory === 'family' ? 'This is a family session. Prioritize multi-person, child-friendly, low-walk, low-stress concepts.' : ''}
+- ${planningData.sessionCategory === 'portrait' ? 'This is a portrait session. Prioritize solo or small-group posing, not child-specific frames.' : ''}
 
 Real location candidates you may choose from:
 ${locationCandidateBlock}
@@ -858,11 +921,22 @@ Return JSON only with schema:
 
 Quality requirements:
 - Return 4-6 locationSuggestions.
-- Return ${shotCountTarget.min}-${shotCountTarget.max} shotList items.
+- Return ${planningData.shotCountTarget.min}-${planningData.shotCountTarget.max} shotList items.
 - Timeline should respect session duration ${input.duration || '(if unspecified assume ~90 minutes)'}.
 - No generic placeholders (e.g., "Urban Edge", "Open Green Space").
-- ${sessionCategory === 'family' ? 'Locations must be family-safe and kid-friendly.' : 'Do not include child/sibling-specific shots unless user explicitly mentioned kids.'}
+- ${planningData.sessionCategory === 'family' ? 'Locations must be family-safe and kid-friendly.' : 'Do not include child/sibling-specific shots unless user explicitly mentioned kids.'}
 - Every shot must reference one of the listed locationSuggestions.`;
+
+  const hardDataPrompt = `
+
+Hard data package:
+${JSON.stringify(planningData, null, 2)}
+
+Creative pass instructions:
+- Use the hard data package as the source of truth.
+- Do not drift outside the required shots or session category rules.
+- Keep the final plan realistic, concise, and specific.
+- If candidate locations are weak, favor fewer location suggestions rather than invented places.`;
 
   try {
     const response = await fetchWithRetry(
@@ -871,7 +945,7 @@ Quality requirements:
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: `${prompt}${qualityGuardrails}` }] }],
+          contents: [{ parts: [{ text: `${prompt}${hardDataPrompt}${qualityGuardrails}` }] }],
           generationConfig: { temperature: 0.7, responseMimeType: 'application/json' },
         }),
       }
@@ -884,34 +958,25 @@ Quality requirements:
     const text = payload.candidates?.[0]?.content?.parts?.map(part => part.text ?? '').join('') ?? '';
     if (!text) throw new Error('Empty AI response');
     const parsed = extractJsonObject<SessionPlan>(text);
-    const requiredShots = buildRequiredShotTemplates({
-      sessionCategory,
-      durationMinutes,
-    });
+    const requiredShots = planningData.requiredShots;
     const normalizedPlan = {
       projectTitle: parsed.projectTitle?.trim() || `${input.shootType} Session Plan`,
       creativeDirection: parsed.creativeDirection?.trim() || '',
-      timeline: buildTimelineForDuration(durationMinutes),
+      timeline: planningData.timeline,
       locationSuggestions: Array.isArray(parsed.locationSuggestions) ? parsed.locationSuggestions.slice(0, 6) : [],
       shotList: mergeShots(
         requiredShots,
         Array.isArray(parsed.shotList) ? parsed.shotList : [],
-        shotCountTarget.max
+        planningData.shotCountTarget.max
       ).map(shot => ({
         ...shot,
         location: shot.location?.trim() || parsed.locationSuggestions?.[0]?.name?.trim() || input.city || 'Primary location',
       })),
-      clientPrepChecklist: buildClientPrepChecklist({
-        sessionCategory,
-        durationMinutes,
-      }),
-      contingencyPlans: buildContingencyPlans({
-        sessionCategory,
-        durationMinutes,
-      }),
+      clientPrepChecklist: planningData.clientPrepChecklist,
+      contingencyPlans: planningData.contingencyPlans,
     };
 
-    const disallowedShotPattern = sessionCategory === 'family' ? null : /\b(kid|kids|child|children|sibling|toddler|newborn|baby)\b/i;
+    const disallowedShotPattern = planningData.sessionCategory === 'family' ? null : /\b(kid|kids|child|children|sibling|toddler|newborn|baby)\b/i;
     const filteredShotList = disallowedShotPattern
       ? normalizedPlan.shotList.filter(shot => !disallowedShotPattern.test(`${shot.title} ${shot.description} ${shot.notes}`))
       : normalizedPlan.shotList;
@@ -921,7 +986,7 @@ Quality requirements:
       shotList: filteredShotList,
     };
 
-    if (repairedPlan.locationSuggestions.length < 3 || repairedPlan.shotList.length < shotCountTarget.min) {
+    if (repairedPlan.locationSuggestions.length < 3 || repairedPlan.shotList.length < planningData.shotCountTarget.min) {
       throw new Error('Plan quality below threshold');
     }
 
