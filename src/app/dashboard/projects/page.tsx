@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
@@ -40,6 +40,8 @@ export default function ProjectsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | ProjectItem['status']>('all');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -197,6 +199,22 @@ export default function ProjectsPage() {
     }
   };
 
+  const filteredProjects = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+
+    return projects.filter(project => {
+      const matchesSearch =
+        !query ||
+        project.title.toLowerCase().includes(query) ||
+        project.description.toLowerCase().includes(query) ||
+        (project.tags ?? []).some(tag => tag.toLowerCase().includes(query));
+
+      const matchesStatus = statusFilter === 'all' || project.status === statusFilter;
+
+      return matchesSearch && matchesStatus;
+    });
+  }, [projects, searchQuery, statusFilter]);
+
   return (
     <div className="space-y-6">
       <Card>
@@ -230,6 +248,29 @@ export default function ProjectsPage() {
           </Button>
         </div>
 
+        <div className="mb-4 grid gap-3 md:grid-cols-2">
+          <input
+            value={searchQuery}
+            onChange={event => setSearchQuery(event.target.value)}
+            className="w-full rounded-lg border border-gray-300 px-4 py-2"
+            placeholder="Search projects by title, description, or tag"
+            aria-label="Search projects"
+          />
+          <select
+            aria-label="Filter projects by status"
+            value={statusFilter}
+            onChange={event => setStatusFilter(event.target.value as 'all' | ProjectItem['status'])}
+            className="w-full rounded-lg border border-gray-300 px-4 py-2"
+          >
+            <option value="all">All statuses</option>
+            <option value="draft">Draft</option>
+            <option value="planning">Planning</option>
+            <option value="in-progress">In Progress</option>
+            <option value="completed">Completed</option>
+            <option value="archived">Archived</option>
+          </select>
+        </div>
+
         {error && (
           <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {error}
@@ -240,15 +281,20 @@ export default function ProjectsPage() {
           <p className="text-gray-600">Loading projects...</p>
         ) : projects.length === 0 ? (
           <p className="text-gray-600">No projects yet. Create your first one above.</p>
+        ) : filteredProjects.length === 0 ? (
+          <p className="text-gray-600">No projects match your search and filters.</p>
         ) : (
           <div className="space-y-3">
-            {projects.map(project => (
+            {filteredProjects.map(project => (
               <div key={project.id} className="rounded-lg border border-gray-200 p-4">
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <h4 className="font-semibold text-gray-900">{project.title}</h4>
                     <p className="mt-1 text-sm text-gray-600">{project.description || 'No description'}</p>
                     <p className="mt-2 text-xs uppercase tracking-wide text-gray-500">Status: {project.status}</p>
+                    {project.tags && project.tags.length > 0 && (
+                      <p className="mt-2 text-xs text-gray-500">Tags: {project.tags.join(', ')}</p>
+                    )}
                   </div>
                   <div className="flex gap-2">
                     <Button variant="secondary" size="sm" onClick={() => openEditModal(project)}>
