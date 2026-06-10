@@ -14,6 +14,7 @@ interface SessionPlanLocation {
   latitude?: number | null;
   longitude?: number | null;
   displayName?: string;
+  googleMapsUrl?: string;
   logistics: {
     parking: string;
     restroom: string;
@@ -412,12 +413,41 @@ export default function PlannerPage() {
               <div className="space-y-3">
                 {plan.locationSuggestions.map(location => (
                   <div key={location.name} className="rounded-lg border border-gray-200 p-3">
-                    <p className="font-semibold text-gray-900">{location.name}</p>
+                    <p className="font-semibold text-gray-900">{location.displayName || location.name}</p>
+                    {location.displayName && location.displayName !== location.name && (
+                      <p className="mt-1 text-xs text-gray-500">AI label: {location.name}</p>
+                    )}
                     <p className="mt-1 text-sm text-gray-600">{location.whyItWorks}</p>
                     {location.latitude != null && location.longitude != null && (
-                      <p className="mt-2 text-xs text-blue-700">
-                        Coordinates: {Number(location.latitude).toFixed(5)}, {Number(location.longitude).toFixed(5)}
-                      </p>
+                      <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
+                        <p className="text-blue-700">
+                          Coordinates: {Number(location.latitude).toFixed(5)}, {Number(location.longitude).toFixed(5)}
+                        </p>
+                        <a
+                          href={
+                            location.googleMapsUrl ||
+                            `https://maps.google.com/?q=${Number(location.latitude)},${Number(location.longitude)}`
+                          }
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          className="font-medium text-blue-600 hover:text-blue-700 hover:underline"
+                        >
+                          Show on Google Maps
+                        </a>
+                      </div>
+                    )}
+                    {location.latitude == null && location.longitude == null && (
+                      <a
+                        href={
+                          location.googleMapsUrl ||
+                          `https://maps.google.com/?q=${encodeURIComponent(location.displayName || location.name)}`
+                        }
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        className="mt-2 inline-block text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline"
+                      >
+                        Show on Google Maps
+                      </a>
                     )}
                     <p className="mt-2 text-xs text-gray-500">Micro-spots: {location.microLocations.join(' • ')}</p>
                     <p className="mt-2 text-xs text-gray-500">Parking: {location.logistics.parking}</p>

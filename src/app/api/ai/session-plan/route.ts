@@ -19,6 +19,18 @@ function simplifyLocationName(value: string) {
     .trim();
 }
 
+function isGenericAiLabel(value: string) {
+  return /(open green space|urban edge|district|waterfront|\s\/\s)/i.test(value);
+}
+
+function getGoogleMapsUrl(input: { latitude?: number | null; longitude?: number | null; query: string }) {
+  if (input.latitude != null && input.longitude != null) {
+    return `https://maps.google.com/?q=${input.latitude},${input.longitude}`;
+  }
+
+  return `https://maps.google.com/?q=${encodeURIComponent(input.query)}`;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const auth = await requireAuth(request);
@@ -85,14 +97,36 @@ export async function POST(request: NextRequest) {
       })
     );
 
-    const locationByName = new Map(enrichedLocations.map(location => [normalizeLocationName(location.name), location]));
+    const finalizedLocations = enrichedLocations.map(location => {
+      const hasDisplayName = typeof location.displayName === 'string' && location.displayName.trim().length > 0;
+      const finalName = hasDisplayName && isGenericAiLabel(location.name)
+        ? location.displayName!.split(',').slice(0, 3).join(',').trim()
+        : location.name;
+
+      return {
+        ...location,
+        name: finalName,
+        googleMapsUrl: getGoogleMapsUrl({
+          latitude: location.latitude,
+          longitude: location.longitude,
+          query: location.displayName || location.name,
+        }),
+      };
+    });
+
+    const locationByName = new Map(
+      finalizedLocations.flatMap(location => {
+        const aliases = [location.name, location.displayName, simplifyLocationName(location.name)].filter(Boolean) as string[];
+        return aliases.map(alias => [normalizeLocationName(alias), location] as const);
+      })
+    );
 
     const enrichedShotList = (plan.shotList ?? []).map(shot => {
       const shotLocation = normalizeLocationName(shot.location ?? '');
       const exactMatch = locationByName.get(shotLocation);
       const fuzzyMatch =
         exactMatch ??
-        enrichedLocations.find(location => {
+        finalizedLocations.find(location => {
           const normalized = normalizeLocationName(location.name);
           return normalized.includes(shotLocation) || shotLocation.includes(normalized);
         });
@@ -112,7 +146,7 @@ export async function POST(request: NextRequest) {
         success: true,
         data: {
           ...plan,
-          locationSuggestions: enrichedLocations,
+          locationSuggestions: finalizedLocations,
           shotList: enrichedShotList,
         },
       },

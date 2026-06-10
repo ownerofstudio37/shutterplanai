@@ -344,6 +344,12 @@ Build a complete session plan for:
 - Must-have shots: ${input.mustHaveShots || 'None'}
 - Constraints: ${input.constraints || 'None'}
 
+Location rules:
+- Use only real, publicly searchable places in/near ${input.city}.
+- Do NOT invent names like "Urban Edge" or "Open Green Space".
+- Prefer specific places (parks, plazas, streets, landmarks, trails, venues) that can be pinned on maps.
+- Keep each location name concise but real.
+
 Return JSON only with schema:
 {
 "projectTitle":"string",
