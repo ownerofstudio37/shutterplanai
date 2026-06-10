@@ -176,6 +176,7 @@ function getFallbackSessionPlan(input: {
   shootType: string;
   subjectDetails: string;
   city: string;
+  duration?: string;
   mood: string;
   constraints?: string;
 }): SessionPlan {
@@ -355,10 +356,10 @@ function getFallbackSessionPlan(input: {
     projectTitle: `${input.shootType} Session Plan`,
     creativeDirection: `A ${input.mood || 'balanced'} visual approach for ${input.subjectDetails || 'the subject'} with practical pacing and flexible backup options.`,
     timeline: [
-      { timeBlock: 'Arrival + Warmup (0-10 min)', focus: 'Introduce flow and comfort', notes: 'Quick orientation, check wardrobe, set expectations.' },
-      { timeBlock: 'Core Portraits (10-30 min)', focus: 'Reliable hero images', notes: 'Capture must-have frames first while energy is high.' },
-      { timeBlock: 'Variety + Movement (30-50 min)', focus: 'Lifestyle and candid variety', notes: 'Use prompts and transitions between micro-locations.' },
-      { timeBlock: 'Final Highlights (50-60 min)', focus: 'Signature closing shots', notes: 'Finish with 1-2 bold compositions and backup safety frame.' },
+      { timeBlock: 'Arrival + Warmup (0-15 min)', focus: 'Introduce flow and comfort', notes: `Quick orientation, check wardrobe, and confirm pace for a ${input.duration || 'standard'} session.` },
+      { timeBlock: 'Core Portraits (15-40 min)', focus: 'Reliable hero images', notes: 'Capture must-have frames first while energy is high.' },
+      { timeBlock: 'Variety + Movement (40-70 min)', focus: 'Lifestyle and candid variety', notes: 'Use prompts and transitions between micro-locations.' },
+      { timeBlock: 'Final Highlights (70-90 min)', focus: 'Signature closing shots', notes: 'Finish with 1-2 bold compositions and backup safety frame.' },
     ],
     locationSuggestions: fallbackLocations,
     shotList: fallbackShots,
@@ -447,6 +448,7 @@ export async function generateSessionPlan(input: {
   subjectDetails: string;
   city: string;
   shootDate?: string;
+  duration?: string;
   mood: string;
   mustHaveShots?: string;
   constraints?: string;
@@ -459,6 +461,7 @@ Build a complete session plan for:
 - Subject details: ${input.subjectDetails}
 - City: ${input.city}
 - Date: ${input.shootDate || 'Not specified'}
+- Duration: ${input.duration || 'Not specified'}
 - Mood: ${input.mood}
 - Must-have shots: ${input.mustHaveShots || 'None'}
 - Constraints: ${input.constraints || 'None'}
@@ -485,6 +488,7 @@ Return JSON only with schema:
 Quality requirements:
 - Return 4-6 locationSuggestions.
 - Return 10-16 shotList items.
+- Timeline should respect session duration ${input.duration || '(if unspecified assume ~90 minutes)'}.
 - No generic placeholders (e.g., "Urban Edge", "Open Green Space").
 - Locations must be family-safe if shoot type implies family/newborn/kids.
 - Every shot must reference one of the listed locationSuggestions.`;

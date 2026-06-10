@@ -103,6 +103,7 @@ export default function PlannerPage() {
   const [subjectDetails, setSubjectDetails] = useState('5 people, 2 toddlers');
   const [city, setCity] = useState('Dallas, TX');
   const [shootDate, setShootDate] = useState('');
+  const [duration, setDuration] = useState('90 minutes');
   const [mood, setMood] = useState('Warm, candid, emotional');
   const [mustHaveShots, setMustHaveShots] = useState('Whole family portrait, parents together, each kid solo');
   const [constraints, setConstraints] = useState('Need stroller-friendly paths and quick transitions');
@@ -145,6 +146,7 @@ export default function PlannerPage() {
           subjectDetails,
           city,
           shootDate,
+          duration,
           mood,
           mustHaveShots,
           constraints,
@@ -180,7 +182,7 @@ export default function PlannerPage() {
         },
         body: JSON.stringify({
           title: plan.projectTitle,
-          description: `${plan.creativeDirection}\n\nConstraints: ${constraints || 'None'}`,
+          description: `${plan.creativeDirection}\n\nDuration: ${duration || 'Not specified'}\nConstraints: ${constraints || 'None'}`,
           status: 'planning',
           startDate: shootDate || undefined,
           tags: ['ai-generated', 'session-plan', shootType.toLowerCase()],
@@ -386,6 +388,7 @@ export default function PlannerPage() {
           <input className="w-full rounded-lg border border-gray-300 px-4 py-2" value={shootType} onChange={e => setShootType(e.target.value)} placeholder="Shoot type" />
           <input className="w-full rounded-lg border border-gray-300 px-4 py-2" value={city} onChange={e => setCity(e.target.value)} placeholder="City / area" />
           <input className="w-full rounded-lg border border-gray-300 px-4 py-2" value={shootDate} onChange={e => setShootDate(e.target.value)} placeholder="Shoot date/time (optional)" />
+          <input className="w-full rounded-lg border border-gray-300 px-4 py-2" value={duration} onChange={e => setDuration(e.target.value)} placeholder="Session duration (e.g. 60 min, 2 hours)" />
           <input className="w-full rounded-lg border border-gray-300 px-4 py-2" value={mood} onChange={e => setMood(e.target.value)} placeholder="Mood/style" />
         </div>
 

@@ -54,6 +54,7 @@ export async function POST(request: NextRequest) {
       subjectDetails: typeof payload.subjectDetails === 'string' ? payload.subjectDetails : '',
       city: typeof payload.city === 'string' ? payload.city : '',
       shootDate: typeof payload.shootDate === 'string' ? payload.shootDate : undefined,
+      duration: typeof payload.duration === 'string' ? payload.duration : undefined,
       mood: typeof payload.mood === 'string' ? payload.mood : 'natural',
       mustHaveShots: typeof payload.mustHaveShots === 'string' ? payload.mustHaveShots : undefined,
       constraints: typeof payload.constraints === 'string' ? payload.constraints : undefined,
