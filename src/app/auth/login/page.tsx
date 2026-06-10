@@ -6,6 +6,11 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/Button';
 import Link from 'next/link';
 
+const demoCredentials = {
+  email: 'demo@shutterplan.ai',
+  password: 'Demo123!',
+};
+
 export default function LoginPage() {
   const router = useRouter();
   const { login, isLoading, error } = useAuth();
@@ -33,12 +38,20 @@ export default function LoginPage() {
     }
   };
 
+  const fillDemoCredentials = () => {
+    setFormData(demoCredentials);
+    setFormError('');
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
       <div className="bg-white rounded-lg shadow-xl p-8 w-full max-w-md">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900">ShutterPlan AI</h1>
           <p className="text-gray-600 mt-2">Photography Planning Made Easy</p>
+          <p className="mt-3 rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-700">
+            Demo login: <strong>{demoCredentials.email}</strong> / <strong>{demoCredentials.password}</strong>
+          </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -76,6 +89,9 @@ export default function LoginPage() {
 
           <Button type="submit" isLoading={isLoading} className="w-full">
             {isLoading ? 'Signing in...' : 'Sign In'}
+          </Button>
+          <Button type="button" variant="ghost" className="w-full" onClick={fillDemoCredentials}>
+            Use Demo Account
           </Button>
         </form>
 

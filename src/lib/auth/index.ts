@@ -28,7 +28,14 @@ export const auth = {
   },
 
   async getSession() {
-    const response = await fetch(`${API_BASE_URL}/auth/session`);
+    const token = tokenUtils.getToken();
+    const response = await fetch(`${API_BASE_URL}/auth/session`, {
+      headers: token
+        ? {
+            Authorization: `Bearer ${token}`,
+          }
+        : undefined,
+    });
     return response.json();
   },
 

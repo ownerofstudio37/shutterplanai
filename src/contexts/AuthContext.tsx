@@ -64,11 +64,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           error: null,
         });
       } else {
+        const message = response.error || 'Login failed';
         setSession(prev => ({
           ...prev,
           isLoading: false,
-          error: response.error || 'Login failed',
+          error: message,
         }));
+        throw new Error(message);
       }
     } catch (error) {
       setSession(prev => ({
@@ -92,11 +94,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           error: null,
         });
       } else {
+        const message = response.error || 'Signup failed';
         setSession(prev => ({
           ...prev,
           isLoading: false,
-          error: response.error || 'Signup failed',
+          error: message,
         }));
+        throw new Error(message);
       }
     } catch (error) {
       setSession(prev => ({
