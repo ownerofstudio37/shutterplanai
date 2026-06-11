@@ -293,7 +293,7 @@ export function PlannerIntakeCard({
                           key={`${activeQuestion.id}-${option}`}
                           type="button"
                           onClick={() => onSubmitAnswerValue(option)}
-                          className="rounded-md border border-[#d8d2c8] bg-white px-3 py-2 text-sm font-medium text-[#1f2933] transition hover:border-[#1f2933]"
+                          className="min-h-10 rounded-md border border-[#d8d2c8] bg-white px-3 py-2 text-sm font-medium text-[#1f2933] transition hover:border-[#1f2933]"
                         >
                           {option}
                         </button>
@@ -312,7 +312,7 @@ export function PlannerIntakeCard({
                                 key={`${activeQuestion.id}-profile-${option}`}
                                 type="button"
                                 onClick={() => onSubmitAnswerValue(option)}
-                                className="rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-800 hover:border-emerald-300"
+                                className="min-h-10 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-2 text-xs font-medium text-emerald-800 hover:border-emerald-300"
                               >
                                 {option}
                               </button>
@@ -328,7 +328,7 @@ export function PlannerIntakeCard({
                               key={`${activeQuestion.id}-quick-${option}`}
                               type="button"
                               onClick={() => onSubmitAnswerValue(option)}
-                              className="rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs font-medium text-blue-800 hover:border-blue-300"
+                              className="min-h-10 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-2 text-xs font-medium text-blue-800 hover:border-blue-300"
                             >
                               {option}
                             </button>

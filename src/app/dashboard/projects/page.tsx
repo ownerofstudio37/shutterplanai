@@ -282,14 +282,14 @@ export default function ProjectsPage() {
               value={title}
               onChange={event => setTitle(event.target.value)}
               placeholder="Project title"
-              className="w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] px-4 py-2 text-sm outline-none focus:border-[#1f2933]"
+              className="w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] min-h-11 px-4 py-2.5 text-sm outline-none focus:border-[#1f2933]"
               disabled={isCreating}
             />
             <textarea
               value={description}
               onChange={event => setDescription(event.target.value)}
               placeholder="Client, shoot type, goal, deliverables..."
-              className="min-h-24 w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] px-4 py-2 text-sm outline-none focus:border-[#1f2933]"
+              className="min-h-24 w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] min-h-11 px-4 py-2.5 text-sm outline-none focus:border-[#1f2933]"
               disabled={isCreating}
             />
             <Button type="submit" isLoading={isCreating} className="bg-[#1f2933] hover:bg-[#111827]">
@@ -314,7 +314,7 @@ export default function ProjectsPage() {
           <input
             value={searchQuery}
             onChange={event => setSearchQuery(event.target.value)}
-            className="w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] px-4 py-2 text-sm outline-none focus:border-[#1f2933]"
+            className="w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] min-h-11 px-4 py-2.5 text-sm outline-none focus:border-[#1f2933]"
             placeholder="Search title, description, or tag"
             aria-label="Search projects"
           />
@@ -322,7 +322,7 @@ export default function ProjectsPage() {
             aria-label="Filter projects by status"
             value={statusFilter}
             onChange={event => setStatusFilter(event.target.value as 'all' | ProjectItem['status'])}
-            className="w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] px-4 py-2 text-sm outline-none focus:border-[#1f2933]"
+            className="w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] min-h-11 px-4 py-2.5 text-sm outline-none focus:border-[#1f2933]"
           >
             <option value="all">All statuses</option>
             <option value="draft">Draft</option>
@@ -412,13 +412,13 @@ export default function ProjectsPage() {
           <input
             value={editForm.title}
             onChange={event => setEditForm(prev => ({ ...prev, title: event.target.value }))}
-            className="w-full rounded-lg border border-gray-300 px-4 py-2"
+            className="w-full rounded-lg border border-gray-300 min-h-11 px-4 py-2.5"
             placeholder="Project title"
           />
           <textarea
             value={editForm.description}
             onChange={event => setEditForm(prev => ({ ...prev, description: event.target.value }))}
-            className="min-h-24 w-full rounded-lg border border-gray-300 px-4 py-2"
+            className="min-h-24 w-full rounded-lg border border-gray-300 min-h-11 px-4 py-2.5"
             placeholder="Project description"
           />
           <select
@@ -427,7 +427,7 @@ export default function ProjectsPage() {
             onChange={event =>
               setEditForm(prev => ({ ...prev, status: event.target.value as ProjectItem['status'] }))
             }
-            className="w-full rounded-lg border border-gray-300 px-4 py-2"
+            className="w-full rounded-lg border border-gray-300 min-h-11 px-4 py-2.5"
           >
             <option value="draft">Draft</option>
             <option value="planning">Planning</option>
@@ -440,19 +440,19 @@ export default function ProjectsPage() {
             aria-label="Project start date"
             value={editForm.startDate}
             onChange={event => setEditForm(prev => ({ ...prev, startDate: event.target.value }))}
-            className="w-full rounded-lg border border-gray-300 px-4 py-2"
+            className="w-full rounded-lg border border-gray-300 min-h-11 px-4 py-2.5"
           />
           <input
             type="date"
             aria-label="Project end date"
             value={editForm.endDate}
             onChange={event => setEditForm(prev => ({ ...prev, endDate: event.target.value }))}
-            className="w-full rounded-lg border border-gray-300 px-4 py-2"
+            className="w-full rounded-lg border border-gray-300 min-h-11 px-4 py-2.5"
           />
           <input
             value={editForm.tags}
             onChange={event => setEditForm(prev => ({ ...prev, tags: event.target.value }))}
-            className="w-full rounded-lg border border-gray-300 px-4 py-2"
+            className="w-full rounded-lg border border-gray-300 min-h-11 px-4 py-2.5"
             placeholder="Tags, comma separated"
           />
         </div>

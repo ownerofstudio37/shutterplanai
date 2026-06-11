@@ -28,6 +28,6 @@
 
 ## Next: Mobile QA
 
-- [ ] Audit dashboard surfaces at mobile viewport sizes.
-- [ ] Tighten touch targets and field-ready workflows.
-- [ ] Verify no text overflow, content overlap, or unusable controls on small screens.
+- [x] Audit dashboard surfaces at mobile viewport sizes.
+- [x] Tighten touch targets and field-ready workflows.
+- [x] Verify no text overflow, content overlap, or unusable controls on small screens.

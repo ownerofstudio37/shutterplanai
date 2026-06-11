@@ -348,21 +348,21 @@ export default function CalendarPage() {
               <button
                 type="button"
                 onClick={goToToday}
-                className="rounded-lg bg-[#1f2933] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#111827]"
+                className="min-h-10 rounded-lg bg-[#1f2933] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#111827]"
               >
                 Today
               </button>
               <button
                 type="button"
                 onClick={previousMonth}
-                className="rounded-lg border border-[#d8d2c8] bg-white px-4 py-2 text-sm font-semibold text-[#1f2933] transition hover:bg-[#faf9f6]"
+                className="min-h-10 rounded-lg border border-[#d8d2c8] bg-white px-4 py-2 text-sm font-semibold text-[#1f2933] transition hover:bg-[#faf9f6]"
               >
                 Previous
               </button>
               <button
                 type="button"
                 onClick={nextMonth}
-                className="rounded-lg border border-[#d8d2c8] bg-white px-4 py-2 text-sm font-semibold text-[#1f2933] transition hover:bg-[#faf9f6]"
+                className="min-h-10 rounded-lg border border-[#d8d2c8] bg-white px-4 py-2 text-sm font-semibold text-[#1f2933] transition hover:bg-[#faf9f6]"
               >
                 Next
               </button>

@@ -1633,7 +1633,7 @@ export default function PlannerPage() {
                 Pro unlocks unlimited planning, protected guide links, longer expirations, and multi-day sessions.
               </p>
             </div>
-            <div className="grid min-w-72 gap-3 sm:grid-cols-2">
+            <div className="grid w-full gap-3 sm:grid-cols-2 lg:min-w-72">
               <div className="rounded-lg border border-[#d8d2c8] bg-white p-4">
                 <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#7c6f64]">AI plans</p>
                 <p className="mt-2 text-2xl font-semibold text-[#1f2933]">
@@ -1865,7 +1865,7 @@ export default function PlannerPage() {
 
           <div className="sticky bottom-3 z-10 md:hidden">
             <div className="rounded-2xl border border-gray-200 bg-white/95 p-3 shadow-lg backdrop-blur">
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid gap-2 sm:grid-cols-2">
                 <Button
                   variant="ghost"
                   isLoading={isRefining}

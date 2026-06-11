@@ -71,7 +71,7 @@ export function MultiDaySessionConfig({
   return (
     <div className="mb-4">
       {/* Toggle row */}
-      <div className="flex items-center justify-between rounded-xl border border-violet-200 bg-violet-50 px-4 py-3">
+      <div className="flex items-center justify-between gap-4 rounded-xl border border-violet-200 bg-violet-50 px-4 py-3">
         <div>
           <p className="text-sm font-semibold text-violet-900">Multi-day session</p>
           <p className="text-xs text-violet-600 mt-0.5">Plan across multiple shoot days</p>
@@ -80,13 +80,13 @@ export function MultiDaySessionConfig({
           type="button"
           aria-label={`Multi-day session: ${multiDay ? 'on' : 'off'}. Click to toggle.`}
           onClick={handleToggle}
-          className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-violet-400 focus:ring-offset-2 ${
+          className={`relative inline-flex h-10 w-14 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-violet-400 focus:ring-offset-2 ${
             multiDay ? 'bg-violet-600' : 'bg-gray-300'
           }`}
         >
           <span
-            className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-              multiDay ? 'translate-x-6' : 'translate-x-1'
+            className={`inline-block h-6 w-6 transform rounded-full bg-white shadow transition-transform ${
+              multiDay ? 'translate-x-7' : 'translate-x-1'
             }`}
           />
         </button>
@@ -97,7 +97,7 @@ export function MultiDaySessionConfig({
         <div className="mt-2 rounded-xl border border-violet-200 bg-white p-4 shadow-sm space-y-4">
 
           {/* Days + Start date */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Number of days
@@ -107,7 +107,7 @@ export function MultiDaySessionConfig({
                   type="button"
                   onClick={() => handleNumDaysChange(numDays - 1)}
                   disabled={numDays <= 2}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 text-sm font-bold text-gray-700 hover:bg-gray-100 disabled:opacity-40"
+                  className="flex h-11 w-11 items-center justify-center rounded-lg border border-gray-300 text-sm font-bold text-gray-700 hover:bg-gray-100 disabled:opacity-40"
                 >
                   −
                 </button>
@@ -118,7 +118,7 @@ export function MultiDaySessionConfig({
                   type="button"
                   onClick={() => handleNumDaysChange(numDays + 1)}
                   disabled={numDays >= 30}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 text-sm font-bold text-gray-700 hover:bg-gray-100 disabled:opacity-40"
+                  className="flex h-11 w-11 items-center justify-center rounded-lg border border-gray-300 text-sm font-bold text-gray-700 hover:bg-gray-100 disabled:opacity-40"
                 >
                   +
                 </button>
@@ -134,7 +134,7 @@ export function MultiDaySessionConfig({
                 title="Shoot start date"
                 value={startDate}
                 onChange={e => handleStartDateChange(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-violet-400 focus:outline-none"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-violet-400 focus:outline-none"
               />
             </div>
           </div>
@@ -159,7 +159,7 @@ export function MultiDaySessionConfig({
           )}
 
           {/* Per-day options */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Daily duration{' '}
@@ -175,7 +175,7 @@ export function MultiDaySessionConfig({
                   onDailyDurationChange(e.target.value ? parseInt(e.target.value, 10) : undefined)
                 }
                 placeholder="e.g. 90"
-                className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-violet-400 focus:outline-none"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-violet-400 focus:outline-none"
               />
             </div>
 
@@ -194,7 +194,7 @@ export function MultiDaySessionConfig({
                   onMaxTravelChange(e.target.value ? parseInt(e.target.value, 10) : undefined)
                 }
                 placeholder="e.g. 30"
-                className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-violet-400 focus:outline-none"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-violet-400 focus:outline-none"
               />
             </div>
           </div>

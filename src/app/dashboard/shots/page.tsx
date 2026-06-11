@@ -499,7 +499,7 @@ export default function ShotsPage() {
         <div className="grid gap-3 md:grid-cols-2">
           <select
             aria-label="Project for AI shot suggestions"
-            className="w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] px-4 py-2 text-sm outline-none focus:border-[#1f2933]"
+            className="w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] min-h-11 px-4 py-2.5 text-sm outline-none focus:border-[#1f2933]"
             value={aiProjectId}
             onChange={event => setAiProjectId(event.target.value)}
             disabled={isGenerating || projects.length === 0}
@@ -517,7 +517,7 @@ export default function ShotsPage() {
           <textarea
             value={creativeBrief}
             onChange={event => setCreativeBrief(event.target.value)}
-            className="min-h-24 w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] px-4 py-2 text-sm outline-none focus:border-[#1f2933]"
+            className="min-h-24 w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] min-h-11 px-4 py-2.5 text-sm outline-none focus:border-[#1f2933]"
             placeholder="Optional creative brief: mood, lens, lighting, story, subject, brand direction..."
           />
         </div>
@@ -573,7 +573,7 @@ export default function ShotsPage() {
         <form onSubmit={createShot} className="space-y-3">
           <select
             aria-label="Select project"
-            className="w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] px-4 py-2 text-sm outline-none focus:border-[#1f2933]"
+            className="w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] min-h-11 px-4 py-2.5 text-sm outline-none focus:border-[#1f2933]"
             value={projectId}
             onChange={event => setProjectId(event.target.value)}
             disabled={isCreating || projects.length === 0}
@@ -590,21 +590,21 @@ export default function ShotsPage() {
           </select>
 
           <input
-            className="w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] px-4 py-2 text-sm outline-none focus:border-[#1f2933]"
+            className="w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] min-h-11 px-4 py-2.5 text-sm outline-none focus:border-[#1f2933]"
             value={title}
             onChange={event => setTitle(event.target.value)}
             placeholder="Shot title"
             disabled={isCreating}
           />
           <textarea
-            className="min-h-24 w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] px-4 py-2 text-sm outline-none focus:border-[#1f2933]"
+            className="min-h-24 w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] min-h-11 px-4 py-2.5 text-sm outline-none focus:border-[#1f2933]"
             value={description}
             onChange={event => setDescription(event.target.value)}
             placeholder="Shot description"
             disabled={isCreating}
           />
           <input
-            className="w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] px-4 py-2 text-sm outline-none focus:border-[#1f2933]"
+            className="w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] min-h-11 px-4 py-2.5 text-sm outline-none focus:border-[#1f2933]"
             value={location}
             onChange={event => setLocation(event.target.value)}
             placeholder="Location (optional)"
@@ -613,14 +613,14 @@ export default function ShotsPage() {
 
           <div className="grid gap-3 md:grid-cols-2">
             <input
-              className="w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] px-4 py-2 text-sm outline-none focus:border-[#1f2933]"
+              className="w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] min-h-11 px-4 py-2.5 text-sm outline-none focus:border-[#1f2933]"
               value={latitude}
               onChange={event => setLatitude(event.target.value)}
               placeholder="Latitude (e.g. 30.2672)"
               disabled={isCreating}
             />
             <input
-              className="w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] px-4 py-2 text-sm outline-none focus:border-[#1f2933]"
+              className="w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] min-h-11 px-4 py-2.5 text-sm outline-none focus:border-[#1f2933]"
               value={longitude}
               onChange={event => setLongitude(event.target.value)}
               placeholder="Longitude (e.g. -97.7431)"
@@ -629,7 +629,7 @@ export default function ShotsPage() {
           </div>
 
           <input
-            className="w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] px-4 py-2 text-sm outline-none focus:border-[#1f2933]"
+            className="w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] min-h-11 px-4 py-2.5 text-sm outline-none focus:border-[#1f2933]"
             value={microSpotName}
             onChange={event => setMicroSpotName(event.target.value)}
             placeholder="Micro-spot name (e.g. Weeping willow by lake)"
@@ -638,14 +638,14 @@ export default function ShotsPage() {
 
           <div className="grid gap-3 md:grid-cols-2">
             <input
-              className="w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] px-4 py-2 text-sm outline-none focus:border-[#1f2933]"
+              className="w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] min-h-11 px-4 py-2.5 text-sm outline-none focus:border-[#1f2933]"
               value={walkingDistance}
               onChange={event => setWalkingDistance(event.target.value)}
               placeholder="Walking distance (e.g. 4 min from lot)"
               disabled={isCreating}
             />
             <input
-              className="w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] px-4 py-2 text-sm outline-none focus:border-[#1f2933]"
+              className="w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] min-h-11 px-4 py-2.5 text-sm outline-none focus:border-[#1f2933]"
               value={restroomLocation}
               onChange={event => setRestroomLocation(event.target.value)}
               placeholder="Nearest restroom location"
@@ -654,14 +654,14 @@ export default function ShotsPage() {
           </div>
 
           <textarea
-            className="min-h-20 w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] px-4 py-2 text-sm outline-none focus:border-[#1f2933]"
+            className="min-h-20 w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] min-h-11 px-4 py-2.5 text-sm outline-none focus:border-[#1f2933]"
             value={parkingNotes}
             onChange={event => setParkingNotes(event.target.value)}
             placeholder="Parking notes"
             disabled={isCreating}
           />
           <textarea
-            className="min-h-20 w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] px-4 py-2 text-sm outline-none focus:border-[#1f2933]"
+            className="min-h-20 w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] min-h-11 px-4 py-2.5 text-sm outline-none focus:border-[#1f2933]"
             value={backgroundDescription}
             onChange={event => setBackgroundDescription(event.target.value)}
             placeholder="Background description"
@@ -693,7 +693,7 @@ export default function ShotsPage() {
           <input
             value={searchQuery}
             onChange={event => setSearchQuery(event.target.value)}
-            className="w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] px-4 py-2 text-sm outline-none focus:border-[#1f2933]"
+            className="w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] min-h-11 px-4 py-2.5 text-sm outline-none focus:border-[#1f2933]"
             placeholder="Search shots by title, description, project, or location"
             aria-label="Search shots"
           />
@@ -701,7 +701,7 @@ export default function ShotsPage() {
             aria-label="Filter shots by project"
             value={projectFilter}
             onChange={event => setProjectFilter(event.target.value)}
-            className="w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] px-4 py-2 text-sm outline-none focus:border-[#1f2933]"
+            className="w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] min-h-11 px-4 py-2.5 text-sm outline-none focus:border-[#1f2933]"
           >
             <option value="all">All projects</option>
             {projects.map(project => (
@@ -714,7 +714,7 @@ export default function ShotsPage() {
             aria-label="Filter shots by status"
             value={statusFilter}
             onChange={event => setStatusFilter(event.target.value as 'all' | ShotItem['status'])}
-            className="w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] px-4 py-2 text-sm outline-none focus:border-[#1f2933]"
+            className="w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] min-h-11 px-4 py-2.5 text-sm outline-none focus:border-[#1f2933]"
           >
             <option value="all">All statuses</option>
             <option value="planned">Planned</option>
@@ -816,39 +816,39 @@ export default function ShotsPage() {
           <input
             value={editForm.title}
             onChange={event => setEditForm(prev => ({ ...prev, title: event.target.value }))}
-            className="w-full rounded-lg border border-gray-300 px-4 py-2"
+            className="w-full rounded-lg border border-gray-300 min-h-11 px-4 py-2.5"
             placeholder="Shot title"
           />
           <textarea
             value={editForm.description}
             onChange={event => setEditForm(prev => ({ ...prev, description: event.target.value }))}
-            className="min-h-24 w-full rounded-lg border border-gray-300 px-4 py-2"
+            className="min-h-24 w-full rounded-lg border border-gray-300 min-h-11 px-4 py-2.5"
             placeholder="Shot description"
           />
           <input
             value={editForm.location}
             onChange={event => setEditForm(prev => ({ ...prev, location: event.target.value }))}
-            className="w-full rounded-lg border border-gray-300 px-4 py-2"
+            className="w-full rounded-lg border border-gray-300 min-h-11 px-4 py-2.5"
             placeholder="Location"
           />
           <div className="grid gap-3 md:grid-cols-2">
             <input
               value={editForm.latitude}
               onChange={event => setEditForm(prev => ({ ...prev, latitude: event.target.value }))}
-              className="w-full rounded-lg border border-gray-300 px-4 py-2"
+              className="w-full rounded-lg border border-gray-300 min-h-11 px-4 py-2.5"
               placeholder="Latitude"
             />
             <input
               value={editForm.longitude}
               onChange={event => setEditForm(prev => ({ ...prev, longitude: event.target.value }))}
-              className="w-full rounded-lg border border-gray-300 px-4 py-2"
+              className="w-full rounded-lg border border-gray-300 min-h-11 px-4 py-2.5"
               placeholder="Longitude"
             />
           </div>
           <input
             value={editForm.microSpotName}
             onChange={event => setEditForm(prev => ({ ...prev, microSpotName: event.target.value }))}
-            className="w-full rounded-lg border border-gray-300 px-4 py-2"
+            className="w-full rounded-lg border border-gray-300 min-h-11 px-4 py-2.5"
             placeholder="Micro-spot name"
           />
           <input
@@ -856,38 +856,38 @@ export default function ShotsPage() {
             aria-label="Planned shoot time"
             value={editForm.plannedTime}
             onChange={event => setEditForm(prev => ({ ...prev, plannedTime: event.target.value }))}
-            className="w-full rounded-lg border border-gray-300 px-4 py-2"
+            className="w-full rounded-lg border border-gray-300 min-h-11 px-4 py-2.5"
           />
           <textarea
             value={editForm.notes}
             onChange={event => setEditForm(prev => ({ ...prev, notes: event.target.value }))}
-            className="min-h-24 w-full rounded-lg border border-gray-300 px-4 py-2"
+            className="min-h-24 w-full rounded-lg border border-gray-300 min-h-11 px-4 py-2.5"
             placeholder="Shot notes"
           />
           <div className="grid gap-3 md:grid-cols-2">
             <input
               value={editForm.walkingDistance}
               onChange={event => setEditForm(prev => ({ ...prev, walkingDistance: event.target.value }))}
-              className="w-full rounded-lg border border-gray-300 px-4 py-2"
+              className="w-full rounded-lg border border-gray-300 min-h-11 px-4 py-2.5"
               placeholder="Walking distance"
             />
             <input
               value={editForm.restroomLocation}
               onChange={event => setEditForm(prev => ({ ...prev, restroomLocation: event.target.value }))}
-              className="w-full rounded-lg border border-gray-300 px-4 py-2"
+              className="w-full rounded-lg border border-gray-300 min-h-11 px-4 py-2.5"
               placeholder="Nearest restroom"
             />
           </div>
           <textarea
             value={editForm.parkingNotes}
             onChange={event => setEditForm(prev => ({ ...prev, parkingNotes: event.target.value }))}
-            className="min-h-20 w-full rounded-lg border border-gray-300 px-4 py-2"
+            className="min-h-20 w-full rounded-lg border border-gray-300 min-h-11 px-4 py-2.5"
             placeholder="Parking notes"
           />
           <textarea
             value={editForm.backgroundDescription}
             onChange={event => setEditForm(prev => ({ ...prev, backgroundDescription: event.target.value }))}
-            className="min-h-20 w-full rounded-lg border border-gray-300 px-4 py-2"
+            className="min-h-20 w-full rounded-lg border border-gray-300 min-h-11 px-4 py-2.5"
             placeholder="Background description"
           />
           <select
@@ -896,7 +896,7 @@ export default function ShotsPage() {
             onChange={event =>
               setEditForm(prev => ({ ...prev, status: event.target.value as ShotItem['status'] }))
             }
-            className="w-full rounded-lg border border-gray-300 px-4 py-2"
+            className="w-full rounded-lg border border-gray-300 min-h-11 px-4 py-2.5"
           >
             <option value="planned">Planned</option>
             <option value="taken">Taken</option>
@@ -917,7 +917,7 @@ export default function ShotsPage() {
               accept="image/*"
               aria-label="Upload shot image"
               onChange={event => setSelectedFile(event.target.files?.[0] ?? null)}
-              className="w-full rounded-lg border border-gray-300 px-4 py-2"
+              className="w-full rounded-lg border border-gray-300 min-h-11 px-4 py-2.5"
             />
             <Button type="button" variant="secondary" isLoading={isUploading} onClick={() => void uploadShotImage()}>
               {isUploading ? 'Uploading...' : 'Upload Image'}

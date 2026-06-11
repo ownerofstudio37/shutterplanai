@@ -72,9 +72,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   return (
     <div className="min-h-screen bg-[#f6f3ee] text-[#1f2933]">
       <div className="grid min-h-screen lg:grid-cols-[280px_1fr]">
-        <aside className="border-r border-[#ded8ce] bg-[#111827] text-white">
-          <div className="flex h-full flex-col">
-            <div className="border-b border-white/10 px-5 py-5">
+        <aside className="border-b border-[#ded8ce] bg-[#111827] text-white lg:border-b-0 lg:border-r">
+          <div className="flex flex-col lg:h-full">
+            <div className="border-b border-white/10 px-4 py-4 lg:px-5 lg:py-5">
               <Link href="/dashboard" className="block">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#9ca3af]">
                   ShutterPlan AI
@@ -85,7 +85,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               </Link>
             </div>
 
-            <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
+            <nav className="grid grid-cols-2 gap-2 px-3 py-3 sm:grid-cols-4 lg:block lg:flex-1 lg:space-y-1 lg:overflow-y-auto lg:py-4">
               {navItems.map(item => {
                 const isActive = pathname === item.href || Boolean(pathname?.startsWith(`${item.href}/`));
 
@@ -110,7 +110,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               })}
             </nav>
 
-            <div className="border-t border-white/10 p-4">
+            <div className="hidden border-t border-white/10 p-4 lg:block">
               <div className="rounded-lg border border-white/10 bg-white/5 p-3">
                 <p className="text-sm font-semibold text-white">{user.name}</p>
                 <p className="mt-1 truncate text-xs text-[#9ca3af]">{user.email}</p>
@@ -143,7 +143,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 </h2>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-md border border-[#d8d2c8] bg-white px-3 py-2 text-sm text-[#5f6b76]">
+                <span className="min-h-10 rounded-md border border-[#d8d2c8] bg-white px-3 py-2 text-sm text-[#5f6b76]">
                   Welcome back, {firstName}
                 </span>
                 <Link href="/dashboard/planner">

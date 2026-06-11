@@ -66,7 +66,7 @@ function getAuthHeader() {
 }
 
 function getInputClass() {
-  return 'mt-2 w-full rounded-lg border border-[#d8d2c8] bg-white px-4 py-3 text-sm text-[#1f2933] shadow-sm outline-none transition placeholder:text-[#9a9187] focus:border-[#1f2933] focus:ring-2 focus:ring-[#1f2933]/10 disabled:bg-[#f4f1ec]';
+  return 'mt-2 min-h-11 w-full rounded-lg border border-[#d8d2c8] bg-white px-4 py-3 text-sm text-[#1f2933] shadow-sm outline-none transition placeholder:text-[#9a9187] focus:border-[#1f2933] focus:ring-2 focus:ring-[#1f2933]/10 disabled:bg-[#f4f1ec]';
 }
 
 function getReadinessLabel(score: number) {
@@ -92,7 +92,7 @@ function TextField({ label, value, onChange, placeholder, disabled, className = 
       {label}
       <input
         type={type}
-        className={getInputClass()}
+        className={`${getInputClass()} ${type === 'color' ? 'h-11 p-1' : ''}`}
         value={value}
         onChange={event => onChange(event.target.value)}
         placeholder={placeholder}

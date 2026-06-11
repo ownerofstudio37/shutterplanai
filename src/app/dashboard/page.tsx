@@ -384,7 +384,7 @@ export default function Dashboard() {
                       A polished plan would include a 45-minute timeline, three nearby micro-spots, kid-friendly pacing, parking notes, and a mobile guide for the client.
                     </p>
                   </div>
-                  <div className="grid shrink-0 grid-cols-3 gap-2 text-center text-xs font-semibold text-[#5f6b76]">
+                  <div className="grid shrink-0 grid-cols-1 gap-2 text-center text-xs font-semibold text-[#5f6b76] sm:grid-cols-3">
                     {['Timeline', 'Pins', 'Guide'].map(item => (
                       <span key={item} className="rounded-md bg-[#ece7df] px-3 py-2">
                         {item}
@@ -592,7 +592,7 @@ export default function Dashboard() {
             })}
           </div>
 
-          <div className="mt-5 grid grid-cols-2 gap-3">
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
             <Link href="/dashboard/planner">
               <Button className="w-full bg-[#1f2933] hover:bg-[#111827]">Generate plan</Button>
             </Link>

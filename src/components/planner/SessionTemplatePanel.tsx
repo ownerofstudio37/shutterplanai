@@ -168,7 +168,7 @@ export function SessionTemplatePanel({ currentPayload, onLoadTemplate }: Session
                 onChange={e => setNewName(e.target.value)}
                 placeholder="Template name (e.g. Golden Hour Family)"
                 maxLength={120}
-                className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none"
+                className="flex-1 rounded-lg border border-gray-300 min-h-11 px-3 py-2.5 text-sm focus:border-emerald-400 focus:outline-none"
                 onKeyDown={e => {
                   if (e.key === 'Enter') void saveTemplate();
                 }}
