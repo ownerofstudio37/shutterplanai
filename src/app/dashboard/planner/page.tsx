@@ -65,6 +65,21 @@ interface SessionPlan {
   };
 }
 
+type BusinessProfile = {
+  businessName?: string;
+  businessType?: string;
+  address?: string;
+  zipCode?: string;
+  baseLocation?: string;
+  websiteUrl?: string;
+  websiteSummary?: string;
+  brandTone?: string;
+  preferredLocationTypes?: string;
+  avoidLocationTypes?: string;
+  poseDirectionStyle?: string;
+  prepGuideNotes?: string;
+};
+
 type LocationMode = 'find-locations' | 'use-provided';
 type ChatQuestionId =
   | 'shootType'
@@ -308,6 +323,46 @@ function getQuickReplyOptions(question: ChatQuestion, sessionCategory: SessionCa
   return [];
 }
 
+function getBusinessProfileTemplates(
+  question: ChatQuestion,
+  sessionCategory: SessionCategory,
+  businessProfile: BusinessProfile | null
+): string[] {
+  if (!businessProfile) return [];
+
+  const templates: string[] = [];
+
+  if (question.id === 'city') {
+    if (businessProfile.baseLocation) templates.push(businessProfile.baseLocation);
+    if (businessProfile.zipCode) templates.push(businessProfile.zipCode);
+  }
+
+  if (question.id === 'mood') {
+    if (businessProfile.brandTone) templates.push(businessProfile.brandTone);
+    if (businessProfile.poseDirectionStyle && sessionCategory === 'portrait') {
+      templates.push(`Brand-forward, ${businessProfile.poseDirectionStyle}`);
+    }
+  }
+
+  if (question.id === 'constraints') {
+    if (businessProfile.prepGuideNotes) templates.push(businessProfile.prepGuideNotes);
+    if (businessProfile.avoidLocationTypes) {
+      templates.push(`Avoid: ${businessProfile.avoidLocationTypes}`);
+    }
+  }
+
+  if (question.id === 'brandingGoals' && sessionCategory === 'portrait') {
+    if (businessProfile.businessType) templates.push(`${businessProfile.businessType} brand shoot`);
+    if (businessProfile.websiteSummary) templates.push('Website hero, about page, and social content');
+  }
+
+  if (question.id === 'providedLocations' && businessProfile.preferredLocationTypes) {
+    templates.push(businessProfile.preferredLocationTypes);
+  }
+
+  return Array.from(new Set(templates.map(item => item.trim()).filter(Boolean))).slice(0, 4);
+}
+
 export default function PlannerPage() {
   const router = useRouter();
 
@@ -328,6 +383,7 @@ export default function PlannerPage() {
   const [chatStepIndex, setChatStepIndex] = useState(0);
   const [draftAnswer, setDraftAnswer] = useState('');
   const [isReviewConfirmed, setIsReviewConfirmed] = useState(false);
+  const [businessProfile, setBusinessProfile] = useState<BusinessProfile | null>(null);
 
   const [plan, setPlan] = useState<SessionPlan | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -440,6 +496,9 @@ export default function PlannerPage() {
   const activePrompt = activeQuestion ? getAdaptivePrompt(activeQuestion, sessionCategory) : '';
   const activePlaceholder = activeQuestion ? getAdaptivePlaceholder(activeQuestion, sessionCategory) : '';
   const activeQuickReplies = activeQuestion ? getQuickReplyOptions(activeQuestion, sessionCategory) : [];
+  const activeProfileTemplates = activeQuestion
+    ? getBusinessProfileTemplates(activeQuestion, sessionCategory, businessProfile)
+    : [];
 
   useEffect(() => {
     if (!activeQuestion) {
@@ -448,6 +507,26 @@ export default function PlannerPage() {
     }
     setDraftAnswer(getAnswerForQuestion(activeQuestion.id));
   }, [activeQuestion]);
+
+  useEffect(() => {
+    const loadBusinessProfile = async () => {
+      try {
+        const response = await fetch('/api/account/business-profile', {
+          headers: {
+            ...getAuthHeader(),
+          },
+        });
+
+        const result = await response.json();
+        if (!result.success) return;
+        setBusinessProfile((result.data ?? null) as BusinessProfile | null);
+      } catch {
+        // ignore profile preload failures in planner
+      }
+    };
+
+    void loadBusinessProfile();
+  }, []);
 
   const locationIndex = useMemo(() => {
     const map = new Map<string, SessionPlanLocation>();
@@ -845,6 +924,31 @@ export default function PlannerPage() {
                 </div>
               ) : (
                 <div className="ml-12">
+                  {activeProfileTemplates.length > 0 && (
+                    <div className="mb-2">
+                      <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-gray-500">From your business profile</p>
+                      <div className="flex flex-wrap gap-2">
+                        {activeProfileTemplates.map(option => (
+                          <button
+                            key={`${activeQuestion.id}-profile-${option}`}
+                            type="button"
+                            onClick={() => {
+                              setDraftAnswer(option);
+                              setError(null);
+                            }}
+                            className={`rounded-full border px-2.5 py-1 text-xs ${
+                              draftAnswer === option
+                                ? 'border-emerald-600 bg-emerald-50 text-emerald-700'
+                                : 'border-emerald-200 bg-white text-emerald-700 hover:border-emerald-300'
+                            }`}
+                          >
+                            {option}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {activeQuickReplies.length > 0 && (
                     <div className="mb-2 flex flex-wrap gap-2">
                       {activeQuickReplies.map(option => (
