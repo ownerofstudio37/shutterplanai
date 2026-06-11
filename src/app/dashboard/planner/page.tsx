@@ -488,6 +488,7 @@ export default function PlannerPage() {
   const [isRefining, setIsRefining] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
   const [feedbackSaveStatus, setFeedbackSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [isRegenerating, setIsRegenerating] = useState<'idle' | 'locations' | 'shot-list' | 'timeline'>('idle');
 
   const durationMinutes = useMemo(() => parseDurationMinutes(duration), [duration]);
   const expectedShotRange = useMemo(() => getExpectedShotRange(durationMinutes), [durationMinutes]);
@@ -826,6 +827,92 @@ export default function PlannerPage() {
     } catch (error) {
       console.warn('Failed to persist planner feedback:', error);
       setFeedbackSaveStatus('idle');
+    }
+  };
+
+  const regenerateSection = async (sectionType: 'shot-list' | 'timeline') => {
+    if (!plan) return;
+
+    setIsRegenerating(sectionType);
+    setError(null);
+
+    try {
+      // Reconstruct payloads similar to generatePlan
+      const subjectDetailsPayload = [
+        subjectDetails,
+        sessionCategory === 'family' && familyPacing ? `Family pacing: ${familyPacing}` : '',
+        sessionCategory === 'engagement' && engagementStory ? `Couple story: ${engagementStory}` : '',
+        sessionCategory === 'portrait' && brandingGoals ? `Brand goals: ${brandingGoals}` : '',
+        sessionCategory === 'event' && eventPriorities ? `Event priorities: ${eventPriorities}` : '',
+      ]
+        .filter(Boolean)
+        .join(' | ');
+
+      const mustHaveShotsPayload = [
+        mustHaveShots,
+        sessionCategory === 'portrait' && brandingGoals ? `Brand outputs: ${brandingGoals}` : '',
+        sessionCategory === 'event' && eventPriorities ? `Priority captures: ${eventPriorities}` : '',
+      ]
+        .filter(Boolean)
+        .join(' | ');
+
+      const constraintsPayload = [
+        constraints,
+        sessionCategory === 'family' && familyPacing ? `Pacing note: ${familyPacing}` : '',
+      ]
+        .filter(Boolean)
+        .join(' | ');
+
+      const response = await fetch('/api/planner/regenerate-section', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeader(),
+        },
+        body: JSON.stringify({
+          type: sectionType,
+          currentPlan: {
+            locationSuggestions: plan.locationSuggestions,
+            shotList: plan.shotList,
+            timeline: plan.timeline,
+          },
+          sessionInputs: {
+            shootType,
+            subjectDetails: subjectDetailsPayload,
+            city: city || businessProfile?.baseLocation || '',
+            duration,
+            mood,
+            mustHaveShots: mustHaveShotsPayload,
+            constraints: constraintsPayload,
+          },
+        }),
+      });
+
+      const result = await response.json();
+      if (!result.success) {
+        setError(result.error ?? `Failed to regenerate ${sectionType}`);
+        setIsRegenerating('idle');
+        return;
+      }
+
+      // Update the plan with regenerated content
+      setPlan(prev =>
+        prev
+          ? {
+              ...prev,
+              ...(result.data?.shotList && { shotList: result.data.shotList }),
+              ...(result.data?.timeline && { timeline: result.data.timeline }),
+            }
+          : prev
+      );
+
+      setFeedbackSaveStatus('saved');
+      setTimeout(() => setFeedbackSaveStatus('idle'), 2000);
+    } catch (error) {
+      console.error(`Failed to regenerate ${sectionType}:`, error);
+      setError(`Failed to regenerate ${sectionType}`);
+    } finally {
+      setIsRegenerating('idle');
     }
   };
 
@@ -2166,6 +2253,20 @@ export default function PlannerPage() {
 
             {activeReviewTab === 'shot-list' && (
               <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900 flex-1">
+                    {displayedShots.length} shots planned for this session
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => regenerateSection('shot-list')}
+                    disabled={isRegenerating === 'shot-list'}
+                    className="ml-3 rounded-lg border border-purple-300 bg-white px-3 py-2 text-sm font-medium text-purple-700 hover:bg-purple-50 disabled:opacity-50 whitespace-nowrap"
+                  >
+                    {isRegenerating === 'shot-list' ? '⟳ Regenerating...' : '⟳ Regenerate List'}
+                  </button>
+                </div>
+
                 {emptyShotMessage && (
                   <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
                     <p className="font-semibold">No visible shots right now</p>
@@ -2196,6 +2297,20 @@ export default function PlannerPage() {
 
             {activeReviewTab === 'timeline' && (
               <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900 flex-1">
+                    {plan.timeline.length} timeline blocks planned
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => regenerateSection('timeline')}
+                    disabled={isRegenerating === 'timeline'}
+                    className="ml-3 rounded-lg border border-purple-300 bg-white px-3 py-2 text-sm font-medium text-purple-700 hover:bg-purple-50 disabled:opacity-50 whitespace-nowrap"
+                  >
+                    {isRegenerating === 'timeline' ? '⟳ Regenerating...' : '⟳ Regenerate Timeline'}
+                  </button>
+                </div>
+
                 {plan.timeline.map(item => (
                   <div key={`${item.timeBlock}-${item.focus}`} className="rounded-lg border border-gray-200 p-3">
                     <p className="text-sm font-semibold text-gray-900">{item.timeBlock}</p>
