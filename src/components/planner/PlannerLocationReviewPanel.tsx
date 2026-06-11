@@ -1,3 +1,5 @@
+import { memo } from 'react';
+
 type ReviewLocation = {
   name: string;
   displayName?: string;
@@ -50,7 +52,7 @@ type PlannerLocationReviewPanelProps = {
   onToggleExcludedVenueBucket: (venueBucket?: string) => void;
 };
 
-export function PlannerLocationReviewPanel({
+export const PlannerLocationReviewPanel = memo(function PlannerLocationReviewPanel({
   locations,
   emptyLocationMessage,
   locationVotes,
@@ -227,4 +229,6 @@ export function PlannerLocationReviewPanel({
       )}
     </div>
   );
-}
+});
+
+PlannerLocationReviewPanel.displayName = 'PlannerLocationReviewPanel';

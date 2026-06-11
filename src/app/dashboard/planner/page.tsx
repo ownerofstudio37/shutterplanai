@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/Card';
@@ -1126,7 +1126,7 @@ export default function PlannerPage() {
     setChatStepIndex(Math.max(0, visibleQuestions.length - 1));
   };
 
-  const setLocationVote = (location: SessionPlanLocation, vote: LocationVote) => {
+  const setLocationVote = useCallback((location: SessionPlanLocation, vote: LocationVote) => {
     const key = (location.displayName || location.name).toLowerCase();
     setLocationVotes(prev => {
       if (prev[key] === vote) {
@@ -1140,19 +1140,19 @@ export default function PlannerPage() {
         [key]: vote,
       };
     });
-  };
+  }, []);
 
-  const togglePreferredVenueBucket = (venueBucket?: string) => {
+  const togglePreferredVenueBucket = useCallback((venueBucket?: string) => {
     if (!venueBucket) return;
     setPreferredVenueBucket(prev => (prev === venueBucket ? null : venueBucket));
-  };
+  }, []);
 
-  const toggleExcludedVenueBucket = (venueBucket?: string) => {
+  const toggleExcludedVenueBucket = useCallback((venueBucket?: string) => {
     if (!venueBucket) return;
     setExcludedVenueBuckets(prev =>
       prev.includes(venueBucket) ? prev.filter(item => item !== venueBucket) : [...prev, venueBucket]
     );
-  };
+  }, []);
 
   const applyPreset = (preset: PlannerPreset) => {
     const presetCity = businessProfile?.baseLocation || businessProfile?.zipCode || city;
@@ -1244,10 +1244,10 @@ export default function PlannerPage() {
     return 'No shots match the currently visible locations. Re-enable a location type or regenerate the plan.';
   }, [displayedShots.length, plan?.shotList?.length]);
 
-  const toggleMobileReviewTab = (tab: ReviewTab) => {
+  const toggleMobileReviewTab = useCallback((tab: ReviewTab) => {
     setActiveMobileReviewTab(prev => (prev === tab ? null : tab));
     setActiveReviewTab(tab);
-  };
+  }, []);
 
   const resumeDraft = () => {
     if (!resumableDraft) return;
@@ -1609,10 +1609,20 @@ export default function PlannerPage() {
           <div className="sticky bottom-3 z-10 md:hidden">
             <div className="rounded-2xl border border-gray-200 bg-white/95 p-3 shadow-lg backdrop-blur">
               <div className="grid grid-cols-2 gap-2">
-                <Button variant="ghost" isLoading={isRefining} onClick={() => void refinePlan()}>
+                <Button
+                  variant="ghost"
+                  isLoading={isRefining}
+                  disabled={isRefining || isApplying}
+                  onClick={() => void refinePlan()}
+                >
                   {isRefining ? 'Refining...' : 'Refine'}
                 </Button>
-                <Button variant="secondary" isLoading={isApplying} onClick={() => void applyPlanToWorkspace()}>
+                <Button
+                  variant="secondary"
+                  isLoading={isApplying}
+                  disabled={isRefining || isApplying}
+                  onClick={() => void applyPlanToWorkspace()}
+                >
                   {isApplying ? 'Applying...' : 'Create Project'}
                 </Button>
               </div>

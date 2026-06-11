@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { memo, type ReactNode } from 'react';
 
 type ReviewTab = 'map' | 'locations' | 'shot-list' | 'timeline' | 'prep';
 type LocationVote = 'up' | 'down';
@@ -57,7 +57,7 @@ type PlannerMobileReviewContentProps = {
   contingencyPlans: string[];
 };
 
-export function PlannerMobileReviewContent({
+export const PlannerMobileReviewContent = memo(function PlannerMobileReviewContent({
   reviewTab,
   mapContent,
   selectedLocation,
@@ -268,4 +268,6 @@ export function PlannerMobileReviewContent({
       </div>
     </div>
   );
-}
+});
+
+PlannerMobileReviewContent.displayName = 'PlannerMobileReviewContent';

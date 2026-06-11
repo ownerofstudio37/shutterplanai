@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { memo, type ReactNode } from 'react';
 import { PlannerMapReviewPanel } from '@/components/planner/PlannerMapReviewPanel';
 import { PlannerLocationReviewPanel } from '@/components/planner/PlannerLocationReviewPanel';
 import { PlannerShotListPanel } from '@/components/planner/PlannerShotListPanel';
@@ -101,7 +101,7 @@ type PlannerDesktopReviewContentProps = {
   onUpdateContingencyItem: (index: number, value: string) => void;
 };
 
-export function PlannerDesktopReviewContent({
+export const PlannerDesktopReviewContent = memo(function PlannerDesktopReviewContent({
   activeReviewTab,
   mapContent,
   locations,
@@ -195,4 +195,6 @@ export function PlannerDesktopReviewContent({
       onUpdateContingencyItem={onUpdateContingencyItem}
     />
   );
-}
+});
+
+PlannerDesktopReviewContent.displayName = 'PlannerDesktopReviewContent';

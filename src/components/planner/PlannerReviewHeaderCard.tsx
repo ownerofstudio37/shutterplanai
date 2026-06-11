@@ -134,13 +134,13 @@ export function PlannerReviewHeaderCard({
         </div>
         <div className="hidden gap-2 md:flex">
           <Button variant="ghost" onClick={onToggleEditMode}>{isEditMode ? 'Done editing' : 'Edit output'}</Button>
-          <Button variant="ghost" isLoading={isCreatingShareLink} onClick={onCreateShareLink}>
+          <Button variant="ghost" isLoading={isCreatingShareLink} disabled={isRefining || isApplying} onClick={onCreateShareLink}>
             {isCreatingShareLink ? 'Creating link...' : 'Create share link'}
           </Button>
-          <Button variant="ghost" isLoading={isRefining} onClick={onRefinePlan}>
+          <Button variant="ghost" isLoading={isRefining} disabled={isApplying} onClick={onRefinePlan}>
             {isRefining ? 'Refining...' : 'Refine Plan'}
           </Button>
-          <Button variant="secondary" isLoading={isApplying} onClick={onApplyPlan}>
+          <Button variant="secondary" isLoading={isApplying} disabled={isRefining} onClick={onApplyPlan}>
             {isApplying ? 'Applying...' : 'Create Project + Shot List'}
           </Button>
           <Link href="/dashboard/shot-board">
@@ -236,8 +236,8 @@ export function PlannerReviewHeaderCard({
           <p className="font-semibold">Share link ready</p>
           <div className="mt-2 flex flex-col gap-2 md:flex-row md:items-center">
             <input title="Share URL" readOnly value={shareUrl} className="w-full rounded border border-emerald-300 bg-white px-2 py-1 text-xs text-emerald-900" />
-            <Button variant="secondary" onClick={onCopyShareLink}>Copy link</Button>
-            <Button variant="ghost" isLoading={isRevokingShareLink} onClick={onRevokeShareLink}>
+            <Button variant="secondary" disabled={isRevokingShareLink} onClick={onCopyShareLink}>Copy link</Button>
+            <Button variant="ghost" isLoading={isRevokingShareLink} disabled={isApplying || isRefining} onClick={onRevokeShareLink}>
               {isRevokingShareLink ? 'Revoking...' : 'Revoke link'}
             </Button>
           </div>
