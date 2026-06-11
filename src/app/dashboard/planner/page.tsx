@@ -7,6 +7,9 @@ import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { InlineEditableField } from '@/components/planner/InlineEditableField';
+import { PlannerWorkflowStages } from '@/components/planner/PlannerWorkflowStages';
+import { DraftResumeBanner } from '@/components/planner/DraftResumeBanner';
+import { PlannerPresetGrid } from '@/components/planner/PlannerPresetGrid';
 import { tokenUtils } from '@/lib/auth';
 
 interface SessionPlanLocation {
@@ -1814,39 +1817,7 @@ export default function PlannerPage() {
 
   return (
     <div className="space-y-6">
-      <Card>
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <h2 className="text-xl font-semibold text-gray-900">Planner workflow</h2>
-            <p className="text-sm text-gray-600">Move from intake to review, then apply the approved plan to your project workspace.</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {workflowStages.map(stage => {
-              const isActive = workflowStage === stage.id;
-              const isAvailable =
-                stage.id === 'intake' ||
-                (stage.id === 'review' && !!plan) ||
-                (stage.id === 'apply' && !!plan);
-
-              return (
-                <div
-                  key={stage.id}
-                  className={`rounded-2xl border px-3 py-2 text-sm ${
-                    isActive
-                      ? 'border-blue-600 bg-blue-50 text-blue-700'
-                      : isAvailable
-                        ? 'border-gray-200 bg-white text-gray-700'
-                        : 'border-gray-200 bg-gray-50 text-gray-400'
-                  }`}
-                >
-                  <p className="font-semibold">{stage.label}</p>
-                  <p className="text-xs">{stage.description}</p>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </Card>
+      <PlannerWorkflowStages stages={workflowStages} currentStage={workflowStage} hasPlan={!!plan} />
 
       <Card>
         <div className="mb-4 flex items-center justify-between">
@@ -1893,66 +1864,15 @@ export default function PlannerPage() {
           {workflowStage === 'intake' ? (
             <>
               {resumableDraft && (
-                <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
-                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <p className="text-sm font-semibold text-amber-900">Resume your last planner draft</p>
-                      <p className="mt-1 text-xs text-amber-800">
-                        Saved {new Date(resumableDraft.updatedAt).toLocaleString()} • {resumableDraft.planState.shootType}
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Button variant="secondary" onClick={() => void dismissDraft()}>Discard draft</Button>
-                      <Button onClick={resumeDraft}>Resume draft</Button>
-                    </div>
-                  </div>
-                </div>
+                <DraftResumeBanner
+                  updatedAt={resumableDraft.updatedAt}
+                  shootType={resumableDraft.planState.shootType}
+                  onDiscard={() => void dismissDraft()}
+                  onResume={resumeDraft}
+                />
               )}
 
-              <div className="mb-4 rounded-xl border border-indigo-200 bg-indigo-50 p-4">
-                <div className="mb-3 flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <p className="text-sm font-semibold text-indigo-900">Quick-start presets</p>
-                    <p className="text-xs text-indigo-700">Start with a proven planning setup, then tweak anything in the intake summary.</p>
-                  </div>
-                  {activePresetId && (
-                    <span className="rounded-full bg-white px-2 py-1 text-xs font-medium text-indigo-700">
-                      Active preset: {PLANNER_PRESETS.find(preset => preset.id === activePresetId)?.label}
-                    </span>
-                  )}
-                </div>
-
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                  {PLANNER_PRESETS.map(preset => (
-                    <button
-                      key={preset.id}
-                      type="button"
-                      onClick={() => applyPreset(preset)}
-                      className={`rounded-xl border px-4 py-3 text-left transition ${
-                        activePresetId === preset.id
-                          ? 'border-indigo-600 bg-white shadow-sm'
-                          : 'border-indigo-200 bg-white/80 hover:border-indigo-300 hover:bg-white'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <p className="text-sm font-semibold text-gray-900">{preset.label}</p>
-                          <p className="mt-1 text-xs text-gray-600">{preset.description}</p>
-                        </div>
-                        <span className="rounded-full bg-indigo-100 px-2 py-1 text-[11px] font-medium text-indigo-700">
-                          {preset.duration}
-                        </span>
-                      </div>
-                      <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
-                        <span className="rounded-full bg-gray-100 px-2 py-1 text-gray-700">{preset.shootType}</span>
-                        <span className="rounded-full bg-gray-100 px-2 py-1 text-gray-700">
-                          {preset.locationMode === 'use-provided' ? 'Provided locations' : 'Find locations'}
-                        </span>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <PlannerPresetGrid presets={PLANNER_PRESETS} activePresetId={activePresetId} onApplyPreset={applyPreset} />
 
               <div className="mb-3 flex items-center justify-between text-xs text-gray-600">
                 <span>Step {Math.min(chatStepIndex + 1, visibleQuestions.length)} of {visibleQuestions.length}</span>
