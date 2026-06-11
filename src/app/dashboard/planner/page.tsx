@@ -438,6 +438,10 @@ function getBusinessProfileTemplates(
   return Array.from(new Set(templates.map(item => item.trim()).filter(Boolean))).slice(0, 4);
 }
 
+function PlannerSkeletonCard({ className = '' }: { className?: string }) {
+  return <div className={`animate-pulse rounded-xl bg-gray-200 ${className}`.trim()} />;
+}
+
 export default function PlannerPage() {
   const router = useRouter();
 
@@ -1070,6 +1074,58 @@ export default function PlannerPage() {
     { id: 'apply', label: '3. Apply to Project', description: 'Create your project and shot list' },
   ];
 
+  const planningSourceExplanation = useMemo(() => {
+    if (!plan?.planningDiagnostics?.locationSource) return null;
+
+    switch (plan.planningDiagnostics.locationSource) {
+      case 'grounded-candidates':
+        return {
+          tone: 'emerald' as const,
+          title: 'Grounded location set',
+          body: 'This plan is built from ranked real-world candidates gathered for the requested area and session type.',
+        };
+      case 'user-provided':
+        return {
+          tone: 'blue' as const,
+          title: 'Using your provided locations',
+          body: 'The planner prioritized the locations you supplied, then built the shot flow and timing around those places.',
+        };
+      case 'fallback-geocode':
+        return {
+          tone: 'amber' as const,
+          title: 'Fallback geocode mode',
+          body: 'The planner found limited ranked venue data, so it used broader map results. Review the locations closely before applying the plan.',
+        };
+      case 'city-fallback':
+        return {
+          tone: 'amber' as const,
+          title: 'City fallback mode',
+          body: 'The planner had to widen the search around the city anchor. A nearby ZIP, neighborhood, or provided location list may improve results.',
+        };
+      default:
+        return null;
+    }
+  }, [plan?.planningDiagnostics?.locationSource]);
+
+  const emptyLocationMessage = useMemo(() => {
+    if (displayedLocations.length > 0) return null;
+    if ((plan?.locationSuggestions?.length ?? 0) === 0) {
+      return 'No locations made it into the current plan. Try broadening the area, using a ZIP, or switching to provided locations.';
+    }
+    if (excludedVenueBuckets.length > 0) {
+      return 'All current locations are hidden by your excluded type filters. Re-enable a venue type to see them again.';
+    }
+    return 'No locations match the current review filters. Clear preferences or regenerate for a broader set.';
+  }, [displayedLocations.length, excludedVenueBuckets.length, plan?.locationSuggestions?.length]);
+
+  const emptyShotMessage = useMemo(() => {
+    if (displayedShots.length > 0) return null;
+    if ((plan?.shotList?.length ?? 0) === 0) {
+      return 'No shots were generated for this plan yet. Regenerate the plan or refine it after locations are confirmed.';
+    }
+    return 'No shots match the currently visible locations. Re-enable a location type or regenerate the plan.';
+  }, [displayedShots.length, plan?.shotList?.length]);
+
   const toggleMobileReviewTab = (tab: ReviewTab) => {
     setActiveMobileReviewTab(prev => (prev === tab ? null : tab));
     setActiveReviewTab(tab);
@@ -1402,6 +1458,45 @@ export default function PlannerPage() {
         {error && <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
       </Card>
 
+      {isGenerating && !plan && (
+        <>
+          <Card>
+            <div className="space-y-4">
+              <div>
+                <p className="text-sm font-semibold text-gray-900">Building your plan</p>
+                <p className="text-sm text-gray-600">Grounding the session with real locations, then assembling the review tabs.</p>
+              </div>
+              <div className="grid gap-3 md:grid-cols-3">
+                {['Checking your intake answers', 'Searching location candidates', 'Drafting timeline + shot flow'].map(step => (
+                  <div key={step} className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                    <p className="mb-3 text-sm font-medium text-gray-700">{step}</p>
+                    <PlannerSkeletonCard className="h-3 w-3/4" />
+                    <PlannerSkeletonCard className="mt-2 h-3 w-full" />
+                    <PlannerSkeletonCard className="mt-2 h-3 w-5/6" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </Card>
+
+          <Card>
+            <div className="space-y-4">
+              <PlannerSkeletonCard className="h-5 w-48" />
+              <div className="grid gap-3 lg:grid-cols-2">
+                {Array.from({ length: 4 }).map((_, index) => (
+                  <div key={`plan-skeleton-${index}`} className="rounded-xl border border-gray-200 p-4">
+                    <PlannerSkeletonCard className="h-4 w-2/3" />
+                    <PlannerSkeletonCard className="mt-3 h-3 w-full" />
+                    <PlannerSkeletonCard className="mt-2 h-3 w-11/12" />
+                    <PlannerSkeletonCard className="mt-4 h-16 w-full" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </Card>
+        </>
+      )}
+
       {plan && workflowStage !== 'intake' && (
         <>
           <Card>
@@ -1447,6 +1542,27 @@ export default function PlannerPage() {
                 </Link>
               </div>
             </div>
+
+            {planningSourceExplanation && (
+              <div
+                className={`mb-3 rounded-lg px-4 py-3 text-sm ${
+                  planningSourceExplanation.tone === 'emerald'
+                    ? 'border border-emerald-200 bg-emerald-50 text-emerald-900'
+                    : planningSourceExplanation.tone === 'blue'
+                      ? 'border border-blue-200 bg-blue-50 text-blue-900'
+                      : 'border border-amber-200 bg-amber-50 text-amber-900'
+                }`}
+              >
+                <p className="font-semibold">{planningSourceExplanation.title}</p>
+                <p className="mt-1">{planningSourceExplanation.body}</p>
+              </div>
+            )}
+
+            {isRefining && (
+              <div className="mb-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+                Refining the current plan now. Review scores and backup guidance will update when the pass finishes.
+              </div>
+            )}
 
             {(plan.planningDiagnostics?.locationSource !== 'grounded-candidates' ||
               (plan.planningDiagnostics?.locationCandidateCount ?? 0) < 3 ||
@@ -1523,6 +1639,13 @@ export default function PlannerPage() {
                             <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
                               Use the feedback controls to pressure-test location quality. Thumbs affect ordering locally, “Prefer this type” boosts similar spots in review, and “Exclude this type” removes that venue type from the current plan review.
                             </div>
+
+                            {emptyLocationMessage && (
+                              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                                <p className="font-semibold">No visible locations right now</p>
+                                <p className="mt-1">{emptyLocationMessage}</p>
+                              </div>
+                            )}
 
                             {displayedLocations.map(location => {
                               const locationKey = (location.displayName || location.name).toLowerCase();
@@ -1604,6 +1727,13 @@ export default function PlannerPage() {
 
                         {reviewTab === 'shot-list' && (
                           <div className="space-y-3">
+                            {emptyShotMessage && (
+                              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                                <p className="font-semibold">No visible shots right now</p>
+                                <p className="mt-1">{emptyShotMessage}</p>
+                              </div>
+                            )}
+
                             {displayedShots.map(shot => (
                               <div key={`mobile-${shot.title}-${shot.microSpot}`} className="rounded-lg border border-gray-200 p-3">
                                 <p className="font-semibold text-gray-900">{shot.title}</p>
@@ -1661,6 +1791,13 @@ export default function PlannerPage() {
                 <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
                   Use the feedback controls to pressure-test location quality. Thumbs affect ordering locally, “Prefer this type” boosts similar spots in review, and “Exclude this type” removes that venue type from the current plan review.
                 </div>
+
+                {emptyLocationMessage && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                    <p className="font-semibold">No visible locations right now</p>
+                    <p className="mt-1">{emptyLocationMessage}</p>
+                  </div>
+                )}
 
                 {displayedLocations.map(location => {
                   const locationKey = (location.displayName || location.name).toLowerCase();
@@ -1818,7 +1955,15 @@ export default function PlannerPage() {
             )}
 
             {activeReviewTab === 'shot-list' && (
-              <div className="grid gap-3 lg:grid-cols-2">
+              <div className="space-y-3">
+                {emptyShotMessage && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                    <p className="font-semibold">No visible shots right now</p>
+                    <p className="mt-1">{emptyShotMessage}</p>
+                  </div>
+                )}
+
+                <div className="grid gap-3 lg:grid-cols-2">
                 {displayedShots.map(shot => (
                   <div key={`${shot.title}-${shot.microSpot}`} className="rounded-lg border border-gray-200 p-3">
                     <p className="font-semibold text-gray-900">{shot.title}</p>
@@ -1835,6 +1980,7 @@ export default function PlannerPage() {
                     <p className="text-xs text-gray-500">Timing: {shot.timingHint}</p>
                   </div>
                 ))}
+                </div>
               </div>
             )}
 
