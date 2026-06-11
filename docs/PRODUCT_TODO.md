@@ -58,11 +58,11 @@
 
 ## Next: E2E and QA Automation
 
-- [ ] Add Playwright as a first-class dev dependency with `playwright.config.ts`.
-- [ ] Add authenticated dashboard smoke tests for mobile and desktop viewports.
-- [ ] Add E2E coverage for login, signup, planner generation, project creation, shot creation, and client guide access.
-- [ ] Add visual/DOM checks for no horizontal overflow and minimum touch target sizes on key routes.
-- [ ] Run E2E against production build via Playwright `webServer`.
+- [x] Add Playwright as a first-class dev dependency with `playwright.config.ts`.
+- [x] Add authenticated dashboard smoke tests for mobile and desktop viewports.
+- [x] Add E2E coverage for login, signup, planner generation, project creation, shot creation, and client guide access.
+- [x] Add visual/DOM checks for no horizontal overflow and minimum touch target sizes on key routes.
+- [x] Run E2E against production build via Playwright `webServer`.
 
 ## Next: Security and Abuse Protection
 
