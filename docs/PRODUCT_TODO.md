@@ -50,11 +50,11 @@
 
 ## Next: Planner Architecture
 
-- [ ] Split the large planner page into smaller state/workflow hooks and focused view components.
-- [ ] Move draft autosave, chat answer state, AI typing state, and selected review location state out of synchronous effects.
-- [ ] Normalize planner memo dependencies so React Compiler can optimize route and logistics lookups.
-- [ ] Add unit coverage around planner draft resume/autosave behavior.
-- [ ] Add integration coverage for generate -> refine -> apply -> share planner flow.
+- [x] Split the large planner page into smaller state/workflow hooks and focused view components.
+- [x] Move draft autosave, chat answer state, AI typing state, and selected review location state out of synchronous effects.
+- [x] Normalize planner memo dependencies so React Compiler can optimize route and logistics lookups.
+- [x] Add unit coverage around planner draft resume/autosave behavior.
+- [x] Add integration coverage for generate -> refine -> apply -> share planner flow.
 
 ## Next: E2E and QA Automation
 

@@ -978,6 +978,10 @@ export async function refineSessionPlan(input: {
   mood?: string;
   constraints?: string;
 }) {
+  if (!process.env.GEMINI_API_KEY) {
+    return getFallbackRefinement(input);
+  }
+
   const { apiKey, model } = getGeminiConfig();
   const prompt = `You are a photography planning quality-control assistant.
 

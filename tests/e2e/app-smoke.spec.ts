@@ -201,4 +201,137 @@ test.describe('planner generation and client guide access', () => {
     await expect(page.getByText(String(planBody.data?.projectTitle))).toBeVisible();
     await expectUsableViewport(page);
   });
+
+  test('supports generate, refine, apply, and share planner workflow through APIs', async ({ page, request }) => {
+    const session = await createTestSession(request);
+    const authHeaders = {
+      Authorization: `Bearer ${session.token}`,
+    };
+
+    const planResponse = await request.post('/api/ai/session-plan', {
+      headers: authHeaders,
+      data: {
+        shootType: 'Engagement Session',
+        subjectDetails: 'Couple wants editorial downtown portraits',
+        city: 'Dallas, TX',
+        duration: '60 minutes',
+        mood: 'Editorial, polished, romantic',
+        mustHaveShots: 'Wide environmental portrait, ring closeup, walking sequence',
+        constraints: 'Keep transitions compact',
+        locationMode: 'use-provided',
+        providedLocations: ['Klyde Warren Park', 'Dallas Arts District'],
+      },
+    });
+    const planBody = (await planResponse.json()) as {
+      success?: boolean;
+      data?: {
+        projectTitle?: string;
+        creativeDirection?: string;
+        locationSuggestions?: Array<{
+          name?: string;
+          displayName?: string;
+          latitude?: number | null;
+          longitude?: number | null;
+          logistics?: {
+            parking?: string;
+            restroom?: string;
+            walkingDistance?: string;
+          };
+        }>;
+        shotList?: Array<{
+          title?: string;
+          description?: string;
+          location?: string;
+          latitude?: number | null;
+          longitude?: number | null;
+          notes?: string;
+          microSpot?: string;
+        }>;
+        timeline?: unknown[];
+        clientPrepChecklist?: unknown[];
+        contingencyPlans?: unknown[];
+      };
+      error?: string;
+    };
+
+    expect(planResponse.ok(), planBody.error).toBe(true);
+    expect(planBody.success, planBody.error).toBe(true);
+    expect(planBody.data?.projectTitle).toBeTruthy();
+    expect(planBody.data?.shotList?.length ?? 0).toBeGreaterThan(0);
+
+    const refineResponse = await request.post('/api/ai/session-plan/refine', {
+      headers: authHeaders,
+      data: {
+        plan: planBody.data,
+        subjectDetails: 'Couple wants editorial downtown portraits',
+        mood: 'Editorial, polished, romantic',
+        constraints: 'Keep transitions compact',
+      },
+    });
+    const refineBody = (await refineResponse.json()) as { success?: boolean; error?: string };
+    expect(refineResponse.ok(), refineBody.error).toBe(true);
+    expect(refineBody.success, refineBody.error).toBe(true);
+
+    const projectResponse = await request.post('/api/projects', {
+      headers: authHeaders,
+      data: {
+        title: planBody.data?.projectTitle || 'E2E Planner Applied Project',
+        description: planBody.data?.creativeDirection || 'Applied from planner integration test.',
+        status: 'planning',
+        tags: ['e2e', 'planner-apply'],
+      },
+    });
+    const projectBody = (await projectResponse.json()) as {
+      success?: boolean;
+      data?: { id?: string };
+      error?: string;
+    };
+    expect(projectResponse.ok(), projectBody.error).toBe(true);
+    expect(projectBody.success, projectBody.error).toBe(true);
+    expect(projectBody.data?.id).toBeTruthy();
+
+    for (const shot of (planBody.data?.shotList ?? []).slice(0, 3)) {
+      const shotResponse = await request.post('/api/shots', {
+        headers: authHeaders,
+        data: {
+          projectId: projectBody.data!.id,
+          title: shot.title || 'Planner shot',
+          description: shot.description || 'Generated planner shot',
+          location: shot.location || planBody.data?.locationSuggestions?.[0]?.name || '',
+          latitude: shot.latitude ?? null,
+          longitude: shot.longitude ?? null,
+          notes: shot.notes || '',
+          microSpotName: shot.microSpot || '',
+          status: 'planned',
+        },
+      });
+      const shotBody = (await shotResponse.json()) as { success?: boolean; error?: string };
+      expect(shotResponse.ok(), shotBody.error).toBe(true);
+      expect(shotBody.success, shotBody.error).toBe(true);
+    }
+
+    const exportResponse = await request.post('/api/planner/export', {
+      headers: authHeaders,
+      data: {
+        plan: planBody.data,
+        planMetadata: {
+          shootType: 'Engagement Session',
+          city: 'Dallas, TX',
+          duration: '60 minutes',
+        },
+      },
+    });
+    const exportBody = (await exportResponse.json()) as {
+      success?: boolean;
+      shareToken?: string;
+      error?: string;
+    };
+    expect(exportResponse.ok(), exportBody.error).toBe(true);
+    expect(exportBody.success, exportBody.error).toBe(true);
+    expect(exportBody.shareToken).toBeTruthy();
+
+    await page.goto(`/plans/${exportBody.shareToken}`);
+    await expect(page.getByText(String(planBody.data?.projectTitle))).toBeVisible();
+    await expectUsableViewport(page);
+  });
 });

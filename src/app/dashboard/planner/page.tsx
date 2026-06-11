@@ -23,20 +23,15 @@ import {
 } from '@/lib/billing/planLimits';
 import {
   type SessionPlan,
-  type SessionPlanLocation,
   type SessionPlanTimelineItem,
   type SessionPlanShot,
-  type LocationRefinement,
   type LocationMode,
   type ChatQuestion,
   type ChatQuestionId,
   type BusinessProfile,
   type PlannerPreset,
-  type PlannerDraftState,
   type PlannerDraft,
   type PlannerIntelligence,
-  type ReviewTab,
-  type LocationVote,
   type WorkflowStage,
   CHAT_QUESTIONS,
   PLANNER_PRESETS,
@@ -49,6 +44,13 @@ import {
 } from '@/lib/planner/plannerConfig';
 import { sleep, sanitizeCoordinates, parseDurationMinutes, getExpectedShotRange } from '@/lib/planner/plannerUtils';
 import { classifyPlannerError, type PlannerErrorInfo } from '@/lib/planner/plannerErrors';
+import { usePlannerReviewState } from '@/hooks/planner/usePlannerReviewState';
+import {
+  buildPlannerDraft,
+  createPlannerDraftId,
+  getDraftResumeQuestionCount,
+  mapServerPlannerDraft,
+} from '@/lib/planner/plannerDrafts';
 
 function getAuthHeader() {
   const token = tokenUtils.getToken();
@@ -57,10 +59,6 @@ function getAuthHeader() {
     headers.Authorization = `Bearer ${token}`;
   }
   return headers;
-}
-
-function createDraftId() {
-  return `draft-${globalThis.crypto?.randomUUID?.() || Date.now()}`;
 }
 
 const PlannerLocationMap = dynamic(() => import('@/components/map/PlannerLocationMap'), {
@@ -94,14 +92,8 @@ export default function PlannerPage() {
   const [isReviewConfirmed, setIsReviewConfirmed] = useState(false);
   const [businessProfile, setBusinessProfile] = useState<BusinessProfile | null>(null);
   const [billingUsage, setBillingUsage] = useState<BillingUsageSummary | null>(null);
-  const [activeReviewTab, setActiveReviewTab] = useState<ReviewTab>('map');
-  const [locationVotes, setLocationVotes] = useState<Record<string, LocationVote>>({});
-  const [preferredVenueBucket, setPreferredVenueBucket] = useState<string | null>(null);
-  const [excludedVenueBuckets, setExcludedVenueBuckets] = useState<string[]>([]);
   const [isAiTyping, setIsAiTyping] = useState(false);
   const [activePresetId, setActivePresetId] = useState<string | null>(null);
-  const [activeMobileReviewTab, setActiveMobileReviewTab] = useState<ReviewTab | null>('map');
-  const [selectedReviewLocationName, setSelectedReviewLocationName] = useState<string | null>(null);
 
   const [plan, setPlan] = useState<SessionPlan | null>(null);
   const [error, setRawError] = useState<PlannerErrorInfo | null>(null);
@@ -114,7 +106,7 @@ export default function PlannerPage() {
   const [applyProgress, setApplyProgress] = useState<{ done: number; total: number; label: string } | null>(null);
   const [feedbackSaveStatus, setFeedbackSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [isRegenerating, setIsRegenerating] = useState<'idle' | 'locations' | 'shot-list' | 'timeline'>('idle');
-  const [draftId, setDraftId] = useState<string>(() => createDraftId());
+  const [draftId, setDraftId] = useState<string>(() => createPlannerDraftId());
   const [draftSaveStatus, setDraftSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [draftBootstrapComplete, setDraftBootstrapComplete] = useState(false);
   const [resumableDraft, setResumableDraft] = useState<PlannerDraft | null>(null);
@@ -132,6 +124,30 @@ export default function PlannerPage() {
   const [sessionDates, setSessionDates] = useState<string[]>([]);
   const [dailyDurationMinutes, setDailyDurationMinutes] = useState<number | undefined>(undefined);
   const [maxTravelMinutesPerDay, setMaxTravelMinutesPerDay] = useState<number | undefined>(undefined);
+  const {
+    activeReviewTab,
+    setActiveReviewTab,
+    activeMobileReviewTab,
+    locationVotes,
+    preferredVenueBucket,
+    excludedVenueBuckets,
+    selectedReviewLocation,
+    effectiveSelectedReviewLocationName,
+    setSelectedReviewLocationName,
+    resetReviewState,
+    locationIndex,
+    refinementIndex,
+    logisticsLookup,
+    displayedLocations,
+    displayedShots,
+    emptyLocationMessage,
+    emptyShotMessage,
+    setLocationVote,
+    togglePreferredVenueBucket,
+    toggleExcludedVenueBucket,
+    toggleMobileReviewTab,
+    reviewTabItems,
+  } = usePlannerReviewState(plan, intelligence);
 
   const durationMinutes = useMemo(() => parseDurationMinutes(duration), [duration]);
   const expectedShotRange = useMemo(() => getExpectedShotRange(durationMinutes), [durationMinutes]);
@@ -293,12 +309,10 @@ export default function PlannerPage() {
   const isChatComplete = boundedChatStepIndex >= visibleQuestions.length;
   const workflowStage: WorkflowStage = plan ? (isApplying ? 'apply' : 'review') : 'intake';
 
-  const buildCurrentDraft = useCallback((currentDraftId: string): PlannerDraft => ({
+  const buildCurrentDraft = useCallback((currentDraftId: string): PlannerDraft => buildPlannerDraft({
     id: currentDraftId,
-    status: workflowStage === 'apply' ? 'applying' : workflowStage,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    planState: {
+    workflowStage,
+    state: {
       shootType,
       city,
       duration,
@@ -344,10 +358,10 @@ export default function PlannerPage() {
   const hydrateFromDraft = (draft: PlannerDraft) => {
     const draftState = draft.planState;
     const mode = draftState.locationMode ?? 'find-locations';
-    const nextCategory = getSessionCategory(draftState.shootType || 'Family Session');
-    const nextVisibleQuestions = CHAT_QUESTIONS.filter(
-      question => !question.showWhen || question.showWhen(mode, nextCategory)
-    );
+    const resumeQuestionCount = getDraftResumeQuestionCount({
+      shootType: draftState.shootType,
+      locationMode: mode,
+    });
 
     setDraftId(draft.id);
     setShootType(draftState.shootType || 'Family Session');
@@ -372,7 +386,7 @@ export default function PlannerPage() {
     setPlan(null);
     setError(null);
     setIsReviewConfirmed(true);
-    setChatStepIndex(nextVisibleQuestions.length);
+    setChatStepIndex(resumeQuestionCount);
     setResumableDraft(null);
   };
 
@@ -466,21 +480,6 @@ export default function PlannerPage() {
       }
     };
 
-    const mapServerDraft = (row: Record<string, unknown>): PlannerDraft | null => {
-      const id = typeof row.id === 'string' ? row.id : null;
-      const planState = (row.plan_state || row.planState) as PlannerDraftState | undefined;
-      const status = typeof row.status === 'string' ? row.status : 'intake';
-      if (!id || !planState) return null;
-
-      return {
-        id,
-        status: status === 'applying' || status === 'review' ? status : 'intake',
-        planState,
-        createdAt: typeof row.created_at === 'string' ? row.created_at : new Date().toISOString(),
-        updatedAt: typeof row.updated_at === 'string' ? row.updated_at : new Date().toISOString(),
-      };
-    };
-
     const bootstrapDraft = async () => {
       const localDraft = readStoredDraft();
       if (localDraft) {
@@ -501,7 +500,7 @@ export default function PlannerPage() {
         };
 
         if (response.ok && result.success && Array.isArray(result.data) && result.data.length > 0 && !localDraft) {
-          const serverDraft = mapServerDraft(result.data[0]);
+          const serverDraft = mapServerPlannerDraft(result.data[0]);
           if (serverDraft) {
             setResumableDraft(serverDraft);
             setDraftId(serverDraft.id);
@@ -637,101 +636,6 @@ export default function PlannerPage() {
     void runIntelligencePass();
   }, [durationMinutes, plan, sessionCategory, shootDate]);
 
-  const locationIndex = useMemo(() => {
-    const map = new Map<string, SessionPlanLocation>();
-    (plan?.locationSuggestions ?? []).forEach(location => {
-      map.set(location.name.toLowerCase(), location);
-    });
-    return map;
-  }, [plan]);
-
-  const refinementIndex = useMemo(() => {
-    const map = new Map<string, LocationRefinement>();
-    (plan?.locationRefinements ?? []).forEach(refinement => {
-      map.set(refinement.name.toLowerCase(), refinement);
-    });
-    return map;
-  }, [plan]);
-
-  const routeRankLookup = useMemo(() => {
-    const map = new Map<string, number>();
-    if (!plan || !intelligence?.optimizedRoute) return map;
-
-    intelligence.optimizedRoute.forEach((originalIndex, optimizedIndex) => {
-      const location = plan.locationSuggestions[originalIndex];
-      if (!location) return;
-      map.set((location.displayName || location.name).toLowerCase(), optimizedIndex);
-    });
-
-    return map;
-  }, [intelligence, plan]);
-
-  const logisticsLookup = useMemo(() => {
-    const map = new Map<string, PlannerIntelligence['logistics'][number]>();
-    if (!plan || !intelligence?.logistics) return map;
-
-    plan.locationSuggestions.forEach((location, index) => {
-      const logistics = intelligence.logistics[index];
-      if (!logistics) return;
-      map.set((location.displayName || location.name).toLowerCase(), logistics);
-    });
-
-    return map;
-  }, [intelligence, plan]);
-
-  const displayedLocations = useMemo(() => {
-    const locations = [...(plan?.locationSuggestions ?? [])];
-
-    return locations
-      .filter(location => !location.venueBucket || !excludedVenueBuckets.includes(location.venueBucket))
-      .sort((a, b) => {
-        const aKey = (a.displayName || a.name).toLowerCase();
-        const bKey = (b.displayName || b.name).toLowerCase();
-        const aVote = locationVotes[aKey];
-        const bVote = locationVotes[bKey];
-        const aPreferred = preferredVenueBucket && a.venueBucket === preferredVenueBucket ? 1 : 0;
-        const bPreferred = preferredVenueBucket && b.venueBucket === preferredVenueBucket ? 1 : 0;
-        const aVoteScore = aVote === 'up' ? 1 : aVote === 'down' ? -1 : 0;
-        const bVoteScore = bVote === 'up' ? 1 : bVote === 'down' ? -1 : 0;
-        const aRouteRank = routeRankLookup.get(aKey);
-        const bRouteRank = routeRankLookup.get(bKey);
-
-        if (aPreferred !== bPreferred) return bPreferred - aPreferred;
-        if (aVoteScore !== bVoteScore) return bVoteScore - aVoteScore;
-        if (typeof aRouteRank === 'number' && typeof bRouteRank === 'number' && aRouteRank !== bRouteRank) {
-          return aRouteRank - bRouteRank;
-        }
-        return (b.confidenceScore ?? 0) - (a.confidenceScore ?? 0);
-      });
-  }, [excludedVenueBuckets, locationVotes, plan?.locationSuggestions, preferredVenueBucket, routeRankLookup]);
-
-  const displayedLocationNames = useMemo(
-    () => new Set(displayedLocations.map(location => (location.displayName || location.name).toLowerCase())),
-    [displayedLocations]
-  );
-
-  const displayedShots = useMemo(() => {
-    const shots = plan?.shotList ?? [];
-    if (displayedLocationNames.size === 0) return shots;
-
-    const filtered = shots.filter(shot => displayedLocationNames.has((shot.location || '').toLowerCase()));
-    return filtered.length > 0 ? filtered : shots;
-  }, [displayedLocationNames, plan?.shotList]);
-
-  const selectedReviewLocation = useMemo(() => {
-    if (!selectedReviewLocationName) return displayedLocations[0] ?? null;
-
-    return (
-      displayedLocations.find(location => (location.displayName || location.name) === selectedReviewLocationName) ??
-      displayedLocations[0] ??
-      null
-    );
-  }, [displayedLocations, selectedReviewLocationName]);
-
-  const effectiveSelectedReviewLocationName = selectedReviewLocation
-    ? selectedReviewLocation.displayName || selectedReviewLocation.name
-    : null;
-
   const generatePlan = async () => {
     setIsGenerating(true);
     setError(null);
@@ -835,12 +739,7 @@ export default function PlannerPage() {
         return;
       }
 
-      setActiveReviewTab('map');
-      setActiveMobileReviewTab('map');
-      setLocationVotes({});
-      setPreferredVenueBucket(null);
-      setExcludedVenueBuckets([]);
-      setSelectedReviewLocationName(null);
+      resetReviewState();
       setPlan(result.data ?? null);
       void (async () => {
         await trackPlannerEvent('planner_generate_success', {
@@ -1146,7 +1045,7 @@ export default function PlannerPage() {
       // Persist feedback before navigating away
       await persistFeedback(true);
       await clearDraftStorage();
-      setDraftId(createDraftId());
+      setDraftId(createPlannerDraftId());
       void trackPlannerEvent('planner_apply_success', {
         createdShots,
         failedShots: failedShots.length,
@@ -1267,34 +1166,6 @@ export default function PlannerPage() {
     moveToQuestionIndex(visibleQuestions.length - 1);
   };
 
-  const setLocationVote = useCallback((location: SessionPlanLocation, vote: LocationVote) => {
-    const key = (location.displayName || location.name).toLowerCase();
-    setLocationVotes(prev => {
-      if (prev[key] === vote) {
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      }
-
-      return {
-        ...prev,
-        [key]: vote,
-      };
-    });
-  }, []);
-
-  const togglePreferredVenueBucket = useCallback((venueBucket?: string) => {
-    if (!venueBucket) return;
-    setPreferredVenueBucket(prev => (prev === venueBucket ? null : venueBucket));
-  }, []);
-
-  const toggleExcludedVenueBucket = useCallback((venueBucket?: string) => {
-    if (!venueBucket) return;
-    setExcludedVenueBuckets(prev =>
-      prev.includes(venueBucket) ? prev.filter(item => item !== venueBucket) : [...prev, venueBucket]
-    );
-  }, []);
-
   const applyPreset = (preset: PlannerPreset) => {
     const presetCity = businessProfile?.baseLocation || businessProfile?.zipCode || city;
     const presetProvidedLocations =
@@ -1398,30 +1269,6 @@ export default function PlannerPage() {
         return null;
     }
   }, [plan]);
-
-  const emptyLocationMessage = useMemo(() => {
-    if (displayedLocations.length > 0) return null;
-    if ((plan?.locationSuggestions?.length ?? 0) === 0) {
-      return 'No locations made it into the current plan. Try broadening the area, using a ZIP, or switching to provided locations.';
-    }
-    if (excludedVenueBuckets.length > 0) {
-      return 'All current locations are hidden by your excluded type filters. Re-enable a venue type to see them again.';
-    }
-    return 'No locations match the current review filters. Clear preferences or regenerate for a broader set.';
-  }, [displayedLocations.length, excludedVenueBuckets.length, plan?.locationSuggestions?.length]);
-
-  const emptyShotMessage = useMemo(() => {
-    if (displayedShots.length > 0) return null;
-    if ((plan?.shotList?.length ?? 0) === 0) {
-      return 'No shots were generated for this plan yet. Regenerate the plan or refine it after locations are confirmed.';
-    }
-    return 'No shots match the currently visible locations. Re-enable a location type or regenerate the plan.';
-  }, [displayedShots.length, plan?.shotList?.length]);
-
-  const toggleMobileReviewTab = useCallback((tab: ReviewTab) => {
-    setActiveMobileReviewTab(prev => (prev === tab ? null : tab));
-    setActiveReviewTab(tab);
-  }, []);
 
   const resumeDraft = () => {
     if (!resumableDraft) return;
@@ -1617,14 +1464,6 @@ export default function PlannerPage() {
       setIsRevokingShareLink(false);
     }
   };
-
-  const reviewTabItems: Array<{ id: ReviewTab; label: string }> = [
-    { id: 'map', label: `Map (${displayedLocations.filter(location => location.latitude != null && location.longitude != null).length})` },
-    { id: 'locations', label: `Locations (${displayedLocations.length})` },
-    { id: 'shot-list', label: `Shot List (${displayedShots.length})` },
-    { id: 'timeline', label: `Timeline (${plan?.timeline.length ?? 0})` },
-    { id: 'prep', label: 'Prep + Backup' },
-  ];
 
   return (
     <div className="space-y-6">
