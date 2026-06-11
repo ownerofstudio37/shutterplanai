@@ -26,12 +26,26 @@ describe('shared plan page', () => {
           plan_data: {
             projectTitle: 'Engagement Sunset Plan',
             creativeDirection: 'Warm cinematic storytelling',
-            locationSuggestions: [{ name: 'Lake Pier', whyItWorks: 'Open sunset view' }],
-            shotList: [{ title: 'Wide Hero', description: 'Couple at edge of pier', location: 'Lake Pier' }],
+            locationSuggestions: [
+              {
+                name: 'Lake Pier',
+                whyItWorks: 'Open sunset view',
+                microLocations: ['Pier edge'],
+                logistics: {
+                  parking: 'Use west lot',
+                  restroom: 'Restroom near marina',
+                  walkingDistance: 'Short walk',
+                },
+              },
+            ],
+            shotList: [{ title: 'Wide Hero', description: 'Couple at edge of pier', location: 'Lake Pier', microSpot: 'Pier edge' }],
+            timeline: [{ timeBlock: 'Golden Hour', focus: 'Hero portraits', notes: 'Start with wide frames.' }],
+            clientPrepChecklist: ['Arrive 10 minutes early.'],
           },
           metadata: {
             shootType: 'Engagement Session',
             city: 'Dallas, TX',
+            duration: '90 minutes',
           },
         }),
       })
@@ -46,6 +60,9 @@ describe('shared plan page', () => {
 
     expect(screen.getByText('Warm cinematic storytelling')).toBeInTheDocument();
     expect(screen.getByText('Wide Hero')).toBeInTheDocument();
+    expect(screen.getByText('Arrival plan')).toBeInTheDocument();
+    expect(screen.getByText('Arrive 10 minutes early.')).toBeInTheDocument();
+    expect(screen.getByText('Golden Hour')).toBeInTheDocument();
     expect(screen.getAllByText('Lake Pier').length).toBeGreaterThanOrEqual(1);
   });
 });

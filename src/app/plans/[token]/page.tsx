@@ -1,17 +1,50 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+
+type SharedLocation = {
+  name?: string;
+  displayName?: string;
+  whyItWorks?: string;
+  microLocations?: string[];
+  selectionReasons?: string[];
+  googleMapsUrl?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  logistics?: {
+    parking?: string;
+    restroom?: string;
+    walkingDistance?: string;
+  };
+};
+
+type SharedShot = {
+  title?: string;
+  location?: string;
+  microSpot?: string;
+  description?: string;
+  poseSuggestion?: string;
+  compositionSuggestion?: string;
+  timingHint?: string;
+};
+
+type SharedTimelineItem = {
+  timeBlock?: string;
+  focus?: string;
+  notes?: string;
+};
 
 type SharedPlanResponse = {
   plan_data?: {
     projectTitle?: string;
     creativeDirection?: string;
-    locationSuggestions?: Array<{ name?: string; displayName?: string; whyItWorks?: string }>;
-    shotList?: Array<{ title?: string; location?: string; description?: string }>;
-    timeline?: Array<{ timeBlock?: string; focus?: string; notes?: string }>;
+    locationSuggestions?: SharedLocation[];
+    shotList?: SharedShot[];
+    timeline?: SharedTimelineItem[];
     clientPrepChecklist?: string[];
     contingencyPlans?: string[];
   };
@@ -20,10 +53,35 @@ type SharedPlanResponse = {
     city?: string;
     duration?: string;
     mood?: string;
+    shootDate?: string;
   };
   requiresPassword?: boolean;
   error?: string;
 };
+
+function formatDate(value?: string) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleDateString(undefined, {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+function getLocationName(location: SharedLocation, index: number) {
+  return location.displayName || location.name || `Location ${index + 1}`;
+}
+
+function getMapsUrl(location: SharedLocation, index: number) {
+  if (location.googleMapsUrl) return location.googleMapsUrl;
+  if (location.latitude != null && location.longitude != null) {
+    return `https://maps.google.com/?q=${Number(location.latitude)},${Number(location.longitude)}`;
+  }
+  return `https://maps.google.com/?q=${encodeURIComponent(getLocationName(location, index))}`;
+}
 
 export default function SharedPlanPage() {
   const params = useParams<{ token: string }>();
@@ -69,93 +127,253 @@ export default function SharedPlanPage() {
     void fetchSharedPlan();
   }, [submittedPassword, token]);
 
+  const plan = data?.plan_data;
+  const locations = useMemo(() => plan?.locationSuggestions ?? [], [plan?.locationSuggestions]);
+  const shots = useMemo(() => plan?.shotList ?? [], [plan?.shotList]);
+  const timeline = useMemo(() => plan?.timeline ?? [], [plan?.timeline]);
+  const prepChecklist = plan?.clientPrepChecklist ?? [];
+  const contingencies = plan?.contingencyPlans ?? [];
+  const shootDate = formatDate(data?.metadata?.shootDate);
+  const primaryLocation = locations[0];
+
   return (
-    <div className="mx-auto max-w-5xl space-y-6 p-6">
-      <Card>
-        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+    <main className="min-h-screen bg-[#f6f3ee] text-[#1f2933]">
+      <div className="mx-auto max-w-6xl px-4 py-5 md:px-6 md:py-8">
+        <header className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-gray-900">Shared session plan</h1>
-            <p className="text-sm text-gray-600">Review this exported plan snapshot.</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#7c6f64]">ShutterPlan AI client guide</p>
+            <p className="mt-1 text-sm text-[#5f6b76]">Prepared by your photographer</p>
           </div>
-          <Link href="/auth/login" className="text-sm font-medium text-blue-600 hover:underline">
-            Open your dashboard
+          <Link href="/auth/login">
+            <Button variant="secondary" className="bg-white hover:bg-[#ebe5db]">Open photographer dashboard</Button>
           </Link>
-        </div>
-      </Card>
+        </header>
 
-      {isLoading && (
-        <Card>
-          <p className="text-sm text-gray-600">Loading shared plan...</p>
-        </Card>
-      )}
+        {isLoading && (
+          <Card className="border border-[#d8d2c8] shadow-sm">
+            <div className="space-y-3">
+              <div className="h-5 w-48 animate-pulse rounded bg-gray-100" />
+              <div className="h-24 animate-pulse rounded-lg bg-gray-100" />
+              <div className="grid gap-3 md:grid-cols-3">
+                {Array.from({ length: 3 }).map((_, index) => (
+                  <div key={index} className="h-20 animate-pulse rounded-lg bg-gray-100" />
+                ))}
+              </div>
+            </div>
+          </Card>
+        )}
 
-      {error && (
-        <Card>
-          <p className="text-sm text-red-700">{error}</p>
-        </Card>
-      )}
+        {error && (
+          <Card className="border border-red-200 bg-red-50 shadow-sm">
+            <p className="text-sm font-semibold text-red-800">{error}</p>
+          </Card>
+        )}
 
-      {requiresPassword && !data?.plan_data && (
-        <Card>
-          <h2 className="text-base font-semibold text-gray-900">This shared plan is password protected</h2>
-          <p className="mt-1 text-sm text-gray-600">Enter the password provided by the photographer.</p>
-          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
-            <input
-              type="password"
-              value={sharePassword}
-              onChange={event => setSharePassword(event.target.value)}
-              placeholder="Share password"
-              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-            />
-            <button
-              type="button"
-              onClick={() => setSubmittedPassword(sharePassword.trim())}
-              className="rounded bg-gray-900 px-4 py-2 text-sm font-medium text-white"
-            >
-              Unlock
-            </button>
+        {requiresPassword && !plan && (
+          <Card className="border border-[#d8d2c8] bg-white shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7c6f64]">Protected guide</p>
+            <h1 className="mt-2 text-2xl font-semibold text-[#1f2933]">Enter the share password</h1>
+            <p className="mt-2 text-sm text-[#5f6b76]">Your photographer protected this session guide before sharing it.</p>
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+              <input
+                type="password"
+                value={sharePassword}
+                onChange={event => setSharePassword(event.target.value)}
+                placeholder="Share password"
+                className="w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] px-3 py-2 text-sm outline-none focus:border-[#1f2933]"
+              />
+              <Button
+                type="button"
+                onClick={() => setSubmittedPassword(sharePassword.trim())}
+                className="bg-[#1f2933] hover:bg-[#111827]"
+              >
+                Unlock guide
+              </Button>
+            </div>
+          </Card>
+        )}
+
+        {!isLoading && !error && plan && (
+          <div className="space-y-5">
+            <section className="overflow-hidden rounded-lg border border-[#d8d2c8] bg-[#1f2933] shadow-sm">
+              <div className="p-5 text-white md:p-7">
+                <div className="max-w-4xl">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#c6b9a5]">
+                    Session plan
+                  </p>
+                  <h1 className="mt-3 text-3xl font-semibold tracking-normal md:text-4xl">
+                    {plan.projectTitle || 'Photography Session Plan'}
+                  </h1>
+                  <p className="mt-3 max-w-3xl text-sm leading-6 text-[#d1d5db]">
+                    {plan.creativeDirection || 'Your photographer has prepared the session details below.'}
+                  </p>
+                </div>
+
+                <div className="mt-6 grid gap-3 md:grid-cols-4">
+                  <div className="rounded-lg border border-white/10 bg-white/10 px-3 py-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#c6b9a5]">Session</p>
+                    <p className="mt-1 text-sm font-semibold">{data.metadata?.shootType || 'Photo session'}</p>
+                  </div>
+                  <div className="rounded-lg border border-white/10 bg-white/10 px-3 py-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#c6b9a5]">Area</p>
+                    <p className="mt-1 text-sm font-semibold">{data.metadata?.city || 'Location provided below'}</p>
+                  </div>
+                  <div className="rounded-lg border border-white/10 bg-white/10 px-3 py-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#c6b9a5]">Duration</p>
+                    <p className="mt-1 text-sm font-semibold">{data.metadata?.duration || 'See timeline'}</p>
+                  </div>
+                  <div className="rounded-lg border border-white/10 bg-white/10 px-3 py-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#c6b9a5]">Date</p>
+                    <p className="mt-1 text-sm font-semibold">{shootDate || 'Confirm with photographer'}</p>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section className="grid gap-5 lg:grid-cols-[1fr_0.9fr]">
+              <Card className="border border-[#d8d2c8] shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7c6f64]">Arrival plan</p>
+                <h2 className="mt-2 text-xl font-semibold text-[#1f2933]">Where to go first</h2>
+                {primaryLocation ? (
+                  <div className="mt-4 rounded-lg border border-[#e4ded5] bg-[#faf9f6] p-4">
+                    <p className="text-lg font-semibold text-[#1f2933]">{getLocationName(primaryLocation, 0)}</p>
+                    <p className="mt-2 text-sm leading-6 text-[#5f6b76]">{primaryLocation.whyItWorks || 'Your photographer will meet you here.'}</p>
+                    <div className="mt-4 grid gap-2 text-xs text-[#5f6b76] md:grid-cols-3">
+                      <p><span className="font-semibold text-[#1f2933]">Parking:</span> {primaryLocation.logistics?.parking || 'Confirm with photographer'}</p>
+                      <p><span className="font-semibold text-[#1f2933]">Restroom:</span> {primaryLocation.logistics?.restroom || 'Confirm before arrival'}</p>
+                      <p><span className="font-semibold text-[#1f2933]">Walking:</span> {primaryLocation.logistics?.walkingDistance || 'Keep transitions short'}</p>
+                    </div>
+                    <a
+                      href={getMapsUrl(primaryLocation, 0)}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="mt-4 inline-flex rounded-lg bg-[#1f2933] px-4 py-2 text-sm font-medium text-white hover:bg-[#111827]"
+                    >
+                      Open arrival map
+                    </a>
+                  </div>
+                ) : (
+                  <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                    Arrival location has not been included in this guide yet.
+                  </p>
+                )}
+              </Card>
+
+              <Card className="border border-[#d8d2c8] shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7c6f64]">Before you arrive</p>
+                <h2 className="mt-2 text-xl font-semibold text-[#1f2933]">Client prep checklist</h2>
+                {prepChecklist.length > 0 ? (
+                  <ul className="mt-4 space-y-2">
+                    {prepChecklist.map((item, index) => (
+                      <li key={`${item}-${index}`} className="flex gap-3 rounded-lg border border-[#e4ded5] bg-[#faf9f6] px-3 py-3 text-sm text-[#5f6b76]">
+                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-white text-xs font-semibold text-[#1f2933]">
+                          {index + 1}
+                        </span>
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-4 rounded-lg border border-[#e4ded5] bg-[#faf9f6] p-4 text-sm text-[#5f6b76]">
+                    No prep checklist was included.
+                  </p>
+                )}
+              </Card>
+            </section>
+
+            {timeline.length > 0 && (
+              <Card className="border border-[#d8d2c8] shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7c6f64]">Session timeline</p>
+                <h2 className="mt-2 text-xl font-semibold text-[#1f2933]">What to expect</h2>
+                <div className="mt-4 grid gap-3">
+                  {timeline.map((item, index) => (
+                    <div key={`${item.timeBlock}-${index}`} className="grid gap-3 rounded-lg border border-[#e4ded5] bg-white p-4 md:grid-cols-[170px_1fr]">
+                      <div>
+                        <p className="text-sm font-semibold text-[#1f2933]">{item.timeBlock || `Block ${index + 1}`}</p>
+                        <p className="mt-1 text-xs font-medium text-[#7c6f64]">{item.focus || 'Session flow'}</p>
+                      </div>
+                      <p className="text-sm leading-6 text-[#5f6b76]">{item.notes || 'Your photographer will guide this section.'}</p>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
+
+            {locations.length > 0 && (
+              <Card className="border border-[#d8d2c8] shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7c6f64]">Locations</p>
+                <h2 className="mt-2 text-xl font-semibold text-[#1f2933]">Planned stops and micro-spots</h2>
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  {locations.map((location, index) => (
+                    <div key={`${location.name}-${index}`} className="rounded-lg border border-[#e4ded5] bg-[#faf9f6] p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-semibold text-[#1f2933]">{getLocationName(location, index)}</p>
+                          <p className="mt-2 text-sm leading-6 text-[#5f6b76]">{location.whyItWorks || 'Location notes pending.'}</p>
+                        </div>
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[#1f2933] text-xs font-semibold text-white">
+                          {index + 1}
+                        </span>
+                      </div>
+                      {location.microLocations?.length ? (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {location.microLocations.map(spot => (
+                            <span key={`${location.name}-${spot}`} className="rounded-md bg-white px-2 py-1 text-xs font-medium text-[#5f6b76]">
+                              {spot}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+                      <a
+                        href={getMapsUrl(location, index)}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        className="mt-3 inline-flex text-sm font-medium text-[#1f2933] underline"
+                      >
+                        Open map
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
+
+            {shots.length > 0 && (
+              <Card className="border border-[#d8d2c8] shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7c6f64]">Shot plan</p>
+                <h2 className="mt-2 text-xl font-semibold text-[#1f2933]">Coverage your photographer is planning</h2>
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  {shots.map((shot, index) => (
+                    <div key={`${shot.title}-${index}`} className="rounded-lg border border-[#e4ded5] bg-white p-4">
+                      <p className="font-semibold text-[#1f2933]">{shot.title || `Shot ${index + 1}`}</p>
+                      <p className="mt-2 text-sm leading-6 text-[#5f6b76]">{shot.description || 'No description provided.'}</p>
+                      <div className="mt-3 flex flex-wrap gap-2 text-xs text-[#5f6b76]">
+                        <span className="rounded-md bg-[#f6f3ee] px-2 py-1">{shot.location || 'Location TBD'}</span>
+                        {shot.microSpot && <span className="rounded-md bg-[#f6f3ee] px-2 py-1">{shot.microSpot}</span>}
+                        {shot.timingHint && <span className="rounded-md bg-[#f6f3ee] px-2 py-1">{shot.timingHint}</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
+
+            {contingencies.length > 0 && (
+              <Card className="border border-amber-200 bg-amber-50 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-800">Backup plan</p>
+                <h2 className="mt-2 text-xl font-semibold text-amber-950">If conditions change</h2>
+                <ul className="mt-4 grid gap-2 md:grid-cols-2">
+                  {contingencies.map((item, index) => (
+                    <li key={`${item}-${index}`} className="rounded-lg border border-amber-200 bg-white/70 px-3 py-3 text-sm leading-6 text-amber-950">
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            )}
           </div>
-        </Card>
-      )}
-
-      {!isLoading && !error && data?.plan_data && (
-        <>
-          <Card>
-            <h2 className="text-lg font-semibold text-gray-900">{data.plan_data.projectTitle || 'Session Plan'}</h2>
-            <p className="mt-1 text-sm text-gray-600">{data.plan_data.creativeDirection || 'No creative direction provided.'}</p>
-            <div className="mt-3 flex flex-wrap gap-2 text-xs">
-              {data.metadata?.shootType && <span className="rounded-full bg-indigo-50 px-2 py-1 text-indigo-700">{data.metadata.shootType}</span>}
-              {data.metadata?.city && <span className="rounded-full bg-gray-100 px-2 py-1 text-gray-700">{data.metadata.city}</span>}
-              {data.metadata?.duration && <span className="rounded-full bg-gray-100 px-2 py-1 text-gray-700">{data.metadata.duration}</span>}
-            </div>
-          </Card>
-
-          <Card>
-            <h3 className="text-base font-semibold text-gray-900">Locations</h3>
-            <div className="mt-3 space-y-2">
-              {(data.plan_data.locationSuggestions || []).map((location, index) => (
-                <div key={`${location.name}-${index}`} className="rounded-lg border border-gray-200 p-3">
-                  <p className="font-medium text-gray-900">{location.displayName || location.name || `Location ${index + 1}`}</p>
-                  <p className="text-sm text-gray-600">{location.whyItWorks || 'No notes provided.'}</p>
-                </div>
-              ))}
-            </div>
-          </Card>
-
-          <Card>
-            <h3 className="text-base font-semibold text-gray-900">Shot list</h3>
-            <div className="mt-3 grid gap-3 md:grid-cols-2">
-              {(data.plan_data.shotList || []).map((shot, index) => (
-                <div key={`${shot.title}-${index}`} className="rounded-lg border border-gray-200 p-3">
-                  <p className="font-medium text-gray-900">{shot.title || `Shot ${index + 1}`}</p>
-                  <p className="text-sm text-gray-600">{shot.description || 'No description provided.'}</p>
-                  <p className="mt-1 text-xs text-gray-500">{shot.location || 'Location not set'}</p>
-                </div>
-              ))}
-            </div>
-          </Card>
-        </>
-      )}
-    </div>
+        )}
+      </div>
+    </main>
   );
 }
