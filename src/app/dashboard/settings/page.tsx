@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { tokenUtils } from '@/lib/auth';
@@ -35,6 +35,17 @@ const EMPTY_PROFILE: BusinessProfile = {
   prepGuideNotes: '',
 };
 
+const READINESS_FIELDS: Array<keyof BusinessProfile> = [
+  'businessName',
+  'businessType',
+  'baseLocation',
+  'websiteUrl',
+  'brandTone',
+  'preferredLocationTypes',
+  'poseDirectionStyle',
+  'prepGuideNotes',
+];
+
 function getAuthHeader() {
   const token = tokenUtils.getToken();
   const headers: Record<string, string> = {};
@@ -44,6 +55,61 @@ function getAuthHeader() {
   return headers;
 }
 
+function getInputClass() {
+  return 'mt-2 w-full rounded-lg border border-[#d8d2c8] bg-white px-4 py-3 text-sm text-[#1f2933] shadow-sm outline-none transition placeholder:text-[#9a9187] focus:border-[#1f2933] focus:ring-2 focus:ring-[#1f2933]/10 disabled:bg-[#f4f1ec]';
+}
+
+function getReadinessLabel(score: number) {
+  if (score >= 90) return 'Ready for polished AI outputs';
+  if (score >= 60) return 'Strong profile, a few details left';
+  if (score > 0) return 'Profile is underway';
+  return 'Start with your studio basics';
+}
+
+interface TextFieldProps {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  disabled: boolean;
+  className?: string;
+}
+
+function TextField({ label, value, onChange, placeholder, disabled, className = '' }: TextFieldProps) {
+  return (
+    <label className={`block text-sm font-medium text-[#1f2933] ${className}`}>
+      {label}
+      <input
+        className={getInputClass()}
+        value={value}
+        onChange={event => onChange(event.target.value)}
+        placeholder={placeholder}
+        disabled={disabled}
+      />
+    </label>
+  );
+}
+
+interface TextAreaFieldProps extends TextFieldProps {
+  rows?: number;
+}
+
+function TextAreaField({ label, value, onChange, placeholder, disabled, className = '', rows = 3 }: TextAreaFieldProps) {
+  return (
+    <label className={`block text-sm font-medium text-[#1f2933] ${className}`}>
+      {label}
+      <textarea
+        className={getInputClass()}
+        rows={rows}
+        value={value}
+        onChange={event => onChange(event.target.value)}
+        placeholder={placeholder}
+        disabled={disabled}
+      />
+    </label>
+  );
+}
+
 export default function SettingsPage() {
   const [profile, setProfile] = useState<BusinessProfile>(EMPTY_PROFILE);
   const [isLoading, setIsLoading] = useState(true);
@@ -51,6 +117,37 @@ export default function SettingsPage() {
   const [isAnalyzingWebsite, setIsAnalyzingWebsite] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const readiness = useMemo(() => {
+    const completedFields = READINESS_FIELDS.filter(field => profile[field].trim().length > 0).length;
+    return Math.round((completedFields / READINESS_FIELDS.length) * 100);
+  }, [profile]);
+
+  const guidanceItems = useMemo(
+    () => [
+      {
+        label: 'Studio identity',
+        value: profile.businessName || 'Business name missing',
+        complete: Boolean(profile.businessName.trim() && profile.businessType.trim()),
+      },
+      {
+        label: 'Home market',
+        value: profile.baseLocation || profile.zipCode || 'Base location missing',
+        complete: Boolean(profile.baseLocation.trim() || profile.zipCode.trim()),
+      },
+      {
+        label: 'Brand voice',
+        value: profile.brandTone || 'Tone not set',
+        complete: Boolean(profile.brandTone.trim()),
+      },
+      {
+        label: 'Client prep',
+        value: profile.prepGuideNotes || 'Prep defaults not set',
+        complete: Boolean(profile.prepGuideNotes.trim()),
+      },
+    ],
+    [profile]
+  );
 
   useEffect(() => {
     const load = async () => {
@@ -80,7 +177,9 @@ export default function SettingsPage() {
       }
     };
 
-    load();
+    queueMicrotask(() => {
+      void load();
+    });
   }, []);
 
   const saveProfile = async () => {
@@ -151,149 +250,215 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-6">
-      <Card>
-        <h3 className="mb-2 text-lg font-semibold text-gray-900">Business Profile</h3>
-        <p className="text-sm text-gray-600">
-          Add your brand details to improve location picks, prep guidance, and shot direction.
-        </p>
-
-        {error ? <p className="mt-3 rounded bg-red-50 p-2 text-sm text-red-700">{error}</p> : null}
-        {message ? <p className="mt-3 rounded bg-green-50 p-2 text-sm text-green-700">{message}</p> : null}
-
-        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-          <label className="text-sm text-gray-700">
-            Business name
-            <input
-              className="mt-1 w-full rounded border border-gray-300 px-3 py-2"
-              value={profile.businessName}
-              onChange={e => setProfile(prev => ({ ...prev, businessName: e.target.value }))}
-              placeholder="Studio 37 Photography"
-              disabled={isLoading}
-            />
-          </label>
-
-          <label className="text-sm text-gray-700">
-            Business type
-            <input
-              className="mt-1 w-full rounded border border-gray-300 px-3 py-2"
-              value={profile.businessType}
-              onChange={e => setProfile(prev => ({ ...prev, businessType: e.target.value }))}
-              placeholder="Family + engagement photographer"
-              disabled={isLoading}
-            />
-          </label>
-
-          <label className="text-sm text-gray-700">
-            Base location (city or ZIP)
-            <input
-              className="mt-1 w-full rounded border border-gray-300 px-3 py-2"
-              value={profile.baseLocation}
-              onChange={e => setProfile(prev => ({ ...prev, baseLocation: e.target.value }))}
-              placeholder="Magnolia, TX or 77355"
-              disabled={isLoading}
-            />
-          </label>
-
-          <label className="text-sm text-gray-700">
-            ZIP code
-            <input
-              className="mt-1 w-full rounded border border-gray-300 px-3 py-2"
-              value={profile.zipCode}
-              onChange={e => setProfile(prev => ({ ...prev, zipCode: e.target.value }))}
-              placeholder="77355"
-              disabled={isLoading}
-            />
-          </label>
-
-          <label className="text-sm text-gray-700 md:col-span-2">
-            Website URL
-            <input
-              className="mt-1 w-full rounded border border-gray-300 px-3 py-2"
-              value={profile.websiteUrl}
-              onChange={e => setProfile(prev => ({ ...prev, websiteUrl: e.target.value }))}
-              placeholder="https://yourstudio.com"
-              disabled={isLoading}
-            />
-          </label>
-
-          <label className="text-sm text-gray-700 md:col-span-2">
-            Brand tone
-            <input
-              className="mt-1 w-full rounded border border-gray-300 px-3 py-2"
-              value={profile.brandTone}
-              onChange={e => setProfile(prev => ({ ...prev, brandTone: e.target.value }))}
-              placeholder="warm, true-to-color, candid, storytelling"
-              disabled={isLoading}
-            />
-          </label>
-
-          <label className="text-sm text-gray-700">
-            Preferred location types (comma-separated)
-            <input
-              className="mt-1 w-full rounded border border-gray-300 px-3 py-2"
-              value={profile.preferredLocationTypes}
-              onChange={e => setProfile(prev => ({ ...prev, preferredLocationTypes: e.target.value }))}
-              placeholder="riverwalk, oak trees, historic district"
-              disabled={isLoading}
-            />
-          </label>
-
-          <label className="text-sm text-gray-700">
-            Avoid location types (comma-separated)
-            <input
-              className="mt-1 w-full rounded border border-gray-300 px-3 py-2"
-              value={profile.avoidLocationTypes}
-              onChange={e => setProfile(prev => ({ ...prev, avoidLocationTypes: e.target.value }))}
-              placeholder="industrial, school campus, crowded malls"
-              disabled={isLoading}
-            />
-          </label>
-
-          <label className="text-sm text-gray-700 md:col-span-2">
-            Pose direction style
-            <textarea
-              className="mt-1 w-full rounded border border-gray-300 px-3 py-2"
-              rows={3}
-              value={profile.poseDirectionStyle}
-              onChange={e => setProfile(prev => ({ ...prev, poseDirectionStyle: e.target.value }))}
-              placeholder="I prompt movement first, then dial into clean hero frames."
-              disabled={isLoading}
-            />
-          </label>
-
-          <label className="text-sm text-gray-700 md:col-span-2">
-            Prep guide notes
-            <textarea
-              className="mt-1 w-full rounded border border-gray-300 px-3 py-2"
-              rows={3}
-              value={profile.prepGuideNotes}
-              onChange={e => setProfile(prev => ({ ...prev, prepGuideNotes: e.target.value }))}
-              placeholder="Ask clients to bring neutral outfits and arrive 10 minutes early."
-              disabled={isLoading}
-            />
-          </label>
-
-          {profile.websiteSummary ? (
-            <div className="md:col-span-2 rounded bg-gray-50 p-3 text-sm text-gray-700">
-              <strong>Website summary detected:</strong> {profile.websiteSummary}
+      <section className="overflow-hidden rounded-lg bg-[#1f2933] text-white shadow-sm">
+        <div className="grid gap-6 p-6 lg:grid-cols-[1.35fr_1fr] lg:p-8">
+          <div className="max-w-3xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#d8d2c8]">AI studio profile</p>
+            <h1 className="mt-3 text-3xl font-semibold tracking-normal md:text-4xl">Teach ShutterPlan how your studio thinks.</h1>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-[#d8d2c8]">
+              Your brand profile becomes reusable context for location ideas, timeline pacing, posing direction, and client prep guidance.
+            </p>
+          </div>
+          <div className="rounded-lg border border-white/10 bg-white/10 p-5">
+            <div className="flex items-end justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#d8d2c8]">Profile readiness</p>
+                <p className="mt-2 text-4xl font-semibold text-white">{readiness}%</p>
+              </div>
+              <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-[#1f2933]">
+                {getReadinessLabel(readiness)}
+              </span>
             </div>
-          ) : null}
+            <div className="mt-5 h-2 rounded-full bg-white/15">
+              <div className="h-2 rounded-full bg-[#d8d2c8]" style={{ width: `${readiness}%` }} />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {(error || message) && (
+        <div
+          className={`rounded-lg border px-4 py-3 text-sm font-medium ${
+            error
+              ? 'border-[#fecaca] bg-[#fef2f2] text-[#b91c1c]'
+              : 'border-[#bbf7d0] bg-[#f0fdf4] text-[#166534]'
+          }`}
+        >
+          {error || message}
+        </div>
+      )}
+
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
+        <div className="space-y-6">
+          <Card className="border border-[#d8d2c8] bg-white shadow-sm">
+            <div className="mb-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#7c6f64]">Studio basics</p>
+              <h2 className="mt-2 text-xl font-semibold text-[#1f2933]">Business identity</h2>
+            </div>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <TextField
+                label="Business name"
+                value={profile.businessName}
+                onChange={value => setProfile(prev => ({ ...prev, businessName: value }))}
+                placeholder="Studio 37 Photography"
+                disabled={isLoading}
+              />
+              <TextField
+                label="Business type"
+                value={profile.businessType}
+                onChange={value => setProfile(prev => ({ ...prev, businessType: value }))}
+                placeholder="Family and engagement photographer"
+                disabled={isLoading}
+              />
+              <TextField
+                label="Base location"
+                value={profile.baseLocation}
+                onChange={value => setProfile(prev => ({ ...prev, baseLocation: value }))}
+                placeholder="Magnolia, TX"
+                disabled={isLoading}
+              />
+              <TextField
+                label="ZIP code"
+                value={profile.zipCode}
+                onChange={value => setProfile(prev => ({ ...prev, zipCode: value }))}
+                placeholder="77355"
+                disabled={isLoading}
+              />
+              <TextField
+                label="Studio address"
+                value={profile.address}
+                onChange={value => setProfile(prev => ({ ...prev, address: value }))}
+                placeholder="Optional studio or office address"
+                disabled={isLoading}
+                className="md:col-span-2"
+              />
+            </div>
+          </Card>
+
+          <Card className="border border-[#d8d2c8] bg-white shadow-sm">
+            <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#7c6f64]">Brand intelligence</p>
+                <h2 className="mt-2 text-xl font-semibold text-[#1f2933]">Voice, website, and preferences</h2>
+              </div>
+              <Button
+                variant="secondary"
+                onClick={analyzeWebsite}
+                isLoading={isAnalyzingWebsite}
+                disabled={isLoading || isSaving || isAnalyzingWebsite || !profile.websiteUrl.trim()}
+                className="border border-[#d8d2c8] bg-[#faf9f6] text-[#1f2933] hover:bg-[#ece7df]"
+              >
+                Analyze website
+              </Button>
+            </div>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <TextField
+                label="Website URL"
+                value={profile.websiteUrl}
+                onChange={value => setProfile(prev => ({ ...prev, websiteUrl: value }))}
+                placeholder="https://yourstudio.com"
+                disabled={isLoading}
+                className="md:col-span-2"
+              />
+              <TextField
+                label="Brand tone"
+                value={profile.brandTone}
+                onChange={value => setProfile(prev => ({ ...prev, brandTone: value }))}
+                placeholder="Warm, true-to-color, candid, storytelling"
+                disabled={isLoading}
+                className="md:col-span-2"
+              />
+              <TextField
+                label="Preferred location types"
+                value={profile.preferredLocationTypes}
+                onChange={value => setProfile(prev => ({ ...prev, preferredLocationTypes: value }))}
+                placeholder="Riverwalk, oak trees, historic district"
+                disabled={isLoading}
+              />
+              <TextField
+                label="Avoid location types"
+                value={profile.avoidLocationTypes}
+                onChange={value => setProfile(prev => ({ ...prev, avoidLocationTypes: value }))}
+                placeholder="Industrial, school campus, crowded malls"
+                disabled={isLoading}
+              />
+              {profile.websiteSummary ? (
+                <div className="rounded-lg border border-[#d8d2c8] bg-[#faf9f6] p-4 text-sm leading-6 text-[#1f2933] md:col-span-2">
+                  <p className="mb-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#7c6f64]">Website summary detected</p>
+                  {profile.websiteSummary}
+                </div>
+              ) : null}
+            </div>
+          </Card>
+
+          <Card className="border border-[#d8d2c8] bg-white shadow-sm">
+            <div className="mb-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#7c6f64]">Client experience defaults</p>
+              <h2 className="mt-2 text-xl font-semibold text-[#1f2933]">Direction and prep guidance</h2>
+            </div>
+            <div className="grid grid-cols-1 gap-4">
+              <TextAreaField
+                label="Pose direction style"
+                value={profile.poseDirectionStyle}
+                onChange={value => setProfile(prev => ({ ...prev, poseDirectionStyle: value }))}
+                placeholder="I prompt movement first, then dial into clean hero frames."
+                disabled={isLoading}
+                rows={4}
+              />
+              <TextAreaField
+                label="Prep guide notes"
+                value={profile.prepGuideNotes}
+                onChange={value => setProfile(prev => ({ ...prev, prepGuideNotes: value }))}
+                placeholder="Ask clients to bring neutral outfits and arrive 10 minutes early."
+                disabled={isLoading}
+                rows={4}
+              />
+            </div>
+          </Card>
         </div>
 
-        <div className="mt-5 flex flex-wrap gap-3">
-          <Button
-            variant="secondary"
-            onClick={analyzeWebsite}
-            isLoading={isAnalyzingWebsite}
-            disabled={isLoading || isSaving || isAnalyzingWebsite}
-          >
-            Analyze website
-          </Button>
-          <Button onClick={saveProfile} isLoading={isSaving} disabled={isLoading || isSaving}>
-            Save business profile
-          </Button>
-        </div>
-      </Card>
+        <aside className="space-y-6">
+          <Card className="border border-[#d8d2c8] bg-[#faf9f6] shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#7c6f64]">AI context map</p>
+            <h2 className="mt-2 text-xl font-semibold text-[#1f2933]">What the planner knows</h2>
+            <div className="mt-5 space-y-3">
+              {guidanceItems.map(item => (
+                <div key={item.label} className="rounded-lg border border-[#d8d2c8] bg-white p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#7c6f64]">{item.label}</p>
+                      <p className="mt-2 truncate text-sm font-medium text-[#1f2933]">{item.value}</p>
+                    </div>
+                    <span
+                      className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${
+                        item.complete ? 'bg-[#d9eee6] text-[#0f766e]' : 'bg-[#fff7ed] text-[#9a3412]'
+                      }`}
+                    >
+                      {item.complete ? 'Set' : 'Open'}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          <Card className="border border-[#d8d2c8] bg-white shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#7c6f64]">Save changes</p>
+            <h2 className="mt-2 text-xl font-semibold text-[#1f2933]">Profile sync</h2>
+            <p className="mt-2 text-sm leading-6 text-[#5f6b76]">
+              Saving updates the context used by AI session plans, shot suggestions, and generated client guidance.
+            </p>
+            <Button
+              onClick={saveProfile}
+              isLoading={isSaving}
+              disabled={isLoading || isSaving}
+              className="mt-5 w-full bg-[#1f2933] hover:bg-[#111827]"
+            >
+              Save business profile
+            </Button>
+          </Card>
+        </aside>
+      </div>
     </div>
   );
 }
