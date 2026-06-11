@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/Card';
@@ -107,7 +108,7 @@ type ChatQuestion = {
 };
 
 type SessionCategory = 'family' | 'engagement' | 'portrait' | 'event';
-type ReviewTab = 'locations' | 'shot-list' | 'timeline' | 'prep';
+type ReviewTab = 'map' | 'locations' | 'shot-list' | 'timeline' | 'prep';
 type LocationVote = 'up' | 'down';
 type WorkflowStage = 'intake' | 'review' | 'apply';
 
@@ -442,6 +443,15 @@ function PlannerSkeletonCard({ className = '' }: { className?: string }) {
   return <div className={`animate-pulse rounded-xl bg-gray-200 ${className}`.trim()} />;
 }
 
+const PlannerLocationMap = dynamic(() => import('@/components/map/PlannerLocationMap'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-90 items-center justify-center rounded-xl border border-gray-200 bg-gray-100 text-sm text-gray-600">
+      Loading map review...
+    </div>
+  ),
+});
+
 export default function PlannerPage() {
   const router = useRouter();
 
@@ -463,13 +473,14 @@ export default function PlannerPage() {
   const [draftAnswer, setDraftAnswer] = useState('');
   const [isReviewConfirmed, setIsReviewConfirmed] = useState(false);
   const [businessProfile, setBusinessProfile] = useState<BusinessProfile | null>(null);
-  const [activeReviewTab, setActiveReviewTab] = useState<ReviewTab>('locations');
+  const [activeReviewTab, setActiveReviewTab] = useState<ReviewTab>('map');
   const [locationVotes, setLocationVotes] = useState<Record<string, LocationVote>>({});
   const [preferredVenueBucket, setPreferredVenueBucket] = useState<string | null>(null);
   const [excludedVenueBuckets, setExcludedVenueBuckets] = useState<string[]>([]);
   const [isAiTyping, setIsAiTyping] = useState(false);
   const [activePresetId, setActivePresetId] = useState<string | null>(null);
-  const [activeMobileReviewTab, setActiveMobileReviewTab] = useState<ReviewTab | null>('locations');
+  const [activeMobileReviewTab, setActiveMobileReviewTab] = useState<ReviewTab | null>('map');
+  const [selectedReviewLocationName, setSelectedReviewLocationName] = useState<string | null>(null);
 
   const [plan, setPlan] = useState<SessionPlan | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -678,6 +689,31 @@ export default function PlannerPage() {
     return filtered.length > 0 ? filtered : shots;
   }, [displayedLocationNames, plan?.shotList]);
 
+  const selectedReviewLocation = useMemo(() => {
+    if (!selectedReviewLocationName) return displayedLocations[0] ?? null;
+
+    return (
+      displayedLocations.find(location => (location.displayName || location.name) === selectedReviewLocationName) ??
+      displayedLocations[0] ??
+      null
+    );
+  }, [displayedLocations, selectedReviewLocationName]);
+
+  useEffect(() => {
+    if (displayedLocations.length === 0) {
+      setSelectedReviewLocationName(null);
+      return;
+    }
+
+    const hasSelectedLocation = displayedLocations.some(
+      location => (location.displayName || location.name) === selectedReviewLocationName
+    );
+
+    if (!hasSelectedLocation) {
+      setSelectedReviewLocationName(displayedLocations[0].displayName || displayedLocations[0].name);
+    }
+  }, [displayedLocations, selectedReviewLocationName]);
+
   const generatePlan = async () => {
     setIsGenerating(true);
     setError(null);
@@ -740,11 +776,12 @@ export default function PlannerPage() {
         return;
       }
 
-      setActiveReviewTab('locations');
-      setActiveMobileReviewTab('locations');
+      setActiveReviewTab('map');
+      setActiveMobileReviewTab('map');
       setLocationVotes({});
       setPreferredVenueBucket(null);
       setExcludedVenueBuckets([]);
+      setSelectedReviewLocationName(null);
       setPlan(result.data ?? null);
     } catch {
       setError('Failed to generate session plan');
@@ -1591,6 +1628,7 @@ export default function PlannerPage() {
           <Card>
             <div className="mb-4 hidden flex-wrap gap-2 md:flex">
               {[
+                { id: 'map', label: `Map (${displayedLocations.filter(location => location.latitude != null && location.longitude != null).length})` },
                 { id: 'locations', label: `Locations (${displayedLocations.length})` },
                 { id: 'shot-list', label: `Shot List (${displayedShots.length})` },
                 { id: 'timeline', label: `Timeline (${plan.timeline.length})` },
@@ -1613,6 +1651,7 @@ export default function PlannerPage() {
 
             <div className="mb-4 space-y-3 md:hidden">
               {[
+                { id: 'map', label: `Map (${displayedLocations.filter(location => location.latitude != null && location.longitude != null).length})` },
                 { id: 'locations', label: `Locations (${displayedLocations.length})` },
                 { id: 'shot-list', label: `Shot List (${displayedShots.length})` },
                 { id: 'timeline', label: `Timeline (${plan.timeline.length})` },
@@ -1634,6 +1673,46 @@ export default function PlannerPage() {
 
                     {isOpen && (
                       <div className="border-t border-gray-100 px-4 py-4">
+                        {reviewTab === 'map' && (
+                          <div className="space-y-4">
+                            <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+                              Use the map to pressure-test spacing, route order, and whether the plan clusters in the right part of town.
+                            </div>
+
+                            <PlannerLocationMap
+                              locations={displayedLocations}
+                              selectedLocationName={selectedReviewLocationName}
+                              onSelectLocation={setSelectedReviewLocationName}
+                            />
+
+                            {selectedReviewLocation ? (
+                              <div className="rounded-xl border border-gray-200 p-4">
+                                <p className="text-sm font-semibold text-gray-900">
+                                  {selectedReviewLocation.displayName || selectedReviewLocation.name}
+                                </p>
+                                <p className="mt-1 text-sm text-gray-600">{selectedReviewLocation.whyItWorks}</p>
+                                <div className="mt-3 flex flex-wrap gap-2 text-xs text-gray-600">
+                                  {selectedReviewLocation.venueBucket && (
+                                    <span className="rounded-full bg-gray-100 px-2 py-1">
+                                      Type: {selectedReviewLocation.venueBucket}
+                                    </span>
+                                  )}
+                                  {typeof selectedReviewLocation.confidenceScore === 'number' && (
+                                    <span className="rounded-full bg-gray-100 px-2 py-1">
+                                      Confidence: {selectedReviewLocation.confidenceScore.toFixed(1)}/10
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                                <p className="font-semibold">No map-ready locations yet</p>
+                                <p className="mt-1">Try regenerating with a broader area or use provided locations with clearer place names.</p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                         {reviewTab === 'locations' && (
                           <div className="space-y-4">
                             <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
@@ -1786,6 +1865,77 @@ export default function PlannerPage() {
             </div>
 
             <div className="hidden md:block">
+            {activeReviewTab === 'map' && (
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
+                <div className="space-y-4">
+                  <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+                    Map-first review helps confirm spacing, route order, and whether the chosen locations cluster in the right part of the city.
+                  </div>
+
+                  <PlannerLocationMap
+                    locations={displayedLocations}
+                    selectedLocationName={selectedReviewLocationName}
+                    onSelectLocation={setSelectedReviewLocationName}
+                  />
+                </div>
+
+                <div className="space-y-4">
+                  <div className="rounded-xl border border-gray-200 p-4">
+                    <p className="text-sm font-semibold text-gray-900">Current stop order</p>
+                    <div className="mt-3 space-y-2">
+                      {displayedLocations.map((location, index) => {
+                        const locationName = location.displayName || location.name;
+                        const isSelected = locationName === (selectedReviewLocation?.displayName || selectedReviewLocation?.name);
+
+                        return (
+                          <button
+                            key={`map-sequence-${locationName}`}
+                            type="button"
+                            onClick={() => setSelectedReviewLocationName(locationName)}
+                            className={`w-full rounded-lg border px-3 py-2 text-left text-sm ${
+                              isSelected
+                                ? 'border-blue-600 bg-blue-50 text-blue-900'
+                                : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                            }`}
+                          >
+                            <p className="font-medium">Stop {index + 1}: {locationName}</p>
+                            <p className="mt-1 text-xs text-gray-500">{location.microLocations.slice(0, 2).join(' • ') || 'No micro-spots listed yet'}</p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {selectedReviewLocation ? (
+                    <div className="rounded-xl border border-gray-200 p-4">
+                      <p className="text-sm font-semibold text-gray-900">
+                        {selectedReviewLocation.displayName || selectedReviewLocation.name}
+                      </p>
+                      <p className="mt-1 text-sm text-gray-600">{selectedReviewLocation.whyItWorks}</p>
+                      {Array.isArray(selectedReviewLocation.selectionReasons) && selectedReviewLocation.selectionReasons.length > 0 && (
+                        <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-gray-700">
+                          {selectedReviewLocation.selectionReasons.map(reason => (
+                            <li key={`map-reason-${selectedReviewLocation.name}-${reason}`}>{reason}</li>
+                          ))}
+                        </ul>
+                      )}
+                      <div className="mt-3 grid gap-2 text-xs text-gray-600 sm:grid-cols-2">
+                        <p>Parking: {selectedReviewLocation.logistics.parking}</p>
+                        <p>Restroom: {selectedReviewLocation.logistics.restroom}</p>
+                        <p>Walk: {selectedReviewLocation.logistics.walkingDistance}</p>
+                        {selectedReviewLocation.venueBucket && <p>Type: {selectedReviewLocation.venueBucket}</p>}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                      <p className="font-semibold">No map-ready locations yet</p>
+                      <p className="mt-1">Try regenerating with a broader area or use provided locations with clearer place names.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {activeReviewTab === 'locations' && (
               <div className="space-y-4">
                 <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
