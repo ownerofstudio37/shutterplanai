@@ -123,6 +123,7 @@ function getSessionCategory(shootType: string): SessionCategory {
   const value = shootType.toLowerCase();
   if (/family|newborn|maternity|kids|children/.test(value)) return 'family';
   if (/engagement|proposal|couple|anniversary/.test(value)) return 'engagement';
+  if (/branding|brand|headshot|personal brand/.test(value)) return 'portrait';
   if (/event|wedding|party|corporate/.test(value)) return 'event';
   return 'portrait';
 }

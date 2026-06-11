@@ -68,6 +68,7 @@ function getSessionCategory(shootType: string) {
   const value = shootType.toLowerCase();
   if (/family|newborn|maternity|kids|children/.test(value)) return 'family' as const;
   if (/engagement|proposal|couple|anniversary/.test(value)) return 'engagement' as const;
+  if (/branding|brand|headshot|personal brand/.test(value)) return 'portrait' as const;
   if (/event|wedding|party|corporate/.test(value)) return 'event' as const;
   return 'portrait' as const;
 }

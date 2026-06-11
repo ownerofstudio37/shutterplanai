@@ -70,6 +70,10 @@ type ChatQuestionId =
   | 'providedLocations'
   | 'city'
   | 'subjectDetails'
+  | 'familyPacing'
+  | 'engagementStory'
+  | 'brandingGoals'
+  | 'eventPriorities'
   | 'shootDate'
   | 'duration'
   | 'mood'
@@ -82,7 +86,7 @@ type ChatQuestion = {
   placeholder?: string;
   options?: string[];
   required?: boolean;
-  showWhen?: (mode: LocationMode) => boolean;
+  showWhen?: (mode: LocationMode, sessionCategory: SessionCategory) => boolean;
 };
 
 type SessionCategory = 'family' | 'engagement' | 'portrait' | 'event';
@@ -161,7 +165,7 @@ const CHAT_QUESTIONS: ChatQuestion[] = [
   {
     id: 'shootType',
     prompt: 'What type of shoot are you planning?',
-    options: ['Family Session', 'Engagement Session', 'Portrait Session', 'Event Session'],
+    options: ['Family Session', 'Engagement Session', 'Branding Session', 'Portrait Session', 'Event Session'],
     required: true,
   },
   {
@@ -188,6 +192,30 @@ const CHAT_QUESTIONS: ChatQuestion[] = [
     prompt: 'Who is being photographed?',
     placeholder: '5 people, 2 toddlers, grandparents included',
     required: true,
+  },
+  {
+    id: 'familyPacing',
+    prompt: 'Anything about kids attention span or family pacing I should optimize for?',
+    placeholder: 'Need fast transitions, one child gets tired after 30 minutes',
+    showWhen: (_mode, category) => category === 'family',
+  },
+  {
+    id: 'engagementStory',
+    prompt: 'Anything meaningful about the couple or proposal story to reflect?',
+    placeholder: 'Proposed at a lake at sunset, want that vibe reflected',
+    showWhen: (_mode, category) => category === 'engagement',
+  },
+  {
+    id: 'brandingGoals',
+    prompt: 'What brand outcomes should this session create?',
+    placeholder: 'Website hero images, speaking profile photos, social content batch',
+    showWhen: (_mode, category) => category === 'portrait',
+  },
+  {
+    id: 'eventPriorities',
+    prompt: 'What are the event priorities and non-negotiable moments?',
+    placeholder: 'Speaker on stage, sponsor signage, audience reactions, networking',
+    showWhen: (_mode, category) => category === 'event',
   },
   {
     id: 'shootDate',
@@ -222,6 +250,7 @@ function getSessionCategory(shootTypeValue: string): SessionCategory {
   const value = shootTypeValue.toLowerCase();
   if (/family|newborn|maternity|kids|children/.test(value)) return 'family';
   if (/engagement|proposal|couple|anniversary/.test(value)) return 'engagement';
+  if (/branding|brand|headshot|personal brand/.test(value)) return 'portrait';
   if (/event|wedding|party|corporate/.test(value)) return 'event';
   return 'portrait';
 }
@@ -258,6 +287,25 @@ function getAdaptivePlaceholder(question: ChatQuestion, sessionCategory: Session
   return question.placeholder || 'Type your answer...';
 }
 
+function getQuickReplyOptions(question: ChatQuestion, sessionCategory: SessionCategory): string[] {
+  if (question.id === 'duration') {
+    return ['30 minutes', '45 minutes', '60 minutes', '90 minutes', '120 minutes'];
+  }
+
+  if (question.id === 'mood') {
+    if (sessionCategory === 'family') return ['Warm + candid', 'Playful + natural', 'Classic family portraits'];
+    if (sessionCategory === 'engagement') return ['Romantic + cinematic', 'Candid + emotional', 'Editorial + modern'];
+    if (sessionCategory === 'event') return ['Documentary + candid', 'Clean + professional', 'Energetic + social'];
+    return ['Polished + professional', 'Bold + editorial', 'Natural + approachable'];
+  }
+
+  if (question.id === 'city') {
+    return ['Skip (use account base location)'];
+  }
+
+  return [];
+}
+
 export default function PlannerPage() {
   const router = useRouter();
 
@@ -271,6 +319,10 @@ export default function PlannerPage() {
   const [constraints, setConstraints] = useState('Need stroller-friendly paths and quick transitions');
   const [locationMode, setLocationMode] = useState<LocationMode>('find-locations');
   const [providedLocations, setProvidedLocations] = useState('');
+  const [familyPacing, setFamilyPacing] = useState('');
+  const [engagementStory, setEngagementStory] = useState('');
+  const [brandingGoals, setBrandingGoals] = useState('');
+  const [eventPriorities, setEventPriorities] = useState('');
   const [chatStepIndex, setChatStepIndex] = useState(0);
   const [draftAnswer, setDraftAnswer] = useState('');
   const [isReviewConfirmed, setIsReviewConfirmed] = useState(false);
@@ -286,8 +338,8 @@ export default function PlannerPage() {
   const sessionCategory = useMemo(() => getSessionCategory(shootType), [shootType]);
 
   const visibleQuestions = useMemo(
-    () => CHAT_QUESTIONS.filter(question => !question.showWhen || question.showWhen(locationMode)),
-    [locationMode]
+    () => CHAT_QUESTIONS.filter(question => !question.showWhen || question.showWhen(locationMode, sessionCategory)),
+    [locationMode, sessionCategory]
   );
 
   useEffect(() => {
@@ -308,6 +360,14 @@ export default function PlannerPage() {
         return city;
       case 'subjectDetails':
         return subjectDetails;
+      case 'familyPacing':
+        return familyPacing;
+      case 'engagementStory':
+        return engagementStory;
+      case 'brandingGoals':
+        return brandingGoals;
+      case 'eventPriorities':
+        return eventPriorities;
       case 'shootDate':
         return shootDate;
       case 'duration':
@@ -342,6 +402,18 @@ export default function PlannerPage() {
       case 'subjectDetails':
         setSubjectDetails(value);
         break;
+      case 'familyPacing':
+        setFamilyPacing(value);
+        break;
+      case 'engagementStory':
+        setEngagementStory(value);
+        break;
+      case 'brandingGoals':
+        setBrandingGoals(value);
+        break;
+      case 'eventPriorities':
+        setEventPriorities(value);
+        break;
       case 'shootDate':
         setShootDate(value);
         break;
@@ -365,6 +437,7 @@ export default function PlannerPage() {
   const activeQuestion = visibleQuestions[chatStepIndex] ?? null;
   const activePrompt = activeQuestion ? getAdaptivePrompt(activeQuestion, sessionCategory) : '';
   const activePlaceholder = activeQuestion ? getAdaptivePlaceholder(activeQuestion, sessionCategory) : '';
+  const activeQuickReplies = activeQuestion ? getQuickReplyOptions(activeQuestion, sessionCategory) : [];
 
   useEffect(() => {
     if (!activeQuestion) {
@@ -400,6 +473,31 @@ export default function PlannerPage() {
       .filter(Boolean)
       .slice(0, 12);
 
+    const subjectDetailsPayload = [
+      subjectDetails,
+      sessionCategory === 'family' && familyPacing ? `Family pacing: ${familyPacing}` : '',
+      sessionCategory === 'engagement' && engagementStory ? `Couple story: ${engagementStory}` : '',
+      sessionCategory === 'portrait' && brandingGoals ? `Brand goals: ${brandingGoals}` : '',
+      sessionCategory === 'event' && eventPriorities ? `Event priorities: ${eventPriorities}` : '',
+    ]
+      .filter(Boolean)
+      .join(' | ');
+
+    const mustHaveShotsPayload = [
+      mustHaveShots,
+      sessionCategory === 'portrait' && brandingGoals ? `Brand outputs: ${brandingGoals}` : '',
+      sessionCategory === 'event' && eventPriorities ? `Priority captures: ${eventPriorities}` : '',
+    ]
+      .filter(Boolean)
+      .join(' | ');
+
+    const constraintsPayload = [
+      constraints,
+      sessionCategory === 'family' && familyPacing ? `Pacing note: ${familyPacing}` : '',
+    ]
+      .filter(Boolean)
+      .join(' | ');
+
     try {
       const response = await fetch('/api/ai/session-plan', {
         method: 'POST',
@@ -409,13 +507,13 @@ export default function PlannerPage() {
         },
         body: JSON.stringify({
           shootType,
-          subjectDetails,
+          subjectDetails: subjectDetailsPayload,
           city,
           shootDate,
           duration,
           mood,
-          mustHaveShots,
-          constraints,
+          mustHaveShots: mustHaveShotsPayload,
+          constraints: constraintsPayload,
           locationMode: locationMode === 'use-provided' ? 'use-provided' : 'find-locations',
           providedLocations: providedLocationList,
         }),
@@ -644,7 +742,12 @@ export default function PlannerPage() {
   const submitCurrentAnswer = () => {
     if (!activeQuestion) return;
 
-    const value = draftAnswer.trim();
+    const rawValue = draftAnswer.trim();
+    const value =
+      activeQuestion.id === 'city' && /^skip\s*\(/i.test(rawValue)
+        ? ''
+        : rawValue;
+
     if (activeQuestion.required && value.length === 0) {
       setError('Please answer the current question before continuing.');
       return;
@@ -740,12 +843,40 @@ export default function PlannerPage() {
                 </div>
               ) : (
                 <div className="ml-12">
+                  {activeQuickReplies.length > 0 && (
+                    <div className="mb-2 flex flex-wrap gap-2">
+                      {activeQuickReplies.map(option => (
+                        <button
+                          key={`${activeQuestion.id}-quick-${option}`}
+                          type="button"
+                          onClick={() => {
+                            setDraftAnswer(option);
+                            setError(null);
+                          }}
+                          className={`rounded-full border px-2.5 py-1 text-xs ${
+                            draftAnswer === option
+                              ? 'border-blue-600 bg-blue-50 text-blue-700'
+                              : 'border-blue-200 bg-white text-blue-700 hover:border-blue-300'
+                          }`}
+                        >
+                          {option}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   <textarea
                     className="mt-2 min-h-20 w-full rounded-2xl rounded-br-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm"
                     value={draftAnswer}
                     onChange={e => setDraftAnswer(e.target.value)}
                     placeholder={activePlaceholder}
+                    onKeyDown={e => {
+                      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                        e.preventDefault();
+                        submitCurrentAnswer();
+                      }
+                    }}
                   />
+                  <p className="mt-1 text-[11px] text-gray-500">Tip: press Cmd/Ctrl + Enter to continue quickly.</p>
                 </div>
               )}
 
@@ -773,6 +904,18 @@ export default function PlannerPage() {
                 )}
                 <p><span className="font-medium">Duration:</span> {duration}</p>
                 <p><span className="font-medium">Mood:</span> {mood}</p>
+                {sessionCategory === 'family' && familyPacing && (
+                  <p className="md:col-span-2"><span className="font-medium">Family pacing:</span> {familyPacing}</p>
+                )}
+                {sessionCategory === 'engagement' && engagementStory && (
+                  <p className="md:col-span-2"><span className="font-medium">Couple story:</span> {engagementStory}</p>
+                )}
+                {sessionCategory === 'portrait' && brandingGoals && (
+                  <p className="md:col-span-2"><span className="font-medium">Brand goals:</span> {brandingGoals}</p>
+                )}
+                {sessionCategory === 'event' && eventPriorities && (
+                  <p className="md:col-span-2"><span className="font-medium">Event priorities:</span> {eventPriorities}</p>
+                )}
               </div>
               <div className="flex flex-wrap gap-2">
                 <Button variant="secondary" onClick={editAnswers}>Edit answers</Button>
