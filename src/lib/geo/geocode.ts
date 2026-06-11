@@ -217,6 +217,19 @@ function normalizeText(value: string) {
 function getCityHotspotOverrides(city: string): string[] {
   const normalized = normalizeText(city);
 
+  const configured = process.env.LOCATION_HOTSPOT_SEEDS_JSON;
+  if (configured) {
+    try {
+      const parsed = JSON.parse(configured) as Record<string, string[]>;
+      const fromConfig = parsed[normalized];
+      if (Array.isArray(fromConfig) && fromConfig.length > 0) {
+        return fromConfig.slice(0, 20);
+      }
+    } catch {
+      // ignore malformed env config
+    }
+  }
+
   // Local hotspot pack: Magnolia, Texas
   if (/\bmagnolia\b/.test(normalized) && /\b(tx|texas)\b/.test(normalized)) {
     return [
@@ -233,6 +246,45 @@ function getCityHotspotOverrides(city: string): string[] {
   }
 
   return [];
+}
+
+function getOverpassTagFilters(sessionCategory: SearchCandidateInput['sessionCategory']) {
+  const common = [
+    { key: 'leisure', value: 'park|garden|nature_reserve', relevanceScore: 12 },
+    { key: 'tourism', value: 'viewpoint|attraction|picnic_site', relevanceScore: 11 },
+    { key: 'historic', value: '.*', relevanceScore: 10 },
+  ];
+
+  if (sessionCategory === 'family') {
+    return [
+      ...common,
+      { key: 'leisure', value: 'playground', relevanceScore: 9 },
+      { key: 'natural', value: 'wood|water|beach', relevanceScore: 9 },
+    ];
+  }
+
+  if (sessionCategory === 'engagement') {
+    return [
+      ...common,
+      { key: 'tourism', value: 'artwork|museum', relevanceScore: 10 },
+      { key: 'amenity', value: 'arts_centre', relevanceScore: 9 },
+      { key: 'natural', value: 'peak|water', relevanceScore: 9 },
+    ];
+  }
+
+  if (sessionCategory === 'event') {
+    return [
+      ...common,
+      { key: 'amenity', value: 'conference_centre|events_venue', relevanceScore: 10 },
+      { key: 'building', value: 'civic|public|museum', relevanceScore: 9 },
+    ];
+  }
+
+  return [
+    ...common,
+    { key: 'tourism', value: 'museum|gallery', relevanceScore: 10 },
+    { key: 'natural', value: 'wood|water|peak|beach', relevanceScore: 9 },
+  ];
 }
 
 function getSearchQueries(
@@ -425,6 +477,101 @@ export async function searchLocationCandidates(input: SearchCandidateInput): Pro
 
     return added;
   };
+
+  const addOverpassResults = async (radiusKm: number) => {
+    if (!hasCenter) return;
+
+    const radiusMeters = Math.round(radiusKm * 1000);
+    const filters = getOverpassTagFilters(input.sessionCategory);
+    const block = filters
+      .map(filter => `nwr(around:${radiusMeters},${cLat},${cLon})["${filter.key}"~"${filter.value}"]["name"];`)
+      .join('\n');
+
+    const query = `[out:json][timeout:20];\n(\n${block}\n);\nout center 120;`;
+    const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
+
+    try {
+      const response = await fetch(url, {
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': 'ShutterPlanAI/1.0',
+        },
+        cache: 'no-store',
+      });
+
+      if (!response.ok) return;
+
+      const payload = (await response.json()) as {
+        elements?: Array<{
+          lat?: number;
+          lon?: number;
+          center?: { lat?: number; lon?: number };
+          tags?: Record<string, string>;
+        }>;
+      };
+
+      const elements = Array.isArray(payload.elements) ? payload.elements : [];
+      const mapped = elements
+        .map(element => {
+          const lat = Number(element.lat ?? element.center?.lat);
+          const lon = Number(element.lon ?? element.center?.lon);
+          if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+
+          const tags = element.tags ?? {};
+          const name = (tags.name || '').trim();
+          if (!name) return null;
+
+          const lowerName = normalizeText(name);
+          if (blocked.some(term => lowerName.includes(term))) return null;
+
+          const cityPart = tags['addr:city'] || city;
+          const displayName = cityPart ? `${name}, ${cityPart}` : name;
+          const primaryTag =
+            tags.leisure || tags.tourism || tags.historic || tags.amenity || tags.natural || tags.building || 'poi';
+
+          const filterMatch = filters.find(filter => {
+            const value = tags[filter.key];
+            if (!value) return false;
+            return new RegExp(`^(${filter.value})$`, 'i').test(value);
+          });
+
+          return {
+            lat: String(lat),
+            lon: String(lon),
+            display_name: displayName,
+            class: 'poi',
+            type: primaryTag,
+            importance: (filterMatch?.relevanceScore ?? 9) / 12,
+          };
+        })
+        .filter(
+          (
+            candidate
+          ): candidate is {
+            lat: string;
+            lon: string;
+            display_name: string;
+            class: string;
+            type: string;
+            importance: number;
+          } => candidate !== null
+        );
+
+      addResults(mapped, { query: `overpass:${input.sessionCategory}`, relevanceScore: 13 }, radiusKm);
+    } catch {
+      // ignore and continue
+    }
+  };
+
+  // Pass 0: global POI source (Overpass) so we can surface local named hotspots
+  // around the world without hardcoded city-specific query strings.
+  if (hasCenter) {
+    for (const radiusKm of [18, 35, 60]) {
+      if (collected.length >= Math.max(4, Math.ceil(limit / 2))) break;
+      await addOverpassResults(radiusKm);
+      await sleep(250);
+    }
+  }
 
   // Pass 1: exact-name searches for local hotspots + preferred terms.
   // This catches "known good" places that generic category queries can miss.
