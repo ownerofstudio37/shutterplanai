@@ -8,13 +8,23 @@ type PlannerIntelligence = {
     sunset: string;
     goldenHourStart: string;
     goldenHourEnd: string;
+    morningGoldenHourStart?: string;
+    morningGoldenHourEnd?: string;
+    morningBlueHourStart?: string;
+    morningBlueHourEnd?: string;
+    eveningBlueHourStart?: string;
+    eveningBlueHourEnd?: string;
   };
   weather?: {
+    temperature?: number;
+    apparentTemperature?: number;
+    humidity?: number;
     cloudCover: number;
     uvIndex: number;
     windSpeed: number;
     windGustSpeed: number;
     precipitationProbability: number;
+    conditionSummary?: string;
     recommendations: string[];
     provider: 'open-meteo' | 'fallback';
   };
@@ -27,6 +37,36 @@ type PlannerIntelligence = {
       confidence: number;
       summary: string;
     }>;
+  };
+  sunWindows?: {
+    morningGolden: {
+      label: string;
+      startsAt: string;
+      endsAt: string;
+      confidence: number;
+      summary: string;
+    };
+    eveningGolden: {
+      label: string;
+      startsAt: string;
+      endsAt: string;
+      confidence: number;
+      summary: string;
+    };
+    morningBlue: {
+      label: string;
+      startsAt: string;
+      endsAt: string;
+      confidence: number;
+      summary: string;
+    };
+    eveningBlue: {
+      label: string;
+      startsAt: string;
+      endsAt: string;
+      confidence: number;
+      summary: string;
+    };
   };
   optimizedRoute: number[];
 };
@@ -135,6 +175,14 @@ export function PlannerReviewHeaderCard({
   const source = diagnostics?.locationSource;
   const locationCount = diagnostics?.locationCandidateCount ?? 0;
   const confidence = intelligence?.confidence?.overall;
+  const bestSunWindow = intelligence?.sunWindows
+    ? [
+        intelligence.sunWindows.morningGolden,
+        intelligence.sunWindows.eveningGolden,
+        intelligence.sunWindows.morningBlue,
+        intelligence.sunWindows.eveningBlue,
+      ].sort((a, b) => b.confidence - a.confidence)[0]
+    : null;
   const shotCountWarning = shotCount < expectedShotRange.min || shotCount > expectedShotRange.max;
 
   const readinessItems = [
@@ -290,8 +338,36 @@ export function PlannerReviewHeaderCard({
                 </p>
                 <div className="mt-3 grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-4">
                   <span className="rounded-md bg-[#f6f3ee] px-3 py-2 font-medium text-[#1f2933]">
-                    Golden: {formatTime(intelligence.goldenHours.goldenHourStart)} - {formatTime(intelligence.goldenHours.goldenHourEnd)}
+                    Evening golden: {formatTime(intelligence.goldenHours.goldenHourStart)} - {formatTime(intelligence.goldenHours.goldenHourEnd)}
                   </span>
+                  {intelligence.goldenHours.morningGoldenHourStart && (
+                    <span className="rounded-md bg-[#f6f3ee] px-3 py-2 font-medium text-[#1f2933]">
+                      Morning golden: {formatTime(intelligence.goldenHours.morningGoldenHourStart)} - {formatTime(intelligence.goldenHours.morningGoldenHourEnd)}
+                    </span>
+                  )}
+                  {intelligence.goldenHours.eveningBlueHourStart && (
+                    <span className="rounded-md bg-[#f6f3ee] px-3 py-2 font-medium text-[#1f2933]">
+                      Blue hour: {formatTime(intelligence.goldenHours.eveningBlueHourStart)} - {formatTime(intelligence.goldenHours.eveningBlueHourEnd)}
+                    </span>
+                  )}
+                  {intelligence.weather?.conditionSummary && (
+                    <span className="rounded-md bg-[#f6f3ee] px-3 py-2 font-medium text-[#1f2933]">
+                      {intelligence.weather.conditionSummary}
+                    </span>
+                  )}
+                  {typeof intelligence.weather?.temperature === 'number' && (
+                    <span className="rounded-md bg-[#f6f3ee] px-3 py-2 font-medium text-[#1f2933]">
+                      Temp: {Math.round(intelligence.weather.temperature)} deg F
+                      {typeof intelligence.weather.apparentTemperature === 'number'
+                        ? ` feels ${Math.round(intelligence.weather.apparentTemperature)} deg F`
+                        : ''}
+                    </span>
+                  )}
+                  {typeof intelligence.weather?.humidity === 'number' && (
+                    <span className="rounded-md bg-[#f6f3ee] px-3 py-2 font-medium text-[#1f2933]">
+                      Humidity: {intelligence.weather.humidity}%
+                    </span>
+                  )}
                   <span className="rounded-md bg-[#f6f3ee] px-3 py-2 font-medium text-[#1f2933]">
                     Sunrise: {formatTime(intelligence.goldenHours.sunrise)}
                   </span>
@@ -311,6 +387,15 @@ export function PlannerReviewHeaderCard({
                 </Button>
               )}
             </div>
+
+            {bestSunWindow && (
+              <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm text-emerald-900">
+                <p className="font-semibold">Best light window: {bestSunWindow.label}</p>
+                <p className="mt-1 text-xs">
+                  {formatTime(bestSunWindow.startsAt)} - {formatTime(bestSunWindow.endsAt)} at {bestSunWindow.confidence}% confidence. {bestSunWindow.summary}
+                </p>
+              </div>
+            )}
 
             {intelligence.confidence?.windows?.length ? (
               <div className="mt-4 grid gap-3 md:grid-cols-2">

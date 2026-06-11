@@ -172,13 +172,23 @@ export type PlannerIntelligence = {
     sunset: string;
     goldenHourStart: string;
     goldenHourEnd: string;
+    morningGoldenHourStart?: string;
+    morningGoldenHourEnd?: string;
+    morningBlueHourStart?: string;
+    morningBlueHourEnd?: string;
+    eveningBlueHourStart?: string;
+    eveningBlueHourEnd?: string;
   };
   weather?: {
+    temperature?: number;
+    apparentTemperature?: number;
+    humidity?: number;
     cloudCover: number;
     uvIndex: number;
     windSpeed: number;
     windGustSpeed: number;
     precipitationProbability: number;
+    conditionSummary?: string;
     recommendations: string[];
     provider: 'open-meteo' | 'fallback';
   };
@@ -191,6 +201,36 @@ export type PlannerIntelligence = {
       confidence: number;
       summary: string;
     }>;
+  };
+  sunWindows?: {
+    morningGolden: {
+      label: string;
+      startsAt: string;
+      endsAt: string;
+      confidence: number;
+      summary: string;
+    };
+    eveningGolden: {
+      label: string;
+      startsAt: string;
+      endsAt: string;
+      confidence: number;
+      summary: string;
+    };
+    morningBlue: {
+      label: string;
+      startsAt: string;
+      endsAt: string;
+      confidence: number;
+      summary: string;
+    };
+    eveningBlue: {
+      label: string;
+      startsAt: string;
+      endsAt: string;
+      confidence: number;
+      summary: string;
+    };
   };
   logistics: Array<{
     parkingDifficulty: number;

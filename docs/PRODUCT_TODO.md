@@ -22,9 +22,9 @@
 
 ## Next: Weather and Sun Telemetry
 
-- [ ] Deepen golden hour and blue hour calculations.
-- [ ] Integrate more complete weather forecasting where gaps remain.
-- [ ] Surface weather and sun confidence directly inside planning decisions.
+- [x] Deepen golden hour and blue hour calculations.
+- [x] Integrate more complete weather forecasting where gaps remain.
+- [x] Surface weather and sun confidence directly inside planning decisions.
 
 ## Next: Mobile QA
 

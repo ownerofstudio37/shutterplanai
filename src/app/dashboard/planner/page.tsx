@@ -579,6 +579,7 @@ export default function PlannerPage() {
           goldenHours?: PlannerIntelligence['goldenHours'];
           weather?: PlannerIntelligence['weather'];
           confidence?: PlannerIntelligence['confidence'];
+          sunWindows?: PlannerIntelligence['sunWindows'];
           logistics?: PlannerIntelligence['logistics'];
           optimizedRoute?: number[];
         };
@@ -591,6 +592,7 @@ export default function PlannerPage() {
           goldenHours: result.goldenHours,
           weather: result.weather,
           confidence: result.confidence,
+          sunWindows: result.sunWindows,
           logistics: result.logistics,
           optimizedRoute: result.optimizedRoute,
         });
