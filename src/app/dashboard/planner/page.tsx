@@ -109,6 +109,7 @@ type ChatQuestion = {
 type SessionCategory = 'family' | 'engagement' | 'portrait' | 'event';
 type ReviewTab = 'locations' | 'shot-list' | 'timeline' | 'prep';
 type LocationVote = 'up' | 'down';
+type WorkflowStage = 'intake' | 'review' | 'apply';
 
 interface LocationRefinement {
   name: string;
@@ -390,6 +391,7 @@ export default function PlannerPage() {
   const [locationVotes, setLocationVotes] = useState<Record<string, LocationVote>>({});
   const [preferredVenueBucket, setPreferredVenueBucket] = useState<string | null>(null);
   const [excludedVenueBuckets, setExcludedVenueBuckets] = useState<string[]>([]);
+  const [isAiTyping, setIsAiTyping] = useState(false);
 
   const [plan, setPlan] = useState<SessionPlan | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -505,6 +507,8 @@ export default function PlannerPage() {
   const activeProfileTemplates = activeQuestion
     ? getBusinessProfileTemplates(activeQuestion, sessionCategory, businessProfile)
     : [];
+  const isChatComplete = chatStepIndex >= visibleQuestions.length;
+  const workflowStage: WorkflowStage = plan ? (isApplying ? 'apply' : 'review') : 'intake';
 
   useEffect(() => {
     if (!activeQuestion) {
@@ -513,6 +517,17 @@ export default function PlannerPage() {
     }
     setDraftAnswer(getAnswerForQuestion(activeQuestion.id));
   }, [activeQuestion]);
+
+  useEffect(() => {
+    if (!activeQuestion || isChatComplete) {
+      setIsAiTyping(false);
+      return;
+    }
+
+    setIsAiTyping(true);
+    const timer = window.setTimeout(() => setIsAiTyping(false), 450);
+    return () => window.clearTimeout(timer);
+  }, [activeQuestion, isChatComplete]);
 
   useEffect(() => {
     const loadBusinessProfile = async () => {
@@ -862,7 +877,21 @@ export default function PlannerPage() {
     }
   };
 
-  const isChatComplete = chatStepIndex >= visibleQuestions.length;
+  const jumpToQuestion = (questionId: ChatQuestionId) => {
+    const nextIndex = visibleQuestions.findIndex(question => question.id === questionId);
+    if (nextIndex === -1) return;
+    setIsReviewConfirmed(false);
+    setError(null);
+    setChatStepIndex(nextIndex);
+  };
+
+  const submitAnswerValue = (value: string) => {
+    if (!activeQuestion) return;
+    setDraftAnswer(value);
+    setError(null);
+    setAnswerForQuestion(activeQuestion.id, value);
+    setChatStepIndex(prev => Math.min(prev + 1, visibleQuestions.length));
+  };
 
   const submitCurrentAnswer = () => {
     if (!activeQuestion) return;
@@ -878,9 +907,7 @@ export default function PlannerPage() {
       return;
     }
 
-    setError(null);
-    setAnswerForQuestion(activeQuestion.id, value);
-    setChatStepIndex(prev => Math.min(prev + 1, visibleQuestions.length));
+    submitAnswerValue(value);
   };
 
   const goBackQuestion = () => {
@@ -896,6 +923,7 @@ export default function PlannerPage() {
 
   const editAnswers = () => {
     setError(null);
+    setPlan(null);
     setIsReviewConfirmed(false);
     setChatStepIndex(Math.max(0, visibleQuestions.length - 1));
   };
@@ -928,178 +956,258 @@ export default function PlannerPage() {
     );
   };
 
+  const workflowStages: Array<{ id: WorkflowStage; label: string; description: string }> = [
+    { id: 'intake', label: '1. Intake', description: 'Answer the planning chat' },
+    { id: 'review', label: '2. Plan Review', description: 'Inspect locations and shot flow' },
+    { id: 'apply', label: '3. Apply to Project', description: 'Create your project and shot list' },
+  ];
+
   return (
     <div className="space-y-6">
       <Card>
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h2 className="text-xl font-semibold text-gray-900">Planner workflow</h2>
+            <p className="text-sm text-gray-600">Move from intake to review, then apply the approved plan to your project workspace.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {workflowStages.map(stage => {
+              const isActive = workflowStage === stage.id;
+              const isAvailable =
+                stage.id === 'intake' ||
+                (stage.id === 'review' && !!plan) ||
+                (stage.id === 'apply' && !!plan);
+
+              return (
+                <div
+                  key={stage.id}
+                  className={`rounded-2xl border px-3 py-2 text-sm ${
+                    isActive
+                      ? 'border-blue-600 bg-blue-50 text-blue-700'
+                      : isAvailable
+                        ? 'border-gray-200 bg-white text-gray-700'
+                        : 'border-gray-200 bg-gray-50 text-gray-400'
+                  }`}
+                >
+                  <p className="font-semibold">{stage.label}</p>
+                  <p className="text-xs">{stage.description}</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </Card>
+
+      <Card>
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <h3 className="text-xl font-semibold text-gray-900">AI Planning Chat</h3>
-            <p className="text-sm text-gray-600">Answer a quick chat questionnaire, then generate a full plan.</p>
+            <h3 className="text-xl font-semibold text-gray-900">
+              {workflowStage === 'intake' ? 'AI Planning Chat' : 'Intake Summary'}
+            </h3>
+            <p className="text-sm text-gray-600">
+              {workflowStage === 'intake'
+                ? 'Answer a quick chat questionnaire, then generate a full plan.'
+                : 'Your approved intake answers are summarized here for quick edits before regenerating.'}
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2 text-xs">
+              <span className="rounded-full bg-indigo-50 px-2 py-1 font-medium text-indigo-700">
+                Session: {shootType}
+              </span>
+              <span className="rounded-full bg-emerald-50 px-2 py-1 font-medium text-emerald-700">
+                Mode: {locationMode === 'use-provided' ? 'Using provided locations' : 'Find locations'}
+              </span>
+              {locationMode === 'find-locations' && (city || businessProfile?.baseLocation || businessProfile?.zipCode) && (
+                <span className="rounded-full bg-gray-100 px-2 py-1 font-medium text-gray-700">
+                  Area: {city || businessProfile?.baseLocation || businessProfile?.zipCode}
+                </span>
+              )}
+            </div>
           </div>
-          <Button
-            isLoading={isGenerating}
-            onClick={() => void generatePlan()}
-            disabled={!isChatComplete || !isReviewConfirmed || isGenerating}
-          >
-            {isGenerating ? 'Generating...' : 'Generate Full Plan'}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {workflowStage !== 'intake' && (
+              <Button variant="secondary" onClick={() => editAnswers()}>
+                Reopen intake
+              </Button>
+            )}
+            <Button
+              isLoading={isGenerating}
+              onClick={() => void generatePlan()}
+              disabled={!isChatComplete || !isReviewConfirmed || isGenerating}
+            >
+              {isGenerating ? 'Generating...' : plan ? 'Regenerate Plan' : 'Generate Full Plan'}
+            </Button>
+          </div>
         </div>
 
         <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-          <div className="mb-3 flex items-center justify-between text-xs text-gray-600">
-            <span>Step {Math.min(chatStepIndex + 1, visibleQuestions.length)} of {visibleQuestions.length}</span>
-            <span>{Math.round((Math.min(chatStepIndex, visibleQuestions.length) / Math.max(visibleQuestions.length, 1)) * 100)}% complete</span>
-          </div>
-
-          <progress
-            className="mb-4 h-2 w-full overflow-hidden rounded [&::-webkit-progress-bar]:rounded [&::-webkit-progress-bar]:bg-gray-200 [&::-webkit-progress-value]:rounded [&::-webkit-progress-value]:bg-blue-600"
-            value={Math.min(chatStepIndex, visibleQuestions.length)}
-            max={Math.max(visibleQuestions.length, 1)}
-          />
-
-          {visibleQuestions.slice(0, chatStepIndex).map(question => (
-            <div key={`answered-${question.id}`} className="mb-4 space-y-2">
-              <div className="mr-12 rounded-2xl rounded-bl-md bg-white px-3 py-2 text-sm text-gray-800 shadow-sm">
-                {getAdaptivePrompt(question, sessionCategory)}
-              </div>
-              <div className="ml-12 rounded-2xl rounded-br-md bg-blue-600 px-3 py-2 text-sm text-white shadow-sm">
-                {getAnswerForQuestion(question.id) || '—'}
-              </div>
-            </div>
-          ))}
-
-          {!isChatComplete && activeQuestion && (
-            <div className="space-y-2">
-              <div className="mr-12 rounded-2xl rounded-bl-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm">
-                {activePrompt}
+          {workflowStage === 'intake' ? (
+            <>
+              <div className="mb-3 flex items-center justify-between text-xs text-gray-600">
+                <span>Step {Math.min(chatStepIndex + 1, visibleQuestions.length)} of {visibleQuestions.length}</span>
+                <span>{Math.round((Math.min(chatStepIndex, visibleQuestions.length) / Math.max(visibleQuestions.length, 1)) * 100)}% complete</span>
               </div>
 
-              {activeQuestion.options && activeQuestion.options.length > 0 ? (
-                <div className="ml-12 mt-2 flex flex-wrap gap-2">
-                  {activeQuestion.options.map(option => (
-                    <button
-                      key={`${activeQuestion.id}-${option}`}
-                      type="button"
-                      onClick={() => {
-                        setDraftAnswer(option);
-                        setError(null);
-                      }}
-                      className={`rounded-full border px-3 py-1.5 text-sm ${
-                        draftAnswer === option
-                          ? 'border-blue-600 bg-blue-50 text-blue-700'
-                          : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
-                      }`}
-                    >
-                      {option}
-                    </button>
-                  ))}
+              <progress
+                className="mb-4 h-2 w-full overflow-hidden rounded [&::-webkit-progress-bar]:rounded [&::-webkit-progress-bar]:bg-gray-200 [&::-webkit-progress-value]:rounded [&::-webkit-progress-value]:bg-blue-600"
+                value={Math.min(chatStepIndex, visibleQuestions.length)}
+                max={Math.max(visibleQuestions.length, 1)}
+              />
+
+              {visibleQuestions.slice(0, chatStepIndex).map(question => (
+                <div key={`answered-${question.id}`} className="mb-4 space-y-2">
+                  <div className="mr-12 rounded-2xl rounded-bl-md bg-white px-3 py-2 text-sm text-gray-800 shadow-sm">
+                    {getAdaptivePrompt(question, sessionCategory)}
+                  </div>
+                  <div className="ml-12 rounded-2xl rounded-br-md bg-blue-600 px-3 py-2 text-sm text-white shadow-sm">
+                    {getAnswerForQuestion(question.id) || '—'}
+                  </div>
                 </div>
-              ) : (
-                <div className="ml-12">
-                  {activeProfileTemplates.length > 0 && (
-                    <div className="mb-2">
-                      <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-gray-500">From your business profile</p>
-                      <div className="flex flex-wrap gap-2">
-                        {activeProfileTemplates.map(option => (
-                          <button
-                            key={`${activeQuestion.id}-profile-${option}`}
-                            type="button"
-                            onClick={() => {
-                              setDraftAnswer(option);
-                              setError(null);
-                            }}
-                            className={`rounded-full border px-2.5 py-1 text-xs ${
-                              draftAnswer === option
-                                ? 'border-emerald-600 bg-emerald-50 text-emerald-700'
-                                : 'border-emerald-200 bg-white text-emerald-700 hover:border-emerald-300'
-                            }`}
-                          >
-                            {option}
-                          </button>
-                        ))}
-                      </div>
+              ))}
+
+              {!isChatComplete && activeQuestion && (
+                <div className="space-y-2">
+                  {isAiTyping && (
+                    <div className="mr-12 inline-flex items-center gap-1 rounded-2xl rounded-bl-md bg-white px-3 py-2 text-xs text-gray-500 shadow-sm">
+                      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-gray-400" />
+                      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-gray-400 [animation-delay:120ms]" />
+                      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-gray-400 [animation-delay:240ms]" />
+                      Planner is preparing the next question...
                     </div>
                   )}
 
-                  {activeQuickReplies.length > 0 && (
-                    <div className="mb-2 flex flex-wrap gap-2">
-                      {activeQuickReplies.map(option => (
+                  {!isAiTyping && (
+                    <div className="mr-12 rounded-2xl rounded-bl-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm">
+                      {activePrompt}
+                    </div>
+                  )}
+
+                  {activeQuestion.options && activeQuestion.options.length > 0 ? (
+                    <div className="ml-12 mt-2 flex flex-wrap gap-2">
+                      {activeQuestion.options.map(option => (
                         <button
-                          key={`${activeQuestion.id}-quick-${option}`}
+                          key={`${activeQuestion.id}-${option}`}
                           type="button"
-                          onClick={() => {
-                            setDraftAnswer(option);
-                            setError(null);
-                          }}
-                          className={`rounded-full border px-2.5 py-1 text-xs ${
-                            draftAnswer === option
-                              ? 'border-blue-600 bg-blue-50 text-blue-700'
-                              : 'border-blue-200 bg-white text-blue-700 hover:border-blue-300'
-                          }`}
+                          onClick={() => submitAnswerValue(option)}
+                          className="rounded-full border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:border-blue-400 hover:text-blue-700"
                         >
                           {option}
                         </button>
                       ))}
                     </div>
+                  ) : (
+                    <div className="ml-12">
+                      {activeProfileTemplates.length > 0 && (
+                        <div className="mb-2">
+                          <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-gray-500">From your business profile</p>
+                          <div className="flex flex-wrap gap-2">
+                            {activeProfileTemplates.map(option => (
+                              <button
+                                key={`${activeQuestion.id}-profile-${option}`}
+                                type="button"
+                                onClick={() => submitAnswerValue(option)}
+                                className="rounded-full border border-emerald-200 bg-white px-2.5 py-1 text-xs text-emerald-700 hover:border-emerald-300"
+                              >
+                                {option}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {activeQuickReplies.length > 0 && (
+                        <div className="mb-2 flex flex-wrap gap-2">
+                          {activeQuickReplies.map(option => (
+                            <button
+                              key={`${activeQuestion.id}-quick-${option}`}
+                              type="button"
+                              onClick={() => submitAnswerValue(option)}
+                              className="rounded-full border border-blue-200 bg-white px-2.5 py-1 text-xs text-blue-700 hover:border-blue-300"
+                            >
+                              {option}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      <div className="sticky bottom-0 rounded-2xl bg-gray-50 pb-1 pt-1">
+                        <textarea
+                          className="mt-2 min-h-20 w-full rounded-2xl rounded-br-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm"
+                          value={draftAnswer}
+                          onChange={e => setDraftAnswer(e.target.value)}
+                          placeholder={activePlaceholder}
+                          onKeyDown={e => {
+                            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                              e.preventDefault();
+                              submitCurrentAnswer();
+                            }
+                          }}
+                        />
+                        <p className="mt-1 text-[11px] text-gray-500">Tip: press Cmd/Ctrl + Enter to continue quickly.</p>
+                        <div className="mt-3 flex items-center gap-2">
+                          <Button variant="secondary" onClick={goBackQuestion} disabled={chatStepIndex === 0}>
+                            Back
+                          </Button>
+                          <Button onClick={submitCurrentAnswer}>
+                            {chatStepIndex === visibleQuestions.length - 1 ? 'Finish intake' : 'Continue'}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
                   )}
-                  <textarea
-                    className="mt-2 min-h-20 w-full rounded-2xl rounded-br-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm"
-                    value={draftAnswer}
-                    onChange={e => setDraftAnswer(e.target.value)}
-                    placeholder={activePlaceholder}
-                    onKeyDown={e => {
-                      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-                        e.preventDefault();
-                        submitCurrentAnswer();
-                      }
-                    }}
-                  />
-                  <p className="mt-1 text-[11px] text-gray-500">Tip: press Cmd/Ctrl + Enter to continue quickly.</p>
                 </div>
               )}
 
-              <div className="mt-3 flex items-center gap-2">
-                <Button variant="secondary" onClick={goBackQuestion} disabled={chatStepIndex === 0}>
-                  Back
-                </Button>
-                <Button onClick={submitCurrentAnswer}>
-                  {chatStepIndex === visibleQuestions.length - 1 ? 'Finish intake' : 'Continue'}
-                </Button>
-              </div>
-            </div>
-          )}
+              {isChatComplete && (
+                <div className="space-y-3 rounded border border-green-200 bg-green-50 p-3 text-sm text-green-900">
+                  <p className="font-semibold">Intake complete. Review before generating.</p>
+                  <div className="space-y-2">
+                    {visibleQuestions.map(question => {
+                      const answer = getAnswerForQuestion(question.id);
+                      if (!answer && !question.required) return null;
 
-          {isChatComplete && (
-            <div className="space-y-3 rounded border border-green-200 bg-green-50 p-3 text-sm text-green-900">
-              <p className="font-semibold">Intake complete. Review before generating.</p>
+                      return (
+                        <div
+                          key={`summary-${question.id}`}
+                          className="flex flex-col gap-2 rounded-lg border border-green-200 bg-white/70 px-3 py-2 md:flex-row md:items-start md:justify-between"
+                        >
+                          <div>
+                            <p className="text-xs font-semibold uppercase tracking-wide text-green-700">
+                              {getAdaptivePrompt(question, sessionCategory)}
+                            </p>
+                            <p className="mt-1 text-sm text-gray-800">{answer || '—'}</p>
+                          </div>
+                          <Button variant="ghost" onClick={() => jumpToQuestion(question.id)}>
+                            Edit
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="secondary" onClick={editAnswers}>Edit answers</Button>
+                    <Button onClick={reviewAnswers} disabled={isReviewConfirmed}>
+                      {isReviewConfirmed ? 'Review confirmed' : 'Looks good — unlock generate'}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="space-y-3 rounded border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+              <p className="font-semibold">Intake is locked for review.</p>
               <div className="grid gap-2 md:grid-cols-2">
-                <p><span className="font-medium">Shoot type:</span> {shootType}</p>
-                <p><span className="font-medium">Location mode:</span> {locationMode === 'use-provided' ? 'Using provided locations' : 'Find locations for me'}</p>
-                {locationMode === 'find-locations' ? (
-                  <p><span className="font-medium">City:</span> {city || 'Account fallback'}</p>
-                ) : (
-                  <p className="md:col-span-2"><span className="font-medium">Provided locations:</span> {providedLocations || 'None provided'}</p>
-                )}
-                <p><span className="font-medium">Duration:</span> {duration}</p>
-                <p><span className="font-medium">Mood:</span> {mood}</p>
-                {sessionCategory === 'family' && familyPacing && (
-                  <p className="md:col-span-2"><span className="font-medium">Family pacing:</span> {familyPacing}</p>
-                )}
-                {sessionCategory === 'engagement' && engagementStory && (
-                  <p className="md:col-span-2"><span className="font-medium">Couple story:</span> {engagementStory}</p>
-                )}
-                {sessionCategory === 'portrait' && brandingGoals && (
-                  <p className="md:col-span-2"><span className="font-medium">Brand goals:</span> {brandingGoals}</p>
-                )}
-                {sessionCategory === 'event' && eventPriorities && (
-                  <p className="md:col-span-2"><span className="font-medium">Event priorities:</span> {eventPriorities}</p>
-                )}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button variant="secondary" onClick={editAnswers}>Edit answers</Button>
-                <Button onClick={reviewAnswers} disabled={isReviewConfirmed}>
-                  {isReviewConfirmed ? 'Review confirmed' : 'Looks good — unlock generate'}
-                </Button>
+                {visibleQuestions.map(question => {
+                  const answer = getAnswerForQuestion(question.id);
+                  if (!answer && !question.required) return null;
+
+                  return (
+                    <div key={`locked-${question.id}`} className="rounded-lg bg-white/80 px-3 py-2">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-blue-700">
+                        {getAdaptivePrompt(question, sessionCategory)}
+                      </p>
+                      <p className="mt-1 text-sm text-gray-800">{answer || '—'}</p>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -1117,7 +1225,7 @@ export default function PlannerPage() {
         {error && <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
       </Card>
 
-      {plan && (
+      {plan && workflowStage !== 'intake' && (
         <>
           <Card>
             <div className="mb-3 flex items-center justify-between">
@@ -1125,8 +1233,17 @@ export default function PlannerPage() {
                 <h3 className="text-lg font-semibold text-gray-900">{plan.projectTitle}</h3>
                 <p className="text-sm text-gray-600">{plan.creativeDirection}</p>
                 <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                  <span className={`rounded-full px-2 py-1 font-medium ${workflowStage === 'apply' ? 'bg-violet-50 text-violet-700' : 'bg-blue-50 text-blue-700'}`}>
+                    Current stage: {workflowStage === 'apply' ? 'Apply to Project' : 'Plan Review'}
+                  </span>
                   <span className="rounded-full bg-blue-50 px-2 py-1 font-medium text-blue-700">
                     Location source: {plan.planningDiagnostics?.locationSource || 'unknown'}
+                  </span>
+                  <span className="rounded-full bg-indigo-50 px-2 py-1 font-medium text-indigo-700">
+                    Session: {shootType}
+                  </span>
+                  <span className="rounded-full bg-emerald-50 px-2 py-1 font-medium text-emerald-700">
+                    Mode: {locationMode === 'use-provided' ? 'Using provided locations' : 'Find locations'}
                   </span>
                   <span className="rounded-full bg-gray-100 px-2 py-1 font-medium text-gray-700">
                     Candidates: {plan.planningDiagnostics?.locationCandidateCount ?? 0}
