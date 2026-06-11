@@ -1,10 +1,10 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { tokenUtils } from '@/lib/auth';
-import Link from 'next/link';
 import type { PlannerAnalyticsSummary } from '@/app/api/planner/analytics/route';
 
 interface ProjectItem {
@@ -36,10 +36,10 @@ function getAuthHeader() {
 }
 
 function formatDate(dateString?: string | null) {
-  if (!dateString) return 'Not scheduled';
+  if (!dateString) return 'Unscheduled';
 
   const parsed = new Date(dateString);
-  if (Number.isNaN(parsed.getTime())) return 'Not scheduled';
+  if (Number.isNaN(parsed.getTime())) return 'Unscheduled';
 
   return parsed.toLocaleDateString(undefined, {
     month: 'short',
@@ -51,28 +51,28 @@ function formatDate(dateString?: string | null) {
 function getProjectStatusClass(status: ProjectItem['status']) {
   switch (status) {
     case 'completed':
-      return 'bg-green-100 text-green-700';
+      return 'border-emerald-200 bg-emerald-50 text-emerald-700';
     case 'in-progress':
-      return 'bg-blue-100 text-blue-700';
+      return 'border-blue-200 bg-blue-50 text-blue-700';
     case 'planning':
-      return 'bg-yellow-100 text-yellow-800';
+      return 'border-amber-200 bg-amber-50 text-amber-800';
     case 'archived':
-      return 'bg-gray-200 text-gray-700';
+      return 'border-gray-200 bg-gray-100 text-gray-700';
     default:
-      return 'bg-slate-100 text-slate-700';
+      return 'border-slate-200 bg-slate-50 text-slate-700';
   }
 }
 
 function getShotStatusClass(status: ShotItem['status']) {
   switch (status) {
     case 'approved':
-      return 'bg-green-100 text-green-700';
+      return 'border-emerald-200 bg-emerald-50 text-emerald-700';
     case 'taken':
-      return 'bg-blue-100 text-blue-700';
+      return 'border-blue-200 bg-blue-50 text-blue-700';
     case 'rejected':
-      return 'bg-red-100 text-red-700';
+      return 'border-red-200 bg-red-50 text-red-700';
     default:
-      return 'bg-yellow-100 text-yellow-800';
+      return 'border-amber-200 bg-amber-50 text-amber-800';
   }
 }
 
@@ -143,11 +143,6 @@ export default function Dashboard() {
     [projects]
   );
 
-  const completedProjects = useMemo(
-    () => projects.filter(project => project.status === 'completed').length,
-    [projects]
-  );
-
   const recentProjects = useMemo(
     () => [...projects].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 5),
     [projects]
@@ -171,104 +166,222 @@ export default function Dashboard() {
     };
   }, [shots]);
 
+  const planningSignals = [
+    {
+      label: 'AI plans generated',
+      value: isLoading ? '-' : String(plannerStats?.generate.total ?? 0),
+      detail: plannerStats?.generate.total ? `${plannerStats.generate.successRate}% success rate` : 'Ready for the next session',
+      href: '/dashboard/planner',
+    },
+    {
+      label: 'Active productions',
+      value: isLoading ? '-' : String(activeProjects),
+      detail: `${projects.length} total project${projects.length === 1 ? '' : 's'}`,
+      href: '/dashboard/projects',
+    },
+    {
+      label: 'Coverage planned',
+      value: isLoading ? '-' : String(shots.length),
+      detail: `${shotStatusBreakdown.approved} approved frame${shotStatusBreakdown.approved === 1 ? '' : 's'}`,
+      href: '/dashboard/shots',
+    },
+    {
+      label: 'Client guides',
+      value: isLoading ? '-' : String(plannerStats?.shareLinksCreated ?? 0),
+      detail: plannerStats?.shareLinksCreated ? 'Delivered from planner exports' : 'No guide links yet',
+      href: '/dashboard/shot-board',
+    },
+  ];
+
+  const workflowCards = [
+    {
+      title: 'Smart AI Engine',
+      metric: plannerStats?.refine.total ?? 0,
+      metricLabel: 'refinement runs',
+      body: 'Generate session timelines, composition ideas, and shot lists from the session variables that actually shape the day.',
+      href: '/dashboard/planner',
+      cta: 'Open planner',
+    },
+    {
+      title: 'Micro-logistics',
+      metric: plannerStats?.routesOptimized ?? 0,
+      metricLabel: 'routes optimized',
+      body: 'Turn location ideas into usable arrival plans with parking, restrooms, walking burden, and exact shoot order.',
+      href: '/dashboard/locations',
+      cta: 'Review locations',
+    },
+    {
+      title: 'Sun and weather',
+      metric: plannerStats?.generate.success ?? 0,
+      metricLabel: 'telemetry-ready plans',
+      body: 'Use forecast confidence, golden hour windows, and route timing before the client ever leaves home.',
+      href: '/dashboard/calendar',
+      cta: 'Check calendar',
+    },
+  ];
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-        <Card>
-          <div className="text-center">
-            <div className="text-4xl font-bold text-blue-600">{isLoading ? '—' : activeProjects}</div>
-            <p className="text-gray-600 mt-2">Active Projects</p>
+      <section className="grid gap-5 xl:grid-cols-[1.5fr_0.9fr]">
+        <div className="rounded-lg border border-[#d8d2c8] bg-[#1f2933] p-5 text-white shadow-sm md:p-6">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-3xl">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#c6b9a5]">
+                Pre-production workspace
+              </p>
+              <h1 className="mt-3 text-3xl font-semibold tracking-normal md:text-4xl">
+                Plan the shoot before the day starts moving.
+              </h1>
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-[#d1d5db]">
+                One workspace for AI timelines, exact location logistics, sun windows, weather risk, and client-ready delivery.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Link href="/dashboard/planner">
+                <Button className="bg-white text-[#1f2933] hover:bg-[#f3f4f6]">Start plan</Button>
+              </Link>
+              <Link href="/dashboard/shot-board">
+                <Button variant="ghost" className="border border-white/20 text-white hover:bg-white/10">
+                  Build guide
+                </Button>
+              </Link>
+            </div>
           </div>
-        </Card>
 
-        <Card>
-          <div className="text-center">
-            <div className="text-4xl font-bold text-green-600">{isLoading ? '—' : shots.length}</div>
-            <p className="text-gray-600 mt-2">Total Shots Planned</p>
+          <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {planningSignals.map(signal => (
+              <Link
+                key={signal.label}
+                href={signal.href}
+                className="rounded-lg border border-white/10 bg-white/8 p-4 transition-colors hover:bg-white/12"
+              >
+                <p className="text-xs font-medium text-[#c6b9a5]">{signal.label}</p>
+                <p className="mt-2 text-3xl font-semibold tracking-normal text-white">{signal.value}</p>
+                <p className="mt-1 text-xs text-[#d1d5db]">{signal.detail}</p>
+              </Link>
+            ))}
           </div>
-        </Card>
+        </div>
 
-        <Card>
-          <div className="text-center">
-            <div className="text-4xl font-bold text-purple-600">{isLoading ? '—' : completedProjects}</div>
-            <p className="text-gray-600 mt-2">Completed Projects</p>
+        <Card className="border border-[#d8d2c8] shadow-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7c6f64]">Next shoot queue</p>
+              <h2 className="mt-2 text-xl font-semibold text-[#1f2933]">Upcoming coverage</h2>
+            </div>
+            <Link href="/dashboard/shots">
+              <Button variant="ghost" size="sm">View all</Button>
+            </Link>
           </div>
-        </Card>
-      </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Card>
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Projects</h3>
-          {isLoading ? (
-            <p className="text-gray-600">Loading projects...</p>
-          ) : recentProjects.length === 0 ? (
-            <p className="text-gray-600">No projects yet. Create your first project to get started.</p>
-          ) : (
-            <div className="space-y-3">
-              {recentProjects.map(project => (
-                <div key={project.id} className="flex items-center justify-between border-b pb-3 last:border-b-0">
-                  <div>
-                    <p className="font-medium text-gray-800">{project.title}</p>
-                    <p className="text-sm text-gray-500">{formatDate(project.created_at)}</p>
+          <div className="mt-4 space-y-3">
+            {isLoading ? (
+              Array.from({ length: 3 }).map((_, index) => (
+                <div key={index} className="h-16 animate-pulse rounded-lg bg-gray-100" />
+              ))
+            ) : upcomingShots.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-[#d8d2c8] bg-[#faf9f6] p-4 text-sm text-[#5f6b76]">
+                No scheduled shots yet. Add planned times to see the next production queue.
+              </div>
+            ) : (
+              upcomingShots.slice(0, 4).map(shot => (
+                <div key={shot.id} className="rounded-lg border border-[#e4ded5] bg-[#faf9f6] p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-medium text-[#1f2933]">{shot.title}</p>
+                      <p className="mt-1 text-xs text-[#5f6b76]">{shot.project_title ?? 'Unknown project'}</p>
+                    </div>
+                    <span className={`shrink-0 rounded-md border px-2 py-1 text-xs font-medium ${getShotStatusClass(shot.status)}`}>
+                      {shot.status}
+                    </span>
                   </div>
-                  <span className={`rounded-full px-3 py-1 text-xs font-medium ${getProjectStatusClass(project.status)}`}>
+                  <p className="mt-2 text-xs font-medium text-[#7c6f64]">{formatDate(shot.planned_time)}</p>
+                </div>
+              ))
+            )}
+          </div>
+        </Card>
+      </section>
+
+      <section className="grid gap-5 lg:grid-cols-3">
+        {workflowCards.map(card => (
+          <Card key={card.title} className="border border-[#d8d2c8] shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7c6f64]">{card.title}</p>
+            <div className="mt-4 flex items-end gap-2">
+              <p className="text-4xl font-semibold tracking-normal text-[#1f2933]">
+                {isLoading ? '-' : card.metric}
+              </p>
+              <p className="pb-1 text-sm text-[#5f6b76]">{card.metricLabel}</p>
+            </div>
+            <p className="mt-4 min-h-18 text-sm leading-6 text-[#5f6b76]">{card.body}</p>
+            <Link href={card.href}>
+              <Button variant="secondary" className="mt-5 w-full bg-[#ebe5db] hover:bg-[#ded8ce]">
+                {card.cta}
+              </Button>
+            </Link>
+          </Card>
+        ))}
+      </section>
+
+      <section className="grid gap-5 xl:grid-cols-[1fr_1fr]">
+        <Card className="border border-[#d8d2c8] shadow-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7c6f64]">Project pipeline</p>
+              <h2 className="mt-2 text-xl font-semibold text-[#1f2933]">Recent client work</h2>
+            </div>
+            <Link href="/dashboard/projects">
+              <Button variant="ghost" size="sm">Manage</Button>
+            </Link>
+          </div>
+
+          <div className="mt-4 space-y-3">
+            {isLoading ? (
+              Array.from({ length: 4 }).map((_, index) => (
+                <div key={index} className="h-14 animate-pulse rounded-lg bg-gray-100" />
+              ))
+            ) : recentProjects.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-[#d8d2c8] bg-[#faf9f6] p-4 text-sm text-[#5f6b76]">
+                No projects yet. Start in the planner or create a client project.
+              </div>
+            ) : (
+              recentProjects.map(project => (
+                <div key={project.id} className="flex items-center justify-between gap-3 rounded-lg border border-[#e4ded5] bg-white p-3">
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-[#1f2933]">{project.title}</p>
+                    <p className="mt-1 text-xs text-[#5f6b76]">{formatDate(project.created_at)}</p>
+                  </div>
+                  <span className={`shrink-0 rounded-md border px-2 py-1 text-xs font-medium ${getProjectStatusClass(project.status)}`}>
                     {project.status}
                   </span>
                 </div>
-              ))}
-            </div>
-          )}
-          <Link href="/dashboard/projects">
-            <Button variant="ghost" className="mt-4 w-full">
-              View All Projects →
-            </Button>
-          </Link>
-        </Card>
-
-        <Card>
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
-          <div className="space-y-3">
-            <Link href="/dashboard/projects">
-              <Button variant="primary" className="w-full text-left">
-                ✨ Create New Project
-              </Button>
-            </Link>
-            <Link href="/dashboard/projects">
-              <Button variant="secondary" className="w-full text-left">
-                📁 Manage Projects
-              </Button>
-            </Link>
-            <Link href="/dashboard/shots">
-              <Button variant="secondary" className="w-full text-left">
-                📸 Plan New Shot
-              </Button>
-            </Link>
-            <Link href="/dashboard/shot-board">
-              <Button variant="secondary" className="w-full text-left">
-                🖨️ Export Shot Board
-              </Button>
-            </Link>
-            <Link href="/dashboard/settings">
-              <Button variant="secondary" className="w-full text-left">
-                ⚙️ Settings
-              </Button>
-            </Link>
+              ))
+            )}
           </div>
         </Card>
 
-        <Card>
-          <h3 className="mb-4 text-lg font-semibold text-gray-900">Shot Status Overview</h3>
-          <div className="space-y-4">
+        <Card className="border border-[#d8d2c8] shadow-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7c6f64]">Coverage readiness</p>
+              <h2 className="mt-2 text-xl font-semibold text-[#1f2933]">Shot status</h2>
+            </div>
+            <Link href="/dashboard/shots">
+              <Button variant="ghost" size="sm">Edit shots</Button>
+            </Link>
+          </div>
+
+          <div className="mt-5 space-y-4">
             {([
-              ['planned', shotStatusBreakdown.planned, 'bg-yellow-500'],
+              ['planned', shotStatusBreakdown.planned, 'bg-amber-500'],
               ['taken', shotStatusBreakdown.taken, 'bg-blue-500'],
-              ['approved', shotStatusBreakdown.approved, 'bg-green-500'],
+              ['approved', shotStatusBreakdown.approved, 'bg-emerald-500'],
               ['rejected', shotStatusBreakdown.rejected, 'bg-red-500'],
             ] as const).map(([label, count, barClass]) => {
               const widthClass = getProgressWidthClass(count, shots.length);
@@ -276,112 +389,29 @@ export default function Dashboard() {
               return (
                 <div key={label}>
                   <div className="mb-1 flex items-center justify-between text-sm">
-                    <span className="capitalize text-gray-700">{label}</span>
-                    <span className="text-gray-500">{count}</span>
+                    <span className="capitalize text-[#1f2933]">{label}</span>
+                    <span className="text-[#5f6b76]">{isLoading ? '-' : count}</span>
                   </div>
-                  <div className="h-2 rounded-full bg-gray-200">
+                  <div className="h-2 overflow-hidden rounded-full bg-[#ebe5db]">
                     <div className={`h-2 rounded-full ${barClass} ${widthClass}`} />
                   </div>
                 </div>
               );
             })}
           </div>
-        </Card>
-      </div>
 
-      {(isLoading || plannerStats) && (
-        <Card>
-          <h3 className="mb-4 text-lg font-semibold text-gray-900">Planner Activity</h3>
-          {isLoading ? (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="animate-pulse rounded-xl bg-gray-100 p-4 h-20" />
-              ))}
-            </div>
-          ) : plannerStats ? (
-            <>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-                  <p className="text-2xl font-bold text-gray-900">{plannerStats.generate.total}</p>
-                  <p className="mt-1 text-sm text-gray-600">Plans Generated</p>
-                  {plannerStats.generate.total > 0 && (
-                    <p className="mt-1 text-xs font-medium text-green-600">{plannerStats.generate.successRate}% success</p>
-                  )}
-                </div>
-                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-                  <p className="text-2xl font-bold text-gray-900">{plannerStats.refine.total}</p>
-                  <p className="mt-1 text-sm text-gray-600">Refines Run</p>
-                  {plannerStats.refine.failed > 0 && (
-                    <p className="mt-1 text-xs text-red-500">{plannerStats.refine.failed} failed</p>
-                  )}
-                </div>
-                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-                  <p className="text-2xl font-bold text-gray-900">{plannerStats.apply.success}</p>
-                  <p className="mt-1 text-sm text-gray-600">Projects Applied</p>
-                  {plannerStats.apply.failed > 0 && (
-                    <p className="mt-1 text-xs text-red-500">{plannerStats.apply.failed} failed</p>
-                  )}
-                </div>
-                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-                  <p className="text-2xl font-bold text-gray-900">{plannerStats.shareLinksCreated}</p>
-                  <p className="mt-1 text-sm text-gray-600">Share Links</p>
-                </div>
-              </div>
-              {(plannerStats.draftsResumed > 0 || plannerStats.routesOptimized > 0) && (
-                <div className="mt-3 flex gap-4 text-sm text-gray-500">
-                  {plannerStats.draftsResumed > 0 && (
-                    <span>{plannerStats.draftsResumed} draft{plannerStats.draftsResumed !== 1 ? 's' : ''} resumed</span>
-                  )}
-                  {plannerStats.routesOptimized > 0 && (
-                    <span>{plannerStats.routesOptimized} route{plannerStats.routesOptimized !== 1 ? 's' : ''} optimized</span>
-                  )}
-                </div>
-              )}
-              <Link href="/dashboard/planner">
-                <Button variant="ghost" className="mt-4 w-full">
-                  Open AI Planner →
-                </Button>
-              </Link>
-            </>
-          ) : null}
-        </Card>
-      )}
-
-      <Card>
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Upcoming Shoots</h3>
-        {isLoading ? (
-          <p className="text-gray-600">Loading shots...</p>
-        ) : upcomingShots.length === 0 ? (
-          <p className="text-gray-600">No upcoming shots yet. Add planned times to your shots to see them here.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b">
-                  <th className="px-4 py-2 text-left font-semibold">Shot</th>
-                  <th className="px-4 py-2 text-left font-semibold">Project</th>
-                  <th className="px-4 py-2 text-left font-semibold">Date</th>
-                  <th className="px-4 py-2 text-left font-semibold">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {upcomingShots.map(shot => (
-                  <tr key={shot.id} className="border-b hover:bg-gray-50">
-                    <td className="px-4 py-3 text-gray-800">{shot.title}</td>
-                    <td className="px-4 py-3 text-gray-600">{shot.project_title ?? 'Unknown project'}</td>
-                    <td className="px-4 py-3 text-gray-600">{formatDate(shot.planned_time)}</td>
-                    <td className="px-4 py-3">
-                      <span className={`rounded-full px-3 py-1 text-xs font-medium ${getShotStatusClass(shot.status)}`}>
-                        {shot.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="mt-5 grid grid-cols-2 gap-3">
+            <Link href="/dashboard/planner">
+              <Button className="w-full bg-[#1f2933] hover:bg-[#111827]">Generate plan</Button>
+            </Link>
+            <Link href="/dashboard/shot-board">
+              <Button variant="secondary" className="w-full bg-[#ebe5db] hover:bg-[#ded8ce]">
+                Export board
+              </Button>
+            </Link>
           </div>
-        )}
-      </Card>
+        </Card>
+      </section>
     </div>
   );
 }
