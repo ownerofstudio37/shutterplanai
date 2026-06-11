@@ -37,6 +37,8 @@ type PlannerReviewHeaderCardProps = {
   onToggleEditMode: () => void;
   isCreatingShareLink: boolean;
   onCreateShareLink: () => void;
+  isRevokingShareLink: boolean;
+  onRevokeShareLink: () => void;
   isRefining: boolean;
   onRefinePlan: () => void;
   isApplying: boolean;
@@ -64,6 +66,8 @@ export function PlannerReviewHeaderCard({
   onToggleEditMode,
   isCreatingShareLink,
   onCreateShareLink,
+  isRevokingShareLink,
+  onRevokeShareLink,
   isRefining,
   onRefinePlan,
   isApplying,
@@ -182,6 +186,9 @@ export function PlannerReviewHeaderCard({
           <div className="mt-2 flex flex-col gap-2 md:flex-row md:items-center">
             <input title="Share URL" readOnly value={shareUrl} className="w-full rounded border border-emerald-300 bg-white px-2 py-1 text-xs text-emerald-900" />
             <Button variant="secondary" onClick={onCopyShareLink}>Copy link</Button>
+            <Button variant="ghost" isLoading={isRevokingShareLink} onClick={onRevokeShareLink}>
+              {isRevokingShareLink ? 'Revoking...' : 'Revoke link'}
+            </Button>
           </div>
         </div>
       )}

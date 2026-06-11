@@ -105,7 +105,9 @@ export default function PlannerPage() {
   const [isLoadingIntelligence, setIsLoadingIntelligence] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [isCreatingShareLink, setIsCreatingShareLink] = useState(false);
+  const [isRevokingShareLink, setIsRevokingShareLink] = useState(false);
   const [shareUrl, setShareUrl] = useState<string>('');
+  const [shareToken, setShareToken] = useState<string>('');
   const [shareLinkError, setShareLinkError] = useState<string>('');
 
   const durationMinutes = useMemo(() => parseDurationMinutes(duration), [duration]);
@@ -1326,6 +1328,14 @@ export default function PlannerPage() {
   const createShareLink = async () => {
     if (!plan) return;
 
+    const sharePasswordInput = window.prompt(
+      'Optional: set a password for this share link (leave blank for no password).'
+    );
+
+    if (sharePasswordInput === null) {
+      return;
+    }
+
     setIsCreatingShareLink(true);
     setShareLinkError('');
 
@@ -1345,16 +1355,24 @@ export default function PlannerPage() {
             mood,
             shootDate,
           },
+          sharePassword: sharePasswordInput.trim() || undefined,
         }),
       });
 
-      const result = (await response.json()) as { success?: boolean; shareUrl?: string; error?: string };
+      const result = (await response.json()) as {
+        success?: boolean;
+        shareUrl?: string;
+        shareToken?: string;
+        passwordProtected?: boolean;
+        error?: string;
+      };
       if (!response.ok || !result.success || !result.shareUrl) {
         setShareLinkError(result.error || 'Failed to create share link.');
         return;
       }
 
       setShareUrl(result.shareUrl);
+      setShareToken(result.shareToken || '');
       void trackPlannerEvent('planner_share_link_created');
     } catch {
       setShareLinkError('Failed to create share link.');
@@ -1370,6 +1388,41 @@ export default function PlannerPage() {
       setShareLinkError('');
     } catch {
       setShareLinkError('Could not copy link. Copy manually.');
+    }
+  };
+
+  const revokeShareLink = async () => {
+    if (!shareToken) {
+      setShareLinkError('Cannot revoke: missing share token. Create a new link first.');
+      return;
+    }
+
+    setIsRevokingShareLink(true);
+    setShareLinkError('');
+
+    try {
+      const response = await fetch('/api/planner/export/revoke', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeader(),
+        },
+        body: JSON.stringify({ shareToken }),
+      });
+
+      const result = (await response.json()) as { success?: boolean; error?: string };
+      if (!response.ok || !result.success) {
+        setShareLinkError(result.error || 'Failed to revoke share link.');
+        return;
+      }
+
+      setShareUrl('');
+      setShareToken('');
+      setShareLinkError('');
+    } catch {
+      setShareLinkError('Failed to revoke share link.');
+    } finally {
+      setIsRevokingShareLink(false);
     }
   };
 
@@ -1442,6 +1495,8 @@ export default function PlannerPage() {
             onToggleEditMode={() => setIsEditMode(prev => !prev)}
             isCreatingShareLink={isCreatingShareLink}
             onCreateShareLink={() => void createShareLink()}
+            isRevokingShareLink={isRevokingShareLink}
+            onRevokeShareLink={() => void revokeShareLink()}
             isRefining={isRefining}
             onRefinePlan={() => void refinePlan()}
             isApplying={isApplying}

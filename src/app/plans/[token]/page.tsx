@@ -21,6 +21,8 @@ type SharedPlanResponse = {
     duration?: string;
     mood?: string;
   };
+  requiresPassword?: boolean;
+  error?: string;
 };
 
 export default function SharedPlanPage() {
@@ -30,6 +32,9 @@ export default function SharedPlanPage() {
   const [data, setData] = useState<SharedPlanResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [requiresPassword, setRequiresPassword] = useState(false);
+  const [sharePassword, setSharePassword] = useState('');
+  const [submittedPassword, setSubmittedPassword] = useState('');
 
   useEffect(() => {
     const fetchSharedPlan = async () => {
@@ -38,14 +43,21 @@ export default function SharedPlanPage() {
       setIsLoading(true);
       setError('');
       try {
-        const response = await fetch(`/api/planner/export?token=${encodeURIComponent(token)}`);
-        const result = (await response.json()) as SharedPlanResponse & { error?: string };
+        const params = new URLSearchParams({ token });
+        if (submittedPassword) {
+          params.set('password', submittedPassword);
+        }
+
+        const response = await fetch(`/api/planner/export?${params.toString()}`);
+        const result = (await response.json()) as SharedPlanResponse;
 
         if (!response.ok) {
+          setRequiresPassword(Boolean(result.requiresPassword));
           setError(result.error || 'Shared plan not found or expired.');
           return;
         }
 
+        setRequiresPassword(false);
         setData(result);
       } catch {
         setError('Failed to load shared plan.');
@@ -55,7 +67,7 @@ export default function SharedPlanPage() {
     };
 
     void fetchSharedPlan();
-  }, [token]);
+  }, [submittedPassword, token]);
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 p-6">
@@ -80,6 +92,29 @@ export default function SharedPlanPage() {
       {error && (
         <Card>
           <p className="text-sm text-red-700">{error}</p>
+        </Card>
+      )}
+
+      {requiresPassword && !data?.plan_data && (
+        <Card>
+          <h2 className="text-base font-semibold text-gray-900">This shared plan is password protected</h2>
+          <p className="mt-1 text-sm text-gray-600">Enter the password provided by the photographer.</p>
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+            <input
+              type="password"
+              value={sharePassword}
+              onChange={event => setSharePassword(event.target.value)}
+              placeholder="Share password"
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+            />
+            <button
+              type="button"
+              onClick={() => setSubmittedPassword(sharePassword.trim())}
+              className="rounded bg-gray-900 px-4 py-2 text-sm font-medium text-white"
+            >
+              Unlock
+            </button>
+          </div>
         </Card>
       )}
 
