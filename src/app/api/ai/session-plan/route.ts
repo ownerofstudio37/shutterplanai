@@ -267,6 +267,13 @@ export async function POST(request: NextRequest) {
       ? locationCandidates.slice(0, 6).map(candidate => buildLocationSuggestionFromCandidate(candidate, sessionCategory))
       : finalizedLocations;
 
+    const locationSource =
+      locationCandidates.length > 0
+        ? 'grounded-candidates'
+        : groundedLocations.some(location => location.latitude != null && location.longitude != null)
+          ? 'fallback-geocode'
+          : 'city-fallback';
+
     const candidateNames = new Set(
       groundedLocations.map(candidate => normalizeLocationName(candidate.displayName || candidate.name))
     );
@@ -308,6 +315,12 @@ export async function POST(request: NextRequest) {
           ...plan,
           locationSuggestions: groundedLocations,
           shotList: enrichedShotList,
+          planningDiagnostics: {
+            locationCandidateCount: locationCandidates.length,
+            locationSource,
+            resolvedCity: city || '',
+            usedAccountFallbackCity: !cityInput && !!(businessContext?.baseLocation || businessContext?.zipCode),
+          },
         },
       },
       { status: 200 }

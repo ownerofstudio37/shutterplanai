@@ -51,6 +51,12 @@ interface SessionPlan {
   clientPrepChecklist: string[];
   contingencyPlans: string[];
   locationRefinements?: LocationRefinement[];
+  planningDiagnostics?: {
+    locationCandidateCount: number;
+    locationSource: 'grounded-candidates' | 'fallback-geocode' | 'city-fallback';
+    resolvedCity: string;
+    usedAccountFallbackCity: boolean;
+  };
 }
 
 interface LocationRefinement {
@@ -96,6 +102,33 @@ function sanitizeCoordinates(latitude: unknown, longitude: unknown) {
   return { latitude: lat, longitude: lng };
 }
 
+function parseDurationMinutes(durationValue: string): number {
+  const value = durationValue.toLowerCase().trim();
+  if (!value) return 90;
+
+  const hourMatch = value.match(/(\d+(?:\.\d+)?)\s*(h|hr|hrs|hour|hours)/);
+  const minuteMatch = value.match(/(\d+)\s*(m|min|mins|minute|minutes)/);
+
+  const hours = hourMatch ? Number(hourMatch[1]) : 0;
+  const minutes = minuteMatch ? Number(minuteMatch[1]) : 0;
+  const combined = Math.round(hours * 60 + minutes);
+  if (combined > 0) return Math.max(20, Math.min(240, combined));
+
+  const numericOnly = Number(value.replace(/[^0-9]/g, ''));
+  if (Number.isFinite(numericOnly) && numericOnly > 0) {
+    return Math.max(20, Math.min(240, numericOnly));
+  }
+
+  return 90;
+}
+
+function getExpectedShotRange(durationMinutes: number) {
+  if (durationMinutes <= 35) return { min: 5, max: 8 };
+  if (durationMinutes <= 60) return { min: 7, max: 11 };
+  if (durationMinutes <= 90) return { min: 9, max: 14 };
+  return { min: 12, max: 18 };
+}
+
 export default function PlannerPage() {
   const router = useRouter();
 
@@ -113,6 +146,9 @@ export default function PlannerPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isRefining, setIsRefining] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
+
+  const durationMinutes = useMemo(() => parseDurationMinutes(duration), [duration]);
+  const expectedShotRange = useMemo(() => getExpectedShotRange(durationMinutes), [durationMinutes]);
 
   const locationIndex = useMemo(() => {
     const map = new Map<string, SessionPlanLocation>();
@@ -396,6 +432,15 @@ export default function PlannerPage() {
         <textarea className="mt-3 min-h-20 w-full rounded-lg border border-gray-300 px-4 py-2" value={mustHaveShots} onChange={e => setMustHaveShots(e.target.value)} placeholder="Must-have shots" />
         <textarea className="mt-3 min-h-20 w-full rounded-lg border border-gray-300 px-4 py-2" value={constraints} onChange={e => setConstraints(e.target.value)} placeholder="Constraints (weather, mobility, permits, timing, kids attention span...)" />
 
+        <p className="mt-2 text-xs text-gray-500">
+          Duration target: {durationMinutes} min • Expected shot range: {expectedShotRange.min}-{expectedShotRange.max}
+        </p>
+        {!city.trim() && (
+          <p className="mt-1 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            City is blank. Planner will fall back to your account base location/ZIP if available.
+          </p>
+        )}
+
         {error && <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
       </Card>
 
@@ -406,6 +451,17 @@ export default function PlannerPage() {
               <div>
                 <h3 className="text-lg font-semibold text-gray-900">{plan.projectTitle}</h3>
                 <p className="text-sm text-gray-600">{plan.creativeDirection}</p>
+                <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                  <span className="rounded-full bg-blue-50 px-2 py-1 font-medium text-blue-700">
+                    Location source: {plan.planningDiagnostics?.locationSource || 'unknown'}
+                  </span>
+                  <span className="rounded-full bg-gray-100 px-2 py-1 font-medium text-gray-700">
+                    Candidates: {plan.planningDiagnostics?.locationCandidateCount ?? 0}
+                  </span>
+                  <span className="rounded-full bg-gray-100 px-2 py-1 font-medium text-gray-700">
+                    Resolved city: {plan.planningDiagnostics?.resolvedCity || city || 'N/A'}
+                  </span>
+                </div>
               </div>
               <div className="flex gap-2">
                 <Button variant="ghost" isLoading={isRefining} onClick={() => void refinePlan()}>
@@ -419,6 +475,29 @@ export default function PlannerPage() {
                 </Link>
               </div>
             </div>
+
+            {(plan.planningDiagnostics?.locationSource !== 'grounded-candidates' ||
+              (plan.planningDiagnostics?.locationCandidateCount ?? 0) < 3 ||
+              plan.shotList.length < expectedShotRange.min ||
+              plan.shotList.length > expectedShotRange.max) && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                <p className="font-semibold">Validation warnings</p>
+                <ul className="mt-1 list-disc space-y-1 pl-5">
+                  {plan.planningDiagnostics?.locationSource !== 'grounded-candidates' && (
+                    <li>Location plan is using fallback mode, not fully grounded candidates.</li>
+                  )}
+                  {(plan.planningDiagnostics?.locationCandidateCount ?? 0) < 3 && (
+                    <li>Fewer than 3 real location candidates found. Consider a broader nearby city or ZIP.</li>
+                  )}
+                  {plan.shotList.length < expectedShotRange.min || plan.shotList.length > expectedShotRange.max ? (
+                    <li>
+                      Shot count ({plan.shotList.length}) is outside expected {expectedShotRange.min}-{expectedShotRange.max}
+                      {' '}for {durationMinutes} minutes.
+                    </li>
+                  ) : null}
+                </ul>
+              </div>
+            )}
           </Card>
 
           <div className="grid gap-6 lg:grid-cols-2">
@@ -517,7 +596,7 @@ export default function PlannerPage() {
           )}
 
           <Card>
-            <h4 className="mb-3 text-lg font-semibold text-gray-900">AI Shot List</h4>
+            <h4 className="mb-3 text-lg font-semibold text-gray-900">Grounded Shot List</h4>
             <div className="grid gap-3 lg:grid-cols-2">
               {plan.shotList.map(shot => (
                 <div key={`${shot.title}-${shot.microSpot}`} className="rounded-lg border border-gray-200 p-3">
