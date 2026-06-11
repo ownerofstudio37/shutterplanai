@@ -9,12 +9,9 @@ import { PlannerWorkflowStages } from '@/components/planner/PlannerWorkflowStage
 import { PlannerIntakeCard } from '@/components/planner/PlannerIntakeCard';
 import { PlannerReviewHeaderCard } from '@/components/planner/PlannerReviewHeaderCard';
 import { PlannerReviewTabs } from '@/components/planner/PlannerReviewTabs';
-import { PlannerMapReviewPanel } from '@/components/planner/PlannerMapReviewPanel';
-import { PlannerLocationReviewPanel } from '@/components/planner/PlannerLocationReviewPanel';
-import { PlannerShotListPanel } from '@/components/planner/PlannerShotListPanel';
-import { PlannerTimelinePanel } from '@/components/planner/PlannerTimelinePanel';
-import { PlannerPrepPanel } from '@/components/planner/PlannerPrepPanel';
 import { PlannerMobileReviewContent } from '@/components/planner/PlannerMobileReviewContent';
+import { PlannerGeneratingSkeleton } from '@/components/planner/PlannerGeneratingSkeleton';
+import { PlannerDesktopReviewContent } from '@/components/planner/PlannerDesktopReviewContent';
 import { tokenUtils } from '@/lib/auth';
 
 interface SessionPlanLocation {
@@ -492,10 +489,6 @@ function getBusinessProfileTemplates(
   }
 
   return Array.from(new Set(templates.map(item => item.trim()).filter(Boolean))).slice(0, 4);
-}
-
-function PlannerSkeletonCard({ className = '' }: { className?: string }) {
-  return <div className={`animate-pulse rounded-xl bg-gray-200 ${className}`.trim()} />;
 }
 
 const PlannerLocationMap = dynamic(() => import('@/components/map/PlannerLocationMap'), {
@@ -1874,44 +1867,7 @@ export default function PlannerPage() {
         error={error}
       />
 
-      {isGenerating && !plan && (
-        <>
-          <Card>
-            <div className="space-y-4">
-              <div>
-                <p className="text-sm font-semibold text-gray-900">Building your plan</p>
-                <p className="text-sm text-gray-600">Grounding the session with real locations, then assembling the review tabs.</p>
-              </div>
-              <div className="grid gap-3 md:grid-cols-3">
-                {['Checking your intake answers', 'Searching location candidates', 'Drafting timeline + shot flow'].map(step => (
-                  <div key={step} className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-                    <p className="mb-3 text-sm font-medium text-gray-700">{step}</p>
-                    <PlannerSkeletonCard className="h-3 w-3/4" />
-                    <PlannerSkeletonCard className="mt-2 h-3 w-full" />
-                    <PlannerSkeletonCard className="mt-2 h-3 w-5/6" />
-                  </div>
-                ))}
-              </div>
-            </div>
-          </Card>
-
-          <Card>
-            <div className="space-y-4">
-              <PlannerSkeletonCard className="h-5 w-48" />
-              <div className="grid gap-3 lg:grid-cols-2">
-                {Array.from({ length: 4 }).map((_, index) => (
-                  <div key={`plan-skeleton-${index}`} className="rounded-xl border border-gray-200 p-4">
-                    <PlannerSkeletonCard className="h-4 w-2/3" />
-                    <PlannerSkeletonCard className="mt-3 h-3 w-full" />
-                    <PlannerSkeletonCard className="mt-2 h-3 w-11/12" />
-                    <PlannerSkeletonCard className="mt-4 h-16 w-full" />
-                  </div>
-                ))}
-              </div>
-            </div>
-          </Card>
-        </>
-      )}
+      {isGenerating && !plan && <PlannerGeneratingSkeleton />}
 
       {plan && workflowStage !== 'intake' && (
         <>
@@ -1978,69 +1934,43 @@ export default function PlannerPage() {
                 />
               )}
               desktopContent={(
-                <>
-            {activeReviewTab === 'map' && (
-              <PlannerMapReviewPanel
-                locations={displayedLocations}
-                selectedLocation={selectedReviewLocation}
-                onSelectLocation={setSelectedReviewLocationName}
-                mapContent={(
-                  <PlannerLocationMap
-                    locations={displayedLocations}
-                    selectedLocationName={selectedReviewLocationName}
-                    onSelectLocation={setSelectedReviewLocationName}
-                  />
-                )}
-              />
-            )}
-
-            {activeReviewTab === 'locations' && (
-              <PlannerLocationReviewPanel
-                locations={displayedLocations}
-                emptyLocationMessage={emptyLocationMessage}
-                locationVotes={locationVotes}
-                preferredVenueBucket={preferredVenueBucket}
-                excludedVenueBuckets={excludedVenueBuckets}
-                logisticsLookup={logisticsLookup}
-                locationRefinements={plan.locationRefinements}
-                onVoteLocation={setLocationVote}
-                onTogglePreferredVenueBucket={togglePreferredVenueBucket}
-                onToggleExcludedVenueBucket={toggleExcludedVenueBucket}
-              />
-            )}
-
-            {activeReviewTab === 'shot-list' && (
-              <PlannerShotListPanel
-                displayedShots={displayedShots}
-                allShots={plan.shotList}
-                emptyShotMessage={emptyShotMessage}
-                isEditMode={isEditMode}
-                isRegenerating={isRegenerating === 'shot-list'}
-                onRegenerate={() => regenerateSection('shot-list')}
-                onUpdateShotField={updateShotField}
-              />
-            )}
-
-            {activeReviewTab === 'timeline' && (
-              <PlannerTimelinePanel
-                timeline={plan.timeline}
-                isEditMode={isEditMode}
-                isRegenerating={isRegenerating === 'timeline'}
-                onRegenerate={() => regenerateSection('timeline')}
-                onUpdateTimelineField={updateTimelineField}
-              />
-            )}
-
-            {activeReviewTab === 'prep' && (
-              <PlannerPrepPanel
-                checklist={plan.clientPrepChecklist}
-                contingencyPlans={plan.contingencyPlans}
-                isEditMode={isEditMode}
-                onUpdateChecklistItem={updateChecklistItem}
-                onUpdateContingencyItem={updateContingencyItem}
-              />
-            )}
-                </>
+                <PlannerDesktopReviewContent
+                  activeReviewTab={activeReviewTab}
+                  mapContent={(
+                    <PlannerLocationMap
+                      locations={displayedLocations}
+                      selectedLocationName={selectedReviewLocationName}
+                      onSelectLocation={setSelectedReviewLocationName}
+                    />
+                  )}
+                  locations={displayedLocations}
+                  selectedLocation={selectedReviewLocation}
+                  onSelectLocation={setSelectedReviewLocationName}
+                  emptyLocationMessage={emptyLocationMessage}
+                  locationVotes={locationVotes}
+                  preferredVenueBucket={preferredVenueBucket}
+                  excludedVenueBuckets={excludedVenueBuckets}
+                  logisticsLookup={logisticsLookup}
+                  locationRefinements={plan.locationRefinements}
+                  onVoteLocation={setLocationVote}
+                  onTogglePreferredVenueBucket={togglePreferredVenueBucket}
+                  onToggleExcludedVenueBucket={toggleExcludedVenueBucket}
+                  displayedShots={displayedShots}
+                  allShots={plan.shotList}
+                  emptyShotMessage={emptyShotMessage}
+                  isEditMode={isEditMode}
+                  isShotListRegenerating={isRegenerating === 'shot-list'}
+                  onRegenerateShotList={() => regenerateSection('shot-list')}
+                  onUpdateShotField={updateShotField}
+                  timeline={plan.timeline}
+                  isTimelineRegenerating={isRegenerating === 'timeline'}
+                  onRegenerateTimeline={() => regenerateSection('timeline')}
+                  onUpdateTimelineField={updateTimelineField}
+                  checklist={plan.clientPrepChecklist}
+                  contingencyPlans={plan.contingencyPlans}
+                  onUpdateChecklistItem={updateChecklistItem}
+                  onUpdateContingencyItem={updateContingencyItem}
+                />
               )}
             />
           </Card>
