@@ -25,6 +25,10 @@ export interface SessionPlanLocation {
   name: string;
   whyItWorks: string;
   microLocations: string[];
+  selectionReasons?: string[];
+  confidenceScore?: number;
+  venueBucket?: string;
+  sourceQuery?: string;
   displayName?: string;
   googleMapsUrl?: string;
   latitude?: number | null;

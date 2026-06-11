@@ -85,6 +85,7 @@ function buildLocationSuggestionFromCandidate(
     featureSignals?: string[];
     confidenceScore?: number;
     venueBucket?: string;
+    sourceQuery?: string;
   },
   sessionCategory: 'family' | 'engagement' | 'event' | 'portrait'
 ): SessionPlanLocation {
@@ -102,6 +103,17 @@ function buildLocationSuggestionFromCandidate(
       : 'grounded pick';
 
   const signalLine = signals.length > 0 ? `${signals.slice(0, 3).join(', ')}.` : '';
+  const reasonMap: Record<string, string> = {
+    'scenic-variety': 'Strong scenic variety for compositions',
+    'easy-logistics': 'Easy access and logistics for clients',
+    'low-walking': 'Low walking burden between micro-spots',
+    'lower-crowd-risk': 'Lower crowd risk during likely shoot windows',
+    'privacy-friendly': 'More privacy-friendly for candid moments',
+    'lower-permit-risk': 'Lower permit risk than comparable spots',
+    'permit-check-needed': 'Permit check recommended before session day',
+    'photographer-mentioned-online': 'Frequently mentioned by photographers online',
+  };
+  const selectionReasons = signals.map(signal => reasonMap[signal] || signal).slice(0, 4);
 
   return {
     name: display,
@@ -113,6 +125,10 @@ function buildLocationSuggestionFromCandidate(
     }),
     latitude: candidate.latitude ?? null,
     longitude: candidate.longitude ?? null,
+    selectionReasons,
+    confidenceScore: candidate.confidenceScore,
+    venueBucket: candidate.venueBucket,
+    sourceQuery: candidate.sourceQuery,
     whyItWorks: isFamily
       ? `Easy parking, low walking burden, and flexible background options for a family session (${confidenceLabel}). ${signalLine}`.trim()
       : isEngagement

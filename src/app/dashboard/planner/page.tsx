@@ -11,6 +11,10 @@ interface SessionPlanLocation {
   name: string;
   whyItWorks: string;
   microLocations: string[];
+  selectionReasons?: string[];
+  confidenceScore?: number;
+  venueBucket?: string;
+  sourceQuery?: string;
   latitude?: number | null;
   longitude?: number | null;
   displayName?: string;
@@ -523,7 +527,28 @@ export default function PlannerPage() {
                     {location.displayName && location.displayName !== location.name && (
                       <p className="mt-1 text-xs text-gray-500">AI label: {location.name}</p>
                     )}
-                    <p className="mt-1 text-sm text-gray-600">{location.whyItWorks}</p>
+                    <div className="mt-2 rounded-md bg-blue-50/60 px-3 py-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Why this location was picked</p>
+                      <p className="mt-1 text-sm text-gray-700">{location.whyItWorks}</p>
+                      {Array.isArray(location.selectionReasons) && location.selectionReasons.length > 0 && (
+                        <ul className="mt-1 list-disc space-y-1 pl-5 text-xs text-gray-700">
+                          {location.selectionReasons.map(reason => (
+                            <li key={`${location.name}-${reason}`}>{reason}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-gray-600">
+                      {typeof location.confidenceScore === 'number' && (
+                        <span className="rounded-full bg-gray-100 px-2 py-1">Confidence: {location.confidenceScore.toFixed(1)}/10</span>
+                      )}
+                      {location.venueBucket && (
+                        <span className="rounded-full bg-gray-100 px-2 py-1">Type: {location.venueBucket}</span>
+                      )}
+                      {location.sourceQuery && (
+                        <span className="rounded-full bg-gray-100 px-2 py-1">Source: {location.sourceQuery}</span>
+                      )}
+                    </div>
                     {location.latitude != null && location.longitude != null && (
                       <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
                         <p className="text-blue-700">
