@@ -21,6 +21,14 @@ type PlannerMapReviewPanelProps = {
   mapContent: ReactNode;
 };
 
+function formatBucket(value?: string) {
+  if (!value) return 'Venue type pending';
+  return value
+    .split('-')
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
 export function PlannerMapReviewPanel({
   locations,
   selectedLocation,
@@ -28,19 +36,33 @@ export function PlannerMapReviewPanel({
   mapContent,
 }: PlannerMapReviewPanelProps) {
   return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
+    <div className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(340px,0.65fr)]">
       <div className="space-y-4">
-        <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
-          Map-first review helps confirm spacing, route order, and whether the chosen locations cluster in the right part of the city.
+        <div className="rounded-lg border border-[#d8d2c8] bg-[#faf9f6] px-4 py-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7c6f64]">Map review</p>
+          <p className="mt-1 text-sm leading-6 text-[#5f6b76]">
+            Confirm drive clustering, stop order, and whether the route supports the client arrival plan.
+          </p>
         </div>
 
-        {mapContent}
+        <div className="overflow-hidden rounded-lg border border-[#d8d2c8] bg-white p-3">
+          {mapContent}
+        </div>
       </div>
 
       <div className="space-y-4">
-        <div className="rounded-xl border border-gray-200 p-4">
-          <p className="text-sm font-semibold text-gray-900">Current stop order</p>
-          <div className="mt-3 space-y-2">
+        <div className="rounded-lg border border-[#d8d2c8] bg-white p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7c6f64]">Route order</p>
+              <h4 className="mt-1 text-base font-semibold text-[#1f2933]">Client arrival sequence</h4>
+            </div>
+            <span className="rounded-md bg-[#f6f3ee] px-2 py-1 text-xs font-medium text-[#5f6b76]">
+              {locations.length} stop{locations.length === 1 ? '' : 's'}
+            </span>
+          </div>
+
+          <div className="mt-4 space-y-2">
             {locations.map((location, index) => {
               const locationName = location.displayName || location.name;
               const isSelected = locationName === (selectedLocation?.displayName || selectedLocation?.name);
@@ -50,14 +72,25 @@ export function PlannerMapReviewPanel({
                   key={`map-sequence-${locationName}`}
                   type="button"
                   onClick={() => onSelectLocation(locationName)}
-                  className={`w-full rounded-lg border px-3 py-2 text-left text-sm ${
+                  className={`grid w-full grid-cols-[32px_1fr] gap-3 rounded-lg border px-3 py-3 text-left transition ${
                     isSelected
-                      ? 'border-blue-600 bg-blue-50 text-blue-900'
-                      : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                      ? 'border-[#1f2933] bg-[#1f2933] text-white'
+                      : 'border-[#e4ded5] bg-[#faf9f6] text-[#1f2933] hover:border-[#1f2933]'
                   }`}
                 >
-                  <p className="font-medium">Stop {index + 1}: {locationName}</p>
-                  <p className="mt-1 text-xs text-gray-500">{location.microLocations.slice(0, 2).join(' • ') || 'No micro-spots listed yet'}</p>
+                  <span
+                    className={`flex h-8 w-8 items-center justify-center rounded-md text-xs font-semibold ${
+                      isSelected ? 'bg-white text-[#1f2933]' : 'bg-[#ebe5db] text-[#5f6b76]'
+                    }`}
+                  >
+                    {index + 1}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-semibold">{locationName}</span>
+                    <span className={`mt-1 block truncate text-xs ${isSelected ? 'text-[#d1d5db]' : 'text-[#5f6b76]'}`}>
+                      {location.microLocations.slice(0, 2).join(' / ') || 'Micro-spots pending'}
+                    </span>
+                  </span>
                 </button>
               );
             })}
@@ -65,21 +98,37 @@ export function PlannerMapReviewPanel({
         </div>
 
         {selectedLocation ? (
-          <div className="rounded-xl border border-gray-200 p-4">
-            <p className="text-sm font-semibold text-gray-900">{selectedLocation.displayName || selectedLocation.name}</p>
-            <p className="mt-1 text-sm text-gray-600">{selectedLocation.whyItWorks}</p>
+          <div className="rounded-lg border border-[#d8d2c8] bg-white p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7c6f64]">Selected stop</p>
+            <h4 className="mt-2 text-lg font-semibold text-[#1f2933]">
+              {selectedLocation.displayName || selectedLocation.name}
+            </h4>
+            <p className="mt-2 text-sm leading-6 text-[#5f6b76]">{selectedLocation.whyItWorks}</p>
+
             {Array.isArray(selectedLocation.selectionReasons) && selectedLocation.selectionReasons.length > 0 && (
-              <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-gray-700">
-                {selectedLocation.selectionReasons.map(reason => (
-                  <li key={`map-reason-${selectedLocation.name}-${reason}`}>{reason}</li>
-                ))}
-              </ul>
+              <div className="mt-4 rounded-lg border border-[#e4ded5] bg-[#faf9f6] px-3 py-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#7c6f64]">Selection reasons</p>
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-[#5f6b76]">
+                  {selectedLocation.selectionReasons.map(reason => (
+                    <li key={`map-reason-${selectedLocation.name}-${reason}`}>{reason}</li>
+                  ))}
+                </ul>
+              </div>
             )}
-            <div className="mt-3 grid gap-2 text-xs text-gray-600 sm:grid-cols-2">
-              <p>Parking: {selectedLocation.logistics.parking}</p>
-              <p>Restroom: {selectedLocation.logistics.restroom}</p>
-              <p>Walk: {selectedLocation.logistics.walkingDistance}</p>
-              {selectedLocation.venueBucket && <p>Type: {selectedLocation.venueBucket}</p>}
+
+            <div className="mt-4 grid gap-2 text-xs text-[#5f6b76]">
+              <div className="rounded-md bg-[#f6f3ee] px-3 py-2">
+                <span className="font-semibold text-[#1f2933]">Parking:</span> {selectedLocation.logistics.parking}
+              </div>
+              <div className="rounded-md bg-[#f6f3ee] px-3 py-2">
+                <span className="font-semibold text-[#1f2933]">Restroom:</span> {selectedLocation.logistics.restroom}
+              </div>
+              <div className="rounded-md bg-[#f6f3ee] px-3 py-2">
+                <span className="font-semibold text-[#1f2933]">Walking:</span> {selectedLocation.logistics.walkingDistance}
+              </div>
+              <div className="rounded-md bg-[#f6f3ee] px-3 py-2">
+                <span className="font-semibold text-[#1f2933]">Venue:</span> {formatBucket(selectedLocation.venueBucket)}
+              </div>
             </div>
           </div>
         ) : (

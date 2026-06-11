@@ -79,25 +79,34 @@ export const PlannerMobileReviewContent = memo(function PlannerMobileReviewConte
   if (reviewTab === 'map') {
     return (
       <div className="space-y-4">
-        <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
-          Use the map to pressure-test spacing, route order, and whether the plan clusters in the right part of town.
+        <div className="rounded-lg border border-[#d8d2c8] bg-[#faf9f6] px-4 py-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7c6f64]">Map review</p>
+          <p className="mt-1 text-sm leading-6 text-[#5f6b76]">
+            Confirm stop spacing, route order, and client arrival flow before the shoot day.
+          </p>
         </div>
 
         {mapContent}
 
         {selectedLocation ? (
-          <div className="rounded-xl border border-gray-200 p-4">
-            <p className="text-sm font-semibold text-gray-900">{selectedLocation.displayName || selectedLocation.name}</p>
-            <p className="mt-1 text-sm text-gray-600">{selectedLocation.whyItWorks}</p>
-            <div className="mt-3 flex flex-wrap gap-2 text-xs text-gray-600">
+          <div className="rounded-lg border border-[#d8d2c8] bg-white p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7c6f64]">Selected stop</p>
+            <p className="mt-2 text-base font-semibold text-[#1f2933]">{selectedLocation.displayName || selectedLocation.name}</p>
+            <p className="mt-2 text-sm leading-6 text-[#5f6b76]">{selectedLocation.whyItWorks}</p>
+            <div className="mt-3 flex flex-wrap gap-2 text-xs text-[#5f6b76]">
               {selectedLocation.venueBucket && (
-                <span className="rounded-full bg-gray-100 px-2 py-1">Type: {selectedLocation.venueBucket}</span>
+                <span className="rounded-md bg-[#f6f3ee] px-2 py-1">Type: {selectedLocation.venueBucket}</span>
               )}
               {typeof selectedLocation.confidenceScore === 'number' && (
-                <span className="rounded-full bg-gray-100 px-2 py-1">
+                <span className="rounded-md bg-[#f6f3ee] px-2 py-1">
                   Confidence: {selectedLocation.confidenceScore.toFixed(1)}/10
                 </span>
               )}
+            </div>
+            <div className="mt-3 grid gap-2 text-xs text-[#5f6b76]">
+              <p><span className="font-semibold text-[#1f2933]">Parking:</span> {selectedLocation.logistics.parking}</p>
+              <p><span className="font-semibold text-[#1f2933]">Restroom:</span> {selectedLocation.logistics.restroom}</p>
+              <p><span className="font-semibold text-[#1f2933]">Walking:</span> {selectedLocation.logistics.walkingDistance}</p>
             </div>
           </div>
         ) : (
@@ -113,8 +122,11 @@ export const PlannerMobileReviewContent = memo(function PlannerMobileReviewConte
   if (reviewTab === 'locations') {
     return (
       <div className="space-y-4">
-        <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
-          Use the feedback controls to pressure-test location quality. Thumbs affect ordering locally, “Prefer this type” boosts similar spots in review, and “Exclude this type” removes that venue type from the current plan review.
+        <div className="rounded-lg border border-[#d8d2c8] bg-[#faf9f6] px-4 py-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7c6f64]">Micro-logistics</p>
+          <p className="mt-1 text-sm leading-6 text-[#5f6b76]">
+            Pressure-test parking, restroom access, walking burden, and exact micro-spots.
+          </p>
         </div>
 
         {emptyLocationMessage && (
@@ -132,76 +144,87 @@ export const PlannerMobileReviewContent = memo(function PlannerMobileReviewConte
           const intelligenceLogistics = logisticsLookup.get(locationKey);
 
           return (
-            <div key={`mobile-${location.name}`} className="rounded-lg border border-gray-200 p-3">
+            <div key={`mobile-${location.name}`} className="rounded-lg border border-[#d8d2c8] bg-white p-3">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <p className="font-semibold text-gray-900">{location.displayName || location.name}</p>
+                  <p className="font-semibold text-[#1f2933]">{location.displayName || location.name}</p>
                   {location.displayName && location.displayName !== location.name && (
-                    <p className="mt-1 text-xs text-gray-500">AI label: {location.name}</p>
+                    <p className="mt-1 text-xs text-[#5f6b76]">AI label: {location.name}</p>
                   )}
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
                     onClick={() => onVoteLocation(location, 'up')}
-                    className={`rounded-full border px-2 py-1 text-xs ${
+                    className={`rounded-md border px-2 py-1 text-xs ${
                       currentVote === 'up'
                         ? 'border-emerald-600 bg-emerald-50 text-emerald-700'
-                        : 'border-gray-300 bg-white text-gray-700'
+                        : 'border-[#d8d2c8] bg-white text-[#5f6b76]'
                     }`}
                   >
-                    👍 Relevant
+                    Relevant
                   </button>
                   <button
                     type="button"
                     onClick={() => onVoteLocation(location, 'down')}
-                    className={`rounded-full border px-2 py-1 text-xs ${
+                    className={`rounded-md border px-2 py-1 text-xs ${
                       currentVote === 'down'
                         ? 'border-red-600 bg-red-50 text-red-700'
-                        : 'border-gray-300 bg-white text-gray-700'
+                        : 'border-[#d8d2c8] bg-white text-[#5f6b76]'
                     }`}
                   >
-                    👎 Not relevant
+                    Not relevant
                   </button>
                   {location.venueBucket && (
                     <button
                       type="button"
                       onClick={() => onTogglePreferredVenueBucket(location.venueBucket)}
-                      className={`rounded-full border px-2 py-1 text-xs ${
+                      className={`rounded-md border px-2 py-1 text-xs ${
                         isPreferredType
                           ? 'border-blue-600 bg-blue-50 text-blue-700'
-                          : 'border-gray-300 bg-white text-gray-700'
+                          : 'border-[#d8d2c8] bg-white text-[#5f6b76]'
                       }`}
                     >
-                      ⭐ Prefer this type
+                      Prefer type
                     </button>
                   )}
                   {location.venueBucket && (
                     <button
                       type="button"
                       onClick={() => onToggleExcludedVenueBucket(location.venueBucket)}
-                      className={`rounded-full border px-2 py-1 text-xs ${
+                      className={`rounded-md border px-2 py-1 text-xs ${
                         isExcludedType
                           ? 'border-amber-600 bg-amber-50 text-amber-700'
-                          : 'border-gray-300 bg-white text-gray-700'
+                          : 'border-[#d8d2c8] bg-white text-[#5f6b76]'
                       }`}
                     >
-                      🚫 Exclude this type
+                      Exclude type
                     </button>
                   )}
                 </div>
               </div>
 
-              <div className="mt-2 rounded-md bg-blue-50/60 px-3 py-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Why this location was picked</p>
-                <p className="mt-1 text-sm text-gray-700">{location.whyItWorks}</p>
+              <div className="mt-3 rounded-md bg-[#faf9f6] px-3 py-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#7c6f64]">Why this location was picked</p>
+                <p className="mt-1 text-sm leading-6 text-[#5f6b76]">{location.whyItWorks}</p>
               </div>
-              <p className="mt-2 text-xs text-gray-500">Micro-spots: {location.microLocations.join(' • ')}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {location.microLocations.map(spot => (
+                  <span key={`mobile-${location.name}-${spot}`} className="rounded-md bg-[#f6f3ee] px-2 py-1 text-xs text-[#1f2933]">
+                    {spot}
+                  </span>
+                ))}
+              </div>
+              <div className="mt-3 grid gap-1 text-xs text-[#5f6b76]">
+                <p><span className="font-semibold text-[#1f2933]">Parking:</span> {location.logistics.parking}</p>
+                <p><span className="font-semibold text-[#1f2933]">Restroom:</span> {location.logistics.restroom}</p>
+                <p><span className="font-semibold text-[#1f2933]">Walking:</span> {location.logistics.walkingDistance}</p>
+              </div>
               {intelligenceLogistics && (
-                <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-gray-700">
-                  <span className="rounded-full bg-indigo-100 px-2 py-1">Risk: {intelligenceLogistics.overallRisk}/10</span>
-                  <span className="rounded-full bg-indigo-100 px-2 py-1">Permit: {intelligenceLogistics.permitLikelihood}/10</span>
-                  <span className="rounded-full bg-indigo-100 px-2 py-1">Crowd: {intelligenceLogistics.crowdRisk}/10</span>
+                <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-[#5f6b76]">
+                  <span className="rounded-md bg-[#f6f3ee] px-2 py-1">Risk: {intelligenceLogistics.overallRisk}/10</span>
+                  <span className="rounded-md bg-[#f6f3ee] px-2 py-1">Permit: {intelligenceLogistics.permitLikelihood}/10</span>
+                  <span className="rounded-md bg-[#f6f3ee] px-2 py-1">Crowd: {intelligenceLogistics.crowdRisk}/10</span>
                 </div>
               )}
             </div>

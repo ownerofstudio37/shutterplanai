@@ -78,7 +78,7 @@ export default function PlannerLocationMap({
 
   if (mappableLocations.length === 0) {
     return (
-      <div className="flex h-90 items-center justify-center rounded-xl border border-dashed border-gray-300 bg-gray-50 px-6 text-center text-sm text-gray-600">
+      <div className="flex h-90 items-center justify-center rounded-lg border border-dashed border-[#d8d2c8] bg-[#faf9f6] px-6 text-center text-sm text-[#5f6b76]">
         No mappable coordinates are available for the current locations yet.
       </div>
     );
@@ -90,14 +90,14 @@ export default function PlannerLocationMap({
       zoom={12}
       scrollWheelZoom={false}
       style={{ height: '360px', width: '100%' }}
-      className="rounded-xl"
+      className="rounded-lg"
     >
       <TileLayer url={tileProviders[0].url} attribution={tileProviders[0].attribution} maxZoom={20} />
 
       {routePoints.length > 1 && (
         <Polyline
           positions={routePoints as L.LatLngExpression[]}
-          pathOptions={{ color: '#2563EB', weight: 3, opacity: 0.65, dashArray: '8 8' }}
+          pathOptions={{ color: '#1f2933', weight: 3, opacity: 0.7, dashArray: '8 8' }}
         />
       )}
 
@@ -113,7 +113,7 @@ export default function PlannerLocationMap({
             pathOptions={{
               color: '#ffffff',
               weight: 2,
-              fillColor: isSelected ? '#2563EB' : '#14B8A6',
+              fillColor: isSelected ? '#1f2933' : '#0f766e',
               fillOpacity: 1,
             }}
             eventHandlers={{
