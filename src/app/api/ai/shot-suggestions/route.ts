@@ -2,12 +2,40 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/serverAuth';
 import { createSupabaseAdminClient } from '@/lib/supabase/server';
 import { generateShotSuggestions } from '@/lib/ai/gemini';
+import { getBillingUsageForUser } from '@/lib/billing/serverUsage';
+import { hasReachedLimit } from '@/lib/billing/planLimits';
+import { checkRateLimit, rateLimitResponse } from '@/lib/security/rateLimit';
+import { logSecurityEvent } from '@/lib/security/auditLog';
 
 export async function POST(request: NextRequest) {
   try {
     const auth = await requireAuth(request);
     if (!auth.success) {
+      logSecurityEvent({ route: '/api/ai/shot-suggestions', event: 'auth_failed', status: auth.status });
       return NextResponse.json({ success: false, error: auth.error }, { status: auth.status });
+    }
+
+    const rateLimit = checkRateLimit({
+      key: `shot-suggestions:${auth.userId}`,
+      limit: 30,
+      windowMs: 10 * 60 * 1000,
+    });
+    if (!rateLimit.success) {
+      logSecurityEvent({ route: '/api/ai/shot-suggestions', event: 'rate_limited', userId: auth.userId, status: 429 });
+      return rateLimitResponse(rateLimit);
+    }
+
+    const billingUsage = await getBillingUsageForUser(auth.userId);
+    if (hasReachedLimit(billingUsage.usage.plannerGenerations, billingUsage.limits.plannerGenerations)) {
+      return NextResponse.json(
+        {
+          success: false,
+          code: 'PLAN_LIMIT_REACHED',
+          error: 'You have used all 3 free AI plans. Upgrade to Pro for unlimited AI shot suggestions.',
+          usage: billingUsage,
+        },
+        { status: 402 }
+      );
     }
 
     const { projectId, creativeBrief } = await request.json();
@@ -54,6 +82,12 @@ export async function POST(request: NextRequest) {
       { status: 200 }
     );
   } catch (error) {
+    logSecurityEvent({
+      route: '/api/ai/shot-suggestions',
+      event: 'provider_or_route_failed',
+      status: 500,
+      detail: error instanceof Error ? error.name : 'unknown',
+    });
     const message = error instanceof Error ? error.message : 'Failed to generate shot suggestions';
     return NextResponse.json(
       {

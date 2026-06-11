@@ -110,12 +110,13 @@ export default function SharedPlanPage() {
       setIsLoading(true);
       setError('');
       try {
-        const params = new URLSearchParams({ token });
-        if (submittedPassword) {
-          params.set('password', submittedPassword);
-        }
-
-        const response = await fetch(`/api/planner/export?${params.toString()}`);
+        const response = submittedPassword
+          ? await fetch('/api/planner/export/access', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ token, password: submittedPassword }),
+            })
+          : await fetch(`/api/planner/export?${new URLSearchParams({ token }).toString()}`);
         const result = (await response.json()) as SharedPlanResponse;
 
         if (!response.ok) {

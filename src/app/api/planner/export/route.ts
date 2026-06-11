@@ -5,6 +5,7 @@ import { createSupabaseAdminClient } from '@/lib/supabase/server';
 import { apiFailure, apiSuccess, jsonWithApiMeta, startApiRequest } from '@/lib/utils/apiObservability';
 import { getBillingUsageForUser } from '@/lib/billing/serverUsage';
 import { hasReachedLimit } from '@/lib/billing/planLimits';
+import { getSharedGuidePlan, hashSharePassword } from '@/lib/planner/shareAccess';
 
 const supabase = createSupabaseAdminClient();
 
@@ -15,10 +16,6 @@ type GuideBranding = {
   accentColor?: string;
   websiteUrl?: string;
 };
-
-function hashSharePassword(password: string, salt: string) {
-  return crypto.scryptSync(password, salt, 64).toString('hex');
-}
 
 function normalizeHexColor(value: unknown) {
   if (typeof value !== 'string') return undefined;
@@ -57,18 +54,6 @@ async function getGuideBrandingForUser(userId: string): Promise<GuideBranding> {
     accentColor: normalizeHexColor(profile.guideAccentColor) || '#d8d2c8',
     websiteUrl: normalizeUrl(profile.websiteUrl),
   };
-}
-
-function verifySharePassword(password: string, salt: string, expectedHash: string) {
-  const actual = hashSharePassword(password, salt);
-  const actualBuffer = Buffer.from(actual, 'hex');
-  const expectedBuffer = Buffer.from(expectedHash, 'hex');
-
-  if (actualBuffer.length !== expectedBuffer.length) {
-    return false;
-  }
-
-  return crypto.timingSafeEqual(actualBuffer, expectedBuffer);
 }
 
 export async function POST(request: NextRequest) {
@@ -180,62 +165,29 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const token = searchParams.get('token');
-    const password = searchParams.get('password')?.trim() || '';
 
     if (!token) {
       apiFailure(requestContext, 400, 'Missing token', { stage: 'validation' });
       return jsonWithApiMeta(requestContext, { error: 'Missing token' }, { status: 400 });
     }
 
-    const { data, error } = await supabase
-      .from('planner_exports')
-      .select('plan_data, metadata, expires_at, revoked_at, password_hash, password_salt, user_id, share_token')
-      .eq('share_token', token)
-      .single();
-
-    if (error || !data || !data.expires_at) {
-      apiFailure(requestContext, 404, error || 'Plan not found or expired', { stage: 'fetch_export' });
-      return jsonWithApiMeta(requestContext, { error: 'Plan not found or expired' }, { status: 404 });
-    }
-
-    if (data.revoked_at) {
-      apiFailure(requestContext, 410, 'Share link has been revoked', { stage: 'revoked' });
-      return jsonWithApiMeta(requestContext, { error: 'Share link has been revoked' }, { status: 410 });
-    }
-
-    if (new Date(data.expires_at).getTime() <= Date.now()) {
-      apiFailure(requestContext, 404, 'Plan not found or expired', { stage: 'expired' });
-      return jsonWithApiMeta(requestContext, { error: 'Plan not found or expired' }, { status: 404 });
-    }
-
-    if (data.password_hash) {
-      if (!password) {
-        apiFailure(requestContext, 401, 'Password required', { stage: 'password_required' });
-        return jsonWithApiMeta(requestContext, { error: 'Password required', requiresPassword: true }, { status: 401 });
-      }
-
-      if (!data.password_salt || !verifySharePassword(password, data.password_salt, data.password_hash)) {
-        apiFailure(requestContext, 401, 'Invalid password', { stage: 'password_invalid' });
-        return jsonWithApiMeta(requestContext, { error: 'Invalid password', requiresPassword: true }, { status: 401 });
-      }
-    }
-
-    if (data.user_id) {
-      await supabase.from('planner_analytics').insert({
-        user_id: data.user_id,
-        event_name: 'planner_guide_viewed',
-        event_payload: {
-          shareToken: data.share_token,
-          passwordProtected: !!data.password_hash,
-        },
-      });
-    }
-
-    apiSuccess(requestContext, 200, { passwordProtected: !!data.password_hash });
-    return jsonWithApiMeta(requestContext, {
-      plan_data: data.plan_data,
-      metadata: data.metadata,
+    const result = await getSharedGuidePlan({
+      supabase,
+      token,
+      allowPasswordCheck: false,
     });
+
+    if (!result.success) {
+      apiFailure(requestContext, result.status, result.cause || result.error, { stage: result.stage });
+      return jsonWithApiMeta(
+        requestContext,
+        { error: result.error, requiresPassword: result.requiresPassword },
+        { status: result.status }
+      );
+    }
+
+    apiSuccess(requestContext, 200, { passwordProtected: result.passwordProtected });
+    return jsonWithApiMeta(requestContext, result.data);
   } catch (error) {
     apiFailure(requestContext, 500, error, { stage: 'fetch_shared_plan' });
     return jsonWithApiMeta(requestContext, { error: 'Failed to fetch plan' }, { status: 500 });

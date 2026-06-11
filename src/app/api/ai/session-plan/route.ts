@@ -5,6 +5,8 @@ import { BusinessContext, generateSessionPlan, SessionPlan, SessionPlanLocation 
 import { geocodeLocations, geocodePlace, searchLocationCandidates } from '@/lib/geo/geocode';
 import { getBillingUsageForUser } from '@/lib/billing/serverUsage';
 import { hasReachedLimit } from '@/lib/billing/planLimits';
+import { checkRateLimit, rateLimitResponse } from '@/lib/security/rateLimit';
+import { logSecurityEvent } from '@/lib/security/auditLog';
 
 function toTrimmedOrUndefined(value: unknown) {
   if (typeof value !== 'string') return undefined;
@@ -156,7 +158,18 @@ export async function POST(request: NextRequest) {
   try {
     const auth = await requireAuth(request);
     if (!auth.success) {
+      logSecurityEvent({ route: '/api/ai/session-plan', event: 'auth_failed', status: auth.status });
       return NextResponse.json({ success: false, error: auth.error }, { status: auth.status });
+    }
+
+    const rateLimit = checkRateLimit({
+      key: `session-plan:${auth.userId}`,
+      limit: 20,
+      windowMs: 10 * 60 * 1000,
+    });
+    if (!rateLimit.success) {
+      logSecurityEvent({ route: '/api/ai/session-plan', event: 'rate_limited', userId: auth.userId, status: 429 });
+      return rateLimitResponse(rateLimit);
     }
 
     const billingUsage = await getBillingUsageForUser(auth.userId);
@@ -445,6 +458,12 @@ export async function POST(request: NextRequest) {
       { status: 200 }
     );
   } catch (error) {
+    logSecurityEvent({
+      route: '/api/ai/session-plan',
+      event: 'provider_or_route_failed',
+      status: 500,
+      detail: error instanceof Error ? error.name : 'unknown',
+    });
     return NextResponse.json(
       {
         success: false,

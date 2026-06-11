@@ -3,6 +3,14 @@ import { requireAuth } from '@/lib/auth/serverAuth';
 import { createSupabaseAdminClient } from '@/lib/supabase/server';
 import { uploadShotImage } from '@/lib/storage/supabaseStorage';
 
+const MAX_SHOT_IMAGE_BYTES = 8 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif']);
+const ALLOWED_IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif']);
+
+function getFileExtension(fileName: string) {
+  return fileName.split('.').pop()?.toLowerCase() ?? '';
+}
+
 export async function POST(request: NextRequest) {
   try {
     const auth = await requireAuth(request);
@@ -22,8 +30,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Image file is required' }, { status: 400 });
     }
 
-    if (!file.type.startsWith('image/')) {
-      return NextResponse.json({ success: false, error: 'Only image files are allowed' }, { status: 400 });
+    const extension = getFileExtension(file.name);
+    if (!ALLOWED_IMAGE_TYPES.has(file.type) || !ALLOWED_IMAGE_EXTENSIONS.has(extension)) {
+      return NextResponse.json(
+        { success: false, error: 'Only JPG, PNG, WebP, HEIC, or HEIF image files are allowed' },
+        { status: 400 }
+      );
+    }
+
+    if (file.size > MAX_SHOT_IMAGE_BYTES) {
+      return NextResponse.json(
+        { success: false, error: 'Image must be 8 MB or smaller' },
+        { status: 413 }
+      );
     }
 
     const admin = createSupabaseAdminClient();

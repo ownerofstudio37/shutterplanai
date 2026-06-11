@@ -66,12 +66,12 @@
 
 ## Next: Security and Abuse Protection
 
-- [ ] Add rate limiting to expensive AI routes: session generation, refinement, shot suggestions, website analysis, and public guide password checks.
-- [ ] Add upload size limits and file extension validation to shot image uploads.
-- [ ] Add timeout and max-body safeguards to website analysis fetches.
-- [ ] Avoid sending public guide passwords through query strings; use POST or short-lived verification state.
-- [ ] Add stronger logging for auth failures, share-link password failures, and AI provider failures without exposing sensitive data.
-- [ ] Add regression tests for billing gates on refinements, AI suggestions, multi-day planning, share links, and password-protected exports.
+- [x] Add rate limiting to expensive AI routes: session generation, refinement, shot suggestions, website analysis, and public guide password checks.
+- [x] Add upload size limits and file extension validation to shot image uploads.
+- [x] Add timeout and max-body safeguards to website analysis fetches.
+- [x] Avoid sending public guide passwords through query strings; use POST or short-lived verification state.
+- [x] Add stronger logging for auth failures, share-link password failures, and AI provider failures without exposing sensitive data.
+- [x] Add regression tests for billing gates on refinements, AI suggestions, multi-day planning, share links, and password-protected exports.
 
 ## Next: Field Execution Mode
 

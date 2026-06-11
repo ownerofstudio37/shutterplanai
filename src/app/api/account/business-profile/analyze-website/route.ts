@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/serverAuth';
 import { createSupabaseAdminClient } from '@/lib/supabase/server';
+import { checkRateLimit, rateLimitResponse } from '@/lib/security/rateLimit';
+import { logSecurityEvent } from '@/lib/security/auditLog';
 
 interface BusinessProfile {
   businessName?: string;
@@ -20,6 +22,9 @@ interface BusinessProfile {
   prepGuideNotes?: string;
   updatedAt?: string;
 }
+
+const WEBSITE_FETCH_TIMEOUT_MS = 8_000;
+const WEBSITE_FETCH_MAX_BYTES = 512_000;
 
 function trimOrUndefined(value: unknown, maxLength = 320): string | undefined {
   if (typeof value !== 'string') return undefined;
@@ -52,32 +57,77 @@ function htmlToText(html: string) {
 }
 
 async function fetchWebsiteContext(url: string) {
-  const response = await fetch(url, {
-    headers: {
-      'User-Agent': 'ShutterPlanAI/1.0',
-      Accept: 'text/html,application/xhtml+xml',
-    },
-    cache: 'no-store',
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), WEBSITE_FETCH_TIMEOUT_MS);
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'ShutterPlanAI/1.0',
+        Accept: 'text/html,application/xhtml+xml',
+      },
+      cache: 'no-store',
+      signal: controller.signal,
+    });
 
-  if (!response.ok) {
-    throw new Error(`Website fetch failed (${response.status})`);
+    if (!response.ok) {
+      throw new Error(`Website fetch failed (${response.status})`);
+    }
+
+    const contentType = response.headers.get('content-type') ?? '';
+    if (contentType && !/text\/html|application\/xhtml\+xml/i.test(contentType)) {
+      throw new Error('Website must return an HTML page');
+    }
+
+    const contentLength = Number(response.headers.get('content-length'));
+    if (Number.isFinite(contentLength) && contentLength > WEBSITE_FETCH_MAX_BYTES) {
+      throw new Error('Website page is too large to analyze');
+    }
+
+    const html = await readResponseBodyWithLimit(response, WEBSITE_FETCH_MAX_BYTES);
+    const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+    const descriptionMatch = html.match(/<meta\s+name=["']description["']\s+content=["']([\s\S]*?)["'][^>]*>/i);
+
+    const title = titleMatch?.[1]?.replace(/\s+/g, ' ').trim();
+    const description = descriptionMatch?.[1]?.replace(/\s+/g, ' ').trim();
+    const text = htmlToText(html);
+
+    const summary = [title, description].filter(Boolean).join(' — ').trim();
+
+    return {
+      summary: summary.slice(0, 320),
+      textSnippet: text.slice(0, 6000),
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function readResponseBodyWithLimit(response: Response, maxBytes: number) {
+  if (!response.body) {
+    const text = await response.text();
+    if (new TextEncoder().encode(text).length > maxBytes) {
+      throw new Error('Website page is too large to analyze');
+    }
+    return text;
   }
 
-  const html = await response.text();
-  const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-  const descriptionMatch = html.match(/<meta\s+name=["']description["']\s+content=["']([\s\S]*?)["'][^>]*>/i);
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let bytesRead = 0;
+  let html = '';
 
-  const title = titleMatch?.[1]?.replace(/\s+/g, ' ').trim();
-  const description = descriptionMatch?.[1]?.replace(/\s+/g, ' ').trim();
-  const text = htmlToText(html);
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    bytesRead += value.byteLength;
+    if (bytesRead > maxBytes) {
+      await reader.cancel();
+      throw new Error('Website page is too large to analyze');
+    }
+    html += decoder.decode(value, { stream: true });
+  }
 
-  const summary = [title, description].filter(Boolean).join(' — ').trim();
-
-  return {
-    summary: summary.slice(0, 320),
-    textSnippet: text.slice(0, 6000),
-  };
+  return html + decoder.decode();
 }
 
 type WebsiteInsights = {
@@ -200,7 +250,18 @@ function mergeAndClampInsights(insights: WebsiteInsights): WebsiteInsights {
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
   if (!auth.success) {
+    logSecurityEvent({ route: '/api/account/business-profile/analyze-website', event: 'auth_failed', status: auth.status });
     return NextResponse.json({ success: false, error: auth.error }, { status: auth.status });
+  }
+
+  const rateLimit = checkRateLimit({
+    key: `website-analysis:${auth.userId}`,
+    limit: 10,
+    windowMs: 60 * 60 * 1000,
+  });
+  if (!rateLimit.success) {
+    logSecurityEvent({ route: '/api/account/business-profile/analyze-website', event: 'rate_limited', userId: auth.userId, status: 429 });
+    return rateLimitResponse(rateLimit);
   }
 
   const payload = await request.json();
@@ -249,6 +310,13 @@ export async function POST(request: NextRequest) {
       message: ai ? 'Website analyzed with AI and profile updated.' : 'Website analyzed with fallback parser and profile updated.',
     });
   } catch (error) {
+    logSecurityEvent({
+      route: '/api/account/business-profile/analyze-website',
+      event: 'provider_or_route_failed',
+      userId: auth.userId,
+      status: 500,
+      detail: error instanceof Error ? error.name : 'unknown',
+    });
     return NextResponse.json(
       {
         success: false,

@@ -62,7 +62,7 @@ export function apiFailure(
 export function jsonWithApiMeta(
   context: ApiRequestContext,
   body: unknown,
-  init?: { status?: number }
+  init?: ResponseInit
 ) {
   const response = NextResponse.json(body, init);
   response.headers.set('x-request-id', context.requestId);
