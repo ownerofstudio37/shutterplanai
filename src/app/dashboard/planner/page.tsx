@@ -15,6 +15,8 @@ import { PlannerDesktopReviewContent } from '@/components/planner/PlannerDesktop
 import { tokenUtils } from '@/lib/auth';
 import { SessionTemplatePanel, type SessionTemplatePayload } from '@/components/planner/SessionTemplatePanel';
 import { MultiDaySessionConfig } from '@/components/planner/MultiDaySessionConfig';
+import { RefinementIncentiveBanner } from '@/components/planner/RefinementIncentiveBanner';
+import { ProgressBar } from '@/components/ui/ProgressBar';
 import {
   type SessionPlan,
   type SessionPlanLocation,
@@ -43,6 +45,7 @@ import {
   getBusinessProfileTemplates,
 } from '@/lib/planner/plannerConfig';
 import { sleep, sanitizeCoordinates, parseDurationMinutes, getExpectedShotRange } from '@/lib/planner/plannerUtils';
+import { classifyPlannerError, type PlannerErrorInfo } from '@/lib/planner/plannerErrors';
 
 function getAuthHeader() {
   const token = tokenUtils.getToken();
@@ -93,10 +96,14 @@ export default function PlannerPage() {
   const [selectedReviewLocationName, setSelectedReviewLocationName] = useState<string | null>(null);
 
   const [plan, setPlan] = useState<SessionPlan | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setRawError] = useState<PlannerErrorInfo | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+
+  // Helper: classify raw error string before storing
+  const setError = (raw: string | null) => setRawError(raw ? classifyPlannerError(raw) : null);
   const [isRefining, setIsRefining] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
+  const [applyProgress, setApplyProgress] = useState<{ done: number; total: number; label: string } | null>(null);
   const [feedbackSaveStatus, setFeedbackSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [isRegenerating, setIsRegenerating] = useState<'idle' | 'locations' | 'shot-list' | 'timeline'>('idle');
   const [draftId, setDraftId] = useState<string>('');
@@ -679,6 +686,27 @@ export default function PlannerPage() {
       .filter(Boolean)
       .slice(0, 12);
 
+    // Guard: find-locations mode requires at least a city or business fallback
+    if (
+      locationMode === 'find-locations' &&
+      !city.trim() &&
+      !businessProfile?.baseLocation &&
+      !businessProfile?.zipCode
+    ) {
+      setError(
+        'City is required when finding locations. Add a city like "Austin, TX" or set your base location in account settings.'
+      );
+      setIsGenerating(false);
+      return;
+    }
+
+    // Guard: use-provided mode requires at least one location
+    if (locationMode === 'use-provided' && providedLocationList.length === 0) {
+      setError('Please list at least one location before generating.');
+      setIsGenerating(false);
+      return;
+    }
+
     const subjectDetailsPayload = [
       subjectDetails,
       sessionCategory === 'family' && familyPacing ? `Family pacing: ${familyPacing}` : '',
@@ -888,9 +916,11 @@ export default function PlannerPage() {
     if (!plan) return;
 
     setIsApplying(true);
+    setApplyProgress(null);
     setError(null);
 
     try {
+      setApplyProgress({ done: 0, total: 1, label: 'Creating project…' });
       const projectResponse = await fetch('/api/projects', {
         method: 'POST',
         headers: {
@@ -963,6 +993,8 @@ export default function PlannerPage() {
       let createdShots = 0;
       const failedShots: string[] = [];
       const failedReasons: string[] = [];
+      const totalShots = plan.shotList.length;
+      setApplyProgress({ done: 0, total: totalShots, label: `Saving shot 1 of ${totalShots}…` });
 
       for (const shot of plan.shotList) {
         const location = locationIndex.get((shot.location || '').toLowerCase());
@@ -1016,6 +1048,14 @@ export default function PlannerPage() {
           failedShots.push(shotTitle);
           failedReasons.push(`${shotTitle}: ${shotResult.error || 'Unknown error'}`);
         }
+        const nextDone = createdShots + failedShots.length;
+        setApplyProgress({
+          done: nextDone,
+          total: totalShots,
+          label: nextDone < totalShots
+            ? `Saving shot ${nextDone + 1} of ${totalShots}…`
+            : 'Finishing up…',
+        });
       }
 
       if (createdShots === 0) {
@@ -1044,6 +1084,7 @@ export default function PlannerPage() {
       void trackPlannerEvent('planner_apply_failed');
     } finally {
       setIsApplying(false);
+      setApplyProgress(null);
     }
   };
 
@@ -1628,6 +1669,14 @@ export default function PlannerPage() {
             durationMinutes={durationMinutes}
           />
 
+          {/* Show refinement incentive when plan is fresh (no refinements yet) */}
+          {workflowStage === 'review' && !plan.locationRefinements?.length && (
+            <RefinementIncentiveBanner
+              isRefining={isRefining}
+              onRefinePlan={() => void refinePlan()}
+            />
+          )}
+
           <Card>
             <PlannerReviewTabs
               tabs={reviewTabItems}
@@ -1725,6 +1774,17 @@ export default function PlannerPage() {
                   {isApplying ? 'Applying...' : 'Create Project'}
                 </Button>
               </div>
+              {applyProgress && (
+                <div className="mt-2">
+                  <div className="mb-1 flex justify-between text-xs text-gray-500">
+                    <span>{applyProgress.label}</span>
+                    <span>{applyProgress.done}/{applyProgress.total}</span>
+                  </div>
+                  <ProgressBar
+                    percent={Math.round((applyProgress.done / Math.max(applyProgress.total, 1)) * 100)}
+                  />
+                </div>
+              )}
             </div>
           </div>
         </>

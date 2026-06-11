@@ -4,6 +4,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { DraftResumeBanner } from '@/components/planner/DraftResumeBanner';
 import { PlannerPresetGrid } from '@/components/planner/PlannerPresetGrid';
+import type { PlannerErrorInfo } from '@/lib/planner/plannerErrors';
 
 type LocationMode = 'find-locations' | 'use-provided';
 type WorkflowStage = 'intake' | 'review' | 'apply';
@@ -88,7 +89,7 @@ type PlannerIntakeCardProps = {
     max: number;
   };
   draftSaveStatus: DraftSaveStatus;
-  error: string | null;
+  error: PlannerErrorInfo | null;
 };
 
 export function PlannerIntakeCard({
@@ -381,7 +382,16 @@ export function PlannerIntakeCard({
         </div>
       </div>
 
-      {error && <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+      {error && (
+        <div className={`mt-3 rounded-lg border px-4 py-3 text-sm ${
+          error.isWarning
+            ? 'border-amber-200 bg-amber-50 text-amber-800'
+            : 'border-red-200 bg-red-50 text-red-700'
+        }`}>
+          <p className="font-semibold">{error.title}</p>
+          <p className="mt-0.5">{error.message}</p>
+        </div>
+      )}
     </Card>
   );
 }
