@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { InlineEditableField } from '@/components/planner/InlineEditableField';
 import { tokenUtils } from '@/lib/auth';
 
 interface SessionPlanLocation {
@@ -728,6 +729,21 @@ export default function PlannerPage() {
     }
   };
 
+  const trackPlannerEvent = async (eventName: string, payload: Record<string, unknown> = {}) => {
+    try {
+      await fetch('/api/planner/analytics', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeader(),
+        },
+        body: JSON.stringify({ eventName, payload }),
+      });
+    } catch {
+      // analytics is best-effort
+    }
+  };
+
   useEffect(() => {
     if (!activeQuestion) {
       setDraftAnswer('');
@@ -1121,8 +1137,18 @@ export default function PlannerPage() {
       setExcludedVenueBuckets([]);
       setSelectedReviewLocationName(null);
       setPlan(result.data ?? null);
+      void trackPlannerEvent('planner_generate_success', {
+        sessionCategory,
+        locationMode,
+        locationCount: result.data?.locationSuggestions?.length ?? 0,
+        shotCount: result.data?.shotList?.length ?? 0,
+      });
     } catch {
       setError('Failed to generate session plan');
+      void trackPlannerEvent('planner_generate_failed', {
+        sessionCategory,
+        locationMode,
+      });
     } finally {
       setIsGenerating(false);
     }
@@ -1401,10 +1427,15 @@ export default function PlannerPage() {
       await persistFeedback(true);
       await clearDraftStorage();
       setDraftId('');
+      void trackPlannerEvent('planner_apply_success', {
+        createdShots,
+        failedShots: failedShots.length,
+      });
 
       router.push(`/dashboard/shot-board?project=${projectId}`);
     } catch {
       setError('Failed while applying plan to workspace');
+      void trackPlannerEvent('planner_apply_failed');
     } finally {
       setIsApplying(false);
     }
@@ -1454,8 +1485,12 @@ export default function PlannerPage() {
             }
           : prev
       );
+      void trackPlannerEvent('planner_refine_success', {
+        refinementCount: locationRefinements.length,
+      });
     } catch {
       setError('Failed to refine plan');
+      void trackPlannerEvent('planner_refine_failed');
     } finally {
       setIsRefining(false);
     }
@@ -1638,6 +1673,9 @@ export default function PlannerPage() {
   const resumeDraft = () => {
     if (!resumableDraft) return;
     hydrateFromDraft(resumableDraft);
+    void trackPlannerEvent('planner_draft_resumed', {
+      status: resumableDraft.status,
+    });
   };
 
   const dismissDraft = async () => {
@@ -1668,6 +1706,9 @@ export default function PlannerPage() {
     );
     setFeedbackSaveStatus('saved');
     setTimeout(() => setFeedbackSaveStatus('idle'), 1200);
+    void trackPlannerEvent('planner_route_optimized', {
+      locationCount: reorderedLocations.length,
+    });
   };
 
   const updateLocationField = (index: number, field: keyof SessionPlanLocation, value: string) => {
@@ -1753,6 +1794,7 @@ export default function PlannerPage() {
       }
 
       setShareUrl(result.shareUrl);
+      void trackPlannerEvent('planner_share_link_created');
     } catch {
       setShareLinkError('Failed to create share link.');
     } finally {
@@ -2856,36 +2898,31 @@ export default function PlannerPage() {
                   const shotIndex = plan.shotList.indexOf(shot);
                   return (
                   <div key={`${shot.title}-${shot.microSpot}`} className="rounded-lg border border-gray-200 p-3">
-                    {isEditMode ? (
-                      <input
-                        title="Shot title"
-                        className="w-full rounded border border-gray-300 px-2 py-1 text-sm font-semibold text-gray-900"
-                        value={shot.title}
-                        onChange={event => updateShotField(shotIndex, 'title', event.target.value)}
-                      />
-                    ) : (
-                      <p className="font-semibold text-gray-900">{shot.title}</p>
-                    )}
-                    {isEditMode ? (
-                      <textarea
-                        title="Shot description"
-                        className="mt-1 min-h-16 w-full rounded border border-gray-300 px-2 py-1 text-sm text-gray-700"
-                        value={shot.description}
-                        onChange={event => updateShotField(shotIndex, 'description', event.target.value)}
-                      />
-                    ) : (
-                      <p className="mt-1 text-sm text-gray-600">{shot.description}</p>
-                    )}
-                    {isEditMode ? (
-                      <input
-                        title="Shot location"
-                        className="mt-2 w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-700"
-                        value={shot.location}
-                        onChange={event => updateShotField(shotIndex, 'location', event.target.value)}
-                      />
-                    ) : (
-                      <p className="mt-2 text-xs text-gray-500">Location: {shot.location}</p>
-                    )}
+                    <InlineEditableField
+                      isEditing={isEditMode}
+                      title="Shot title"
+                      value={shot.title}
+                      onChange={value => updateShotField(shotIndex, 'title', value)}
+                      className="w-full rounded border border-gray-300 px-2 py-1 text-sm font-semibold text-gray-900"
+                      displayClassName="font-semibold text-gray-900"
+                    />
+                    <InlineEditableField
+                      isEditing={isEditMode}
+                      title="Shot description"
+                      value={shot.description}
+                      onChange={value => updateShotField(shotIndex, 'description', value)}
+                      className="mt-1 min-h-16 w-full rounded border border-gray-300 px-2 py-1 text-sm text-gray-700"
+                      displayClassName="mt-1 text-sm text-gray-600"
+                      multiline
+                    />
+                    <InlineEditableField
+                      isEditing={isEditMode}
+                      title="Shot location"
+                      value={shot.location}
+                      onChange={value => updateShotField(shotIndex, 'location', value)}
+                      className="mt-2 w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-700"
+                      displayClassName="mt-2 text-xs text-gray-500"
+                    />
                     {shot.latitude != null && shot.longitude != null && (
                       <p className="text-xs text-blue-700">
                         Coordinates: {Number(shot.latitude).toFixed(5)}, {Number(shot.longitude).toFixed(5)}
@@ -2919,36 +2956,31 @@ export default function PlannerPage() {
 
                 {plan.timeline.map((item, index) => (
                   <div key={`${item.timeBlock}-${item.focus}`} className="rounded-lg border border-gray-200 p-3">
-                    {isEditMode ? (
-                      <input
-                        title="Timeline time block"
-                        className="w-full rounded border border-gray-300 px-2 py-1 text-sm font-semibold text-gray-900"
-                        value={item.timeBlock}
-                        onChange={event => updateTimelineField(index, 'timeBlock', event.target.value)}
-                      />
-                    ) : (
-                      <p className="text-sm font-semibold text-gray-900">{item.timeBlock}</p>
-                    )}
-                    {isEditMode ? (
-                      <input
-                        title="Timeline focus"
-                        className="mt-1 w-full rounded border border-gray-300 px-2 py-1 text-sm text-blue-700"
-                        value={item.focus}
-                        onChange={event => updateTimelineField(index, 'focus', event.target.value)}
-                      />
-                    ) : (
-                      <p className="text-sm text-blue-700">{item.focus}</p>
-                    )}
-                    {isEditMode ? (
-                      <textarea
-                        title="Timeline notes"
-                        className="mt-1 min-h-14 w-full rounded border border-gray-300 px-2 py-1 text-sm text-gray-700"
-                        value={item.notes}
-                        onChange={event => updateTimelineField(index, 'notes', event.target.value)}
-                      />
-                    ) : (
-                      <p className="mt-1 text-sm text-gray-600">{item.notes}</p>
-                    )}
+                    <InlineEditableField
+                      isEditing={isEditMode}
+                      title="Timeline time block"
+                      value={item.timeBlock}
+                      onChange={value => updateTimelineField(index, 'timeBlock', value)}
+                      className="w-full rounded border border-gray-300 px-2 py-1 text-sm font-semibold text-gray-900"
+                      displayClassName="text-sm font-semibold text-gray-900"
+                    />
+                    <InlineEditableField
+                      isEditing={isEditMode}
+                      title="Timeline focus"
+                      value={item.focus}
+                      onChange={value => updateTimelineField(index, 'focus', value)}
+                      className="mt-1 w-full rounded border border-gray-300 px-2 py-1 text-sm text-blue-700"
+                      displayClassName="text-sm text-blue-700"
+                    />
+                    <InlineEditableField
+                      isEditing={isEditMode}
+                      title="Timeline notes"
+                      value={item.notes}
+                      onChange={value => updateTimelineField(index, 'notes', value)}
+                      className="mt-1 min-h-14 w-full rounded border border-gray-300 px-2 py-1 text-sm text-gray-700"
+                      displayClassName="mt-1 text-sm text-gray-600"
+                      multiline
+                    />
                   </div>
                 ))}
               </div>
