@@ -180,6 +180,10 @@ export async function POST(request: NextRequest) {
 
     const cityInput = toTrimmedOrUndefined(payload.city);
     const city = cityInput || businessContext?.baseLocation || businessContext?.zipCode;
+    const businessGeoAnchorSource =
+      businessContext?.zipCode ||
+      businessContext?.baseLocation ||
+      businessContext?.address;
 
     const dynamicAvoidTerms = (businessContext?.avoidLocationTypes ?? '')
       .split(',')
@@ -204,7 +208,22 @@ export async function POST(request: NextRequest) {
       ...dynamicAvoidTerms,
     ];
 
-    const cityFallbackGeo = city ? await geocodePlace({ place: city }) : { latitude: null, longitude: null };
+    const businessGeoAnchor = businessGeoAnchorSource
+      ? await geocodePlace({ place: businessGeoAnchorSource })
+      : { latitude: null, longitude: null };
+
+    const disambiguationNear =
+      cityInput && businessGeoAnchor.latitude != null && businessGeoAnchor.longitude != null
+        ? {
+            latitude: businessGeoAnchor.latitude,
+            longitude: businessGeoAnchor.longitude,
+            maxDistanceKm: 120,
+          }
+        : undefined;
+
+    const cityFallbackGeo = city
+      ? await geocodePlace({ place: city, near: disambiguationNear })
+      : { latitude: null, longitude: null };
     const nearCity =
       cityFallbackGeo.latitude != null && cityFallbackGeo.longitude != null
         ? {
@@ -392,6 +411,8 @@ export async function POST(request: NextRequest) {
             locationSource,
             resolvedCity: city || '',
             usedAccountFallbackCity: !cityInput && !!(businessContext?.baseLocation || businessContext?.zipCode),
+            usedBusinessZipDisambiguation: !!disambiguationNear,
+            businessGeoAnchorSource: disambiguationNear ? businessGeoAnchorSource || '' : '',
           },
         },
       },

@@ -60,6 +60,8 @@ interface SessionPlan {
     locationSource: 'grounded-candidates' | 'fallback-geocode' | 'city-fallback' | 'user-provided';
     resolvedCity: string;
     usedAccountFallbackCity: boolean;
+    usedBusinessZipDisambiguation?: boolean;
+    businessGeoAnchorSource?: string;
   };
 }
 
@@ -956,6 +958,11 @@ export default function PlannerPage() {
                   <span className="rounded-full bg-gray-100 px-2 py-1 font-medium text-gray-700">
                     Resolved city: {plan.planningDiagnostics?.resolvedCity || city || 'N/A'}
                   </span>
+                  {plan.planningDiagnostics?.usedBusinessZipDisambiguation && (
+                    <span className="rounded-full bg-emerald-50 px-2 py-1 font-medium text-emerald-700">
+                      Disambiguated with business anchor: {plan.planningDiagnostics.businessGeoAnchorSource || 'account location'}
+                    </span>
+                  )}
                 </div>
               </div>
               <div className="flex gap-2">
