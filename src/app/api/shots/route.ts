@@ -8,6 +8,12 @@ const BASE_SELECT =
 const EXTENDED_SELECT =
   'id, project_id, title, description, location, planned_time, status, notes, image_url, latitude, longitude, micro_spot_name, parking_notes, background_description, walking_distance, restroom_location, created_at, updated_at, projects!inner(id, title, user_id)';
 
+type RelatedProject = { title?: string } | Array<{ title?: string }> | null;
+
+type ShotRow = Record<string, unknown> & {
+  projects?: RelatedProject;
+};
+
 function toNullableTrimmedString(value: unknown) {
   if (typeof value !== 'string') return undefined;
   const trimmed = value.trim();
@@ -76,8 +82,8 @@ export async function GET(request: NextRequest) {
     }
 
     const normalized = (data ?? []).map(item => {
-      const row = item as Record<string, any>;
-      const relatedProject = row.projects as { title?: string } | Array<{ title?: string }> | null;
+      const row = item as ShotRow;
+      const relatedProject = row.projects ?? null;
       const projectTitle = Array.isArray(relatedProject)
         ? relatedProject[0]?.title
         : relatedProject?.title;

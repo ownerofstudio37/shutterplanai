@@ -1,6 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+/* eslint-disable @next/next/no-img-element -- Shot thumbnails use user-uploaded/public URLs that are not guaranteed to match a configured Next Image remote pattern. */
+
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
@@ -129,7 +131,7 @@ export default function ShotsPage() {
     longitude: '',
   });
 
-  const loadProjects = async () => {
+  const loadProjects = useCallback(async () => {
     const response = await fetch('/api/projects', {
       headers: getAuthHeader(),
     });
@@ -138,16 +140,12 @@ export default function ShotsPage() {
     if (result.success) {
       const options: ProjectOption[] = result.data ?? [];
       setProjects(options);
-      if (!projectId && options.length > 0) {
-        setProjectId(options[0].id);
-      }
-      if (!aiProjectId && options.length > 0) {
-        setAiProjectId(options[0].id);
-      }
+      setProjectId(current => current || options[0]?.id || '');
+      setAiProjectId(current => current || options[0]?.id || '');
     }
-  };
+  }, []);
 
-  const loadShots = async () => {
+  const loadShots = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
@@ -167,7 +165,7 @@ export default function ShotsPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     queueMicrotask(() => {
@@ -176,7 +174,7 @@ export default function ShotsPage() {
         await loadShots();
       })();
     });
-  }, []);
+  }, [loadProjects, loadShots]);
 
   const createShot = async (event: React.FormEvent) => {
     event.preventDefault();

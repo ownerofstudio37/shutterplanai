@@ -20,7 +20,6 @@ export function ProgressBar({ percent, className = '' }: ProgressBarProps) {
         // CSS custom property is the only clean way to pass a runtime % to CSS
         // without inline styles on the element. This is the accepted pattern for
         // dynamic progress bars in CSS-module or Tailwind projects.
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
         {...({ style: { '--fill-width': `${clamped}%` } } as React.HTMLAttributes<HTMLDivElement>)}
       />
     </div>

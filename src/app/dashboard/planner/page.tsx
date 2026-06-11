@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/Card';
@@ -30,7 +30,6 @@ import {
   type LocationMode,
   type ChatQuestion,
   type ChatQuestionId,
-  type SessionCategory,
   type BusinessProfile,
   type PlannerPreset,
   type PlannerDraftState,
@@ -58,6 +57,10 @@ function getAuthHeader() {
     headers.Authorization = `Bearer ${token}`;
   }
   return headers;
+}
+
+function createDraftId() {
+  return `draft-${globalThis.crypto?.randomUUID?.() || Date.now()}`;
 }
 
 const PlannerLocationMap = dynamic(() => import('@/components/map/PlannerLocationMap'), {
@@ -111,7 +114,7 @@ export default function PlannerPage() {
   const [applyProgress, setApplyProgress] = useState<{ done: number; total: number; label: string } | null>(null);
   const [feedbackSaveStatus, setFeedbackSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [isRegenerating, setIsRegenerating] = useState<'idle' | 'locations' | 'shot-list' | 'timeline'>('idle');
-  const [draftId, setDraftId] = useState<string>('');
+  const [draftId, setDraftId] = useState<string>(() => createDraftId());
   const [draftSaveStatus, setDraftSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [draftBootstrapComplete, setDraftBootstrapComplete] = useState(false);
   const [resumableDraft, setResumableDraft] = useState<PlannerDraft | null>(null);
@@ -146,13 +149,10 @@ export default function PlannerPage() {
     [locationMode, sessionCategory]
   );
 
-  useEffect(() => {
-    if (chatStepIndex > visibleQuestions.length) {
-      setChatStepIndex(visibleQuestions.length);
-    }
-  }, [chatStepIndex, visibleQuestions.length]);
+  const boundedChatStepIndex = Math.min(chatStepIndex, visibleQuestions.length);
+  const aiTypingTimerRef = useRef<number | null>(null);
 
-  const getAnswerForQuestion = (id: ChatQuestionId) => {
+  const getAnswerForQuestion = useCallback((id: ChatQuestionId) => {
     switch (id) {
       case 'shootType':
         return shootType;
@@ -185,7 +185,51 @@ export default function PlannerPage() {
       default:
         return '';
     }
-  };
+  }, [
+    brandingGoals,
+    city,
+    constraints,
+    duration,
+    engagementStory,
+    eventPriorities,
+    familyPacing,
+    locationMode,
+    mood,
+    mustHaveShots,
+    providedLocations,
+    shootDate,
+    shootType,
+    subjectDetails,
+  ]);
+
+  const showAiTypingForNextQuestion = useCallback((hasNextQuestion: boolean) => {
+    if (aiTypingTimerRef.current) {
+      window.clearTimeout(aiTypingTimerRef.current);
+      aiTypingTimerRef.current = null;
+    }
+
+    if (!hasNextQuestion) {
+      setIsAiTyping(false);
+      return;
+    }
+
+    setIsAiTyping(true);
+    aiTypingTimerRef.current = window.setTimeout(() => {
+      setIsAiTyping(false);
+      aiTypingTimerRef.current = null;
+    }, 450);
+  }, []);
+
+  const moveToQuestionIndex = useCallback(
+    (nextIndex: number) => {
+      const clampedIndex = Math.max(0, Math.min(nextIndex, visibleQuestions.length));
+      const nextQuestion = visibleQuestions[clampedIndex] ?? null;
+      setChatStepIndex(clampedIndex);
+      setDraftAnswer(nextQuestion ? getAnswerForQuestion(nextQuestion.id) : '');
+      showAiTypingForNextQuestion(Boolean(nextQuestion && clampedIndex < visibleQuestions.length));
+    },
+    [getAnswerForQuestion, showAiTypingForNextQuestion, visibleQuestions]
+  );
 
   const setAnswerForQuestion = (id: ChatQuestionId, value: string) => {
     setIsReviewConfirmed(false);
@@ -239,17 +283,17 @@ export default function PlannerPage() {
     }
   };
 
-  const activeQuestion = visibleQuestions[chatStepIndex] ?? null;
+  const activeQuestion = visibleQuestions[boundedChatStepIndex] ?? null;
   const activePrompt = activeQuestion ? getAdaptivePrompt(activeQuestion, sessionCategory) : '';
   const activePlaceholder = activeQuestion ? getAdaptivePlaceholder(activeQuestion, sessionCategory) : '';
   const activeQuickReplies = activeQuestion ? getQuickReplyOptions(activeQuestion, sessionCategory) : [];
   const activeProfileTemplates = activeQuestion
     ? getBusinessProfileTemplates(activeQuestion, sessionCategory, businessProfile)
     : [];
-  const isChatComplete = chatStepIndex >= visibleQuestions.length;
+  const isChatComplete = boundedChatStepIndex >= visibleQuestions.length;
   const workflowStage: WorkflowStage = plan ? (isApplying ? 'apply' : 'review') : 'intake';
 
-  const buildCurrentDraft = (currentDraftId: string): PlannerDraft => ({
+  const buildCurrentDraft = useCallback((currentDraftId: string): PlannerDraft => ({
     id: currentDraftId,
     status: workflowStage === 'apply' ? 'applying' : workflowStage,
     createdAt: new Date().toISOString(),
@@ -275,7 +319,27 @@ export default function PlannerPage() {
       dailyDurationMinutes,
       maxTravelMinutesPerDay,
     },
-  });
+  }), [
+    brandingGoals,
+    city,
+    constraints,
+    dailyDurationMinutes,
+    duration,
+    engagementStory,
+    eventPriorities,
+    familyPacing,
+    locationMode,
+    maxTravelMinutesPerDay,
+    mood,
+    mustHaveShots,
+    providedLocations,
+    sessionDates,
+    shootDate,
+    shootType,
+    subjectDetails,
+    multiDay,
+    workflowStage,
+  ]);
 
   const hydrateFromDraft = (draft: PlannerDraft) => {
     const draftState = draft.planState;
@@ -361,23 +425,12 @@ export default function PlannerPage() {
   }, []);
 
   useEffect(() => {
-    if (!activeQuestion) {
-      setDraftAnswer('');
-      return;
-    }
-    setDraftAnswer(getAnswerForQuestion(activeQuestion.id));
-  }, [activeQuestion]);
-
-  useEffect(() => {
-    if (!activeQuestion || isChatComplete) {
-      setIsAiTyping(false);
-      return;
-    }
-
-    setIsAiTyping(true);
-    const timer = window.setTimeout(() => setIsAiTyping(false), 450);
-    return () => window.clearTimeout(timer);
-  }, [activeQuestion, isChatComplete]);
+    return () => {
+      if (aiTypingTimerRef.current) {
+        window.clearTimeout(aiTypingTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const loadBusinessProfile = async () => {
@@ -467,12 +520,7 @@ export default function PlannerPage() {
   useEffect(() => {
     if (!draftBootstrapComplete) return;
 
-    const resolvedDraftId = draftId || `draft-${globalThis.crypto?.randomUUID?.() || Date.now()}`;
-    if (!draftId) {
-      setDraftId(resolvedDraftId);
-    }
-
-    const draftPayload = buildCurrentDraft(resolvedDraftId);
+    const draftPayload = buildCurrentDraft(draftId);
     const normalizedDraftPayload: PlannerDraft = {
       ...draftPayload,
       status: workflowStage === 'apply' ? 'applying' : workflowStage,
@@ -480,9 +528,9 @@ export default function PlannerPage() {
     };
 
     localStorage.setItem(PLANNER_DRAFT_STORAGE_KEY, JSON.stringify(normalizedDraftPayload));
-    setDraftSaveStatus('saving');
 
     const timer = window.setTimeout(async () => {
+      setDraftSaveStatus('saving');
       try {
         const response = await fetch('/api/planner/drafts', {
           method: 'POST',
@@ -507,27 +555,10 @@ export default function PlannerPage() {
 
     return () => window.clearTimeout(timer);
   }, [
+    buildCurrentDraft,
     draftBootstrapComplete,
     draftId,
     workflowStage,
-    shootType,
-    city,
-    duration,
-    mood,
-    subjectDetails,
-    mustHaveShots,
-    constraints,
-    locationMode,
-    providedLocations,
-    familyPacing,
-    engagementStory,
-    brandingGoals,
-    eventPriorities,
-    shootDate,
-    multiDay,
-    sessionDates,
-    dailyDurationMinutes,
-    maxTravelMinutesPerDay,
   ]);
 
   useEffect(() => {
@@ -633,7 +664,7 @@ export default function PlannerPage() {
     });
 
     return map;
-  }, [intelligence?.optimizedRoute, plan]);
+  }, [intelligence, plan]);
 
   const logisticsLookup = useMemo(() => {
     const map = new Map<string, PlannerIntelligence['logistics'][number]>();
@@ -646,7 +677,7 @@ export default function PlannerPage() {
     });
 
     return map;
-  }, [intelligence?.logistics, plan]);
+  }, [intelligence, plan]);
 
   const displayedLocations = useMemo(() => {
     const locations = [...(plan?.locationSuggestions ?? [])];
@@ -697,20 +728,9 @@ export default function PlannerPage() {
     );
   }, [displayedLocations, selectedReviewLocationName]);
 
-  useEffect(() => {
-    if (displayedLocations.length === 0) {
-      setSelectedReviewLocationName(null);
-      return;
-    }
-
-    const hasSelectedLocation = displayedLocations.some(
-      location => (location.displayName || location.name) === selectedReviewLocationName
-    );
-
-    if (!hasSelectedLocation) {
-      setSelectedReviewLocationName(displayedLocations[0].displayName || displayedLocations[0].name);
-    }
-  }, [displayedLocations, selectedReviewLocationName]);
+  const effectiveSelectedReviewLocationName = selectedReviewLocation
+    ? selectedReviewLocation.displayName || selectedReviewLocation.name
+    : null;
 
   const generatePlan = async () => {
     setIsGenerating(true);
@@ -1126,7 +1146,7 @@ export default function PlannerPage() {
       // Persist feedback before navigating away
       await persistFeedback(true);
       await clearDraftStorage();
-      setDraftId('');
+      setDraftId(createDraftId());
       void trackPlannerEvent('planner_apply_success', {
         createdShots,
         failedShots: failedShots.length,
@@ -1202,15 +1222,14 @@ export default function PlannerPage() {
     if (nextIndex === -1) return;
     setIsReviewConfirmed(false);
     setError(null);
-    setChatStepIndex(nextIndex);
+    moveToQuestionIndex(nextIndex);
   };
 
   const submitAnswerValue = (value: string) => {
     if (!activeQuestion) return;
-    setDraftAnswer(value);
     setError(null);
     setAnswerForQuestion(activeQuestion.id, value);
-    setChatStepIndex(prev => Math.min(prev + 1, visibleQuestions.length));
+    moveToQuestionIndex(boundedChatStepIndex + 1);
   };
 
   const submitCurrentAnswer = () => {
@@ -1233,7 +1252,7 @@ export default function PlannerPage() {
   const goBackQuestion = () => {
     setError(null);
     setIsReviewConfirmed(false);
-    setChatStepIndex(prev => Math.max(0, prev - 1));
+    moveToQuestionIndex(boundedChatStepIndex - 1);
   };
 
   const reviewAnswers = () => {
@@ -1245,7 +1264,7 @@ export default function PlannerPage() {
     setError(null);
     setPlan(null);
     setIsReviewConfirmed(false);
-    setChatStepIndex(Math.max(0, visibleQuestions.length - 1));
+    moveToQuestionIndex(visibleQuestions.length - 1);
   };
 
   const setLocationVote = useCallback((location: SessionPlanLocation, vote: LocationVote) => {
@@ -1378,7 +1397,7 @@ export default function PlannerPage() {
       default:
         return null;
     }
-  }, [plan?.planningDiagnostics?.locationSource]);
+  }, [plan]);
 
   const emptyLocationMessage = useMemo(() => {
     if (displayedLocations.length > 0) return null;
@@ -1442,17 +1461,6 @@ export default function PlannerPage() {
     setTimeout(() => setFeedbackSaveStatus('idle'), 1200);
     void trackPlannerEvent('planner_route_optimized', {
       locationCount: reorderedLocations.length,
-    });
-  };
-
-  const updateLocationField = (index: number, field: keyof SessionPlanLocation, value: string) => {
-    setPlan(prev => {
-      if (!prev) return prev;
-      const nextLocations = [...prev.locationSuggestions];
-      const target = nextLocations[index];
-      if (!target) return prev;
-      nextLocations[index] = { ...target, [field]: value };
-      return { ...prev, locationSuggestions: nextLocations };
     });
   };
 
@@ -1721,7 +1729,7 @@ export default function PlannerPage() {
         presets={PLANNER_PRESETS}
         activePresetId={activePresetId}
         onApplyPreset={applyPreset}
-        chatStepIndex={chatStepIndex}
+        chatStepIndex={boundedChatStepIndex}
         visibleQuestions={visibleQuestions}
         sessionCategory={sessionCategory}
         getAdaptivePrompt={(question, category) => getAdaptivePrompt(question as ChatQuestion, category)}
@@ -1800,7 +1808,7 @@ export default function PlannerPage() {
                   mapContent={
                     <PlannerLocationMap
                       locations={displayedLocations}
-                      selectedLocationName={selectedReviewLocationName}
+                      selectedLocationName={effectiveSelectedReviewLocationName}
                       onSelectLocation={setSelectedReviewLocationName}
                     />
                   }
@@ -1827,7 +1835,7 @@ export default function PlannerPage() {
                   mapContent={(
                     <PlannerLocationMap
                       locations={displayedLocations}
-                      selectedLocationName={selectedReviewLocationName}
+                      selectedLocationName={effectiveSelectedReviewLocationName}
                       onSelectLocation={setSelectedReviewLocationName}
                     />
                   )}
