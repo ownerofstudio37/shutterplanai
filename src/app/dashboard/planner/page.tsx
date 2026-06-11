@@ -107,6 +107,8 @@ type ChatQuestion = {
 };
 
 type SessionCategory = 'family' | 'engagement' | 'portrait' | 'event';
+type ReviewTab = 'locations' | 'shot-list' | 'timeline' | 'prep';
+type LocationVote = 'up' | 'down';
 
 interface LocationRefinement {
   name: string;
@@ -384,6 +386,10 @@ export default function PlannerPage() {
   const [draftAnswer, setDraftAnswer] = useState('');
   const [isReviewConfirmed, setIsReviewConfirmed] = useState(false);
   const [businessProfile, setBusinessProfile] = useState<BusinessProfile | null>(null);
+  const [activeReviewTab, setActiveReviewTab] = useState<ReviewTab>('locations');
+  const [locationVotes, setLocationVotes] = useState<Record<string, LocationVote>>({});
+  const [preferredVenueBucket, setPreferredVenueBucket] = useState<string | null>(null);
+  const [excludedVenueBuckets, setExcludedVenueBuckets] = useState<string[]>([]);
 
   const [plan, setPlan] = useState<SessionPlan | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -544,6 +550,40 @@ export default function PlannerPage() {
     return map;
   }, [plan]);
 
+  const displayedLocations = useMemo(() => {
+    const locations = [...(plan?.locationSuggestions ?? [])];
+
+    return locations
+      .filter(location => !location.venueBucket || !excludedVenueBuckets.includes(location.venueBucket))
+      .sort((a, b) => {
+        const aKey = (a.displayName || a.name).toLowerCase();
+        const bKey = (b.displayName || b.name).toLowerCase();
+        const aVote = locationVotes[aKey];
+        const bVote = locationVotes[bKey];
+        const aPreferred = preferredVenueBucket && a.venueBucket === preferredVenueBucket ? 1 : 0;
+        const bPreferred = preferredVenueBucket && b.venueBucket === preferredVenueBucket ? 1 : 0;
+        const aVoteScore = aVote === 'up' ? 1 : aVote === 'down' ? -1 : 0;
+        const bVoteScore = bVote === 'up' ? 1 : bVote === 'down' ? -1 : 0;
+
+        if (aPreferred !== bPreferred) return bPreferred - aPreferred;
+        if (aVoteScore !== bVoteScore) return bVoteScore - aVoteScore;
+        return (b.confidenceScore ?? 0) - (a.confidenceScore ?? 0);
+      });
+  }, [excludedVenueBuckets, locationVotes, plan?.locationSuggestions, preferredVenueBucket]);
+
+  const displayedLocationNames = useMemo(
+    () => new Set(displayedLocations.map(location => (location.displayName || location.name).toLowerCase())),
+    [displayedLocations]
+  );
+
+  const displayedShots = useMemo(() => {
+    const shots = plan?.shotList ?? [];
+    if (displayedLocationNames.size === 0) return shots;
+
+    const filtered = shots.filter(shot => displayedLocationNames.has((shot.location || '').toLowerCase()));
+    return filtered.length > 0 ? filtered : shots;
+  }, [displayedLocationNames, plan?.shotList]);
+
   const generatePlan = async () => {
     setIsGenerating(true);
     setError(null);
@@ -606,6 +646,10 @@ export default function PlannerPage() {
         return;
       }
 
+      setActiveReviewTab('locations');
+      setLocationVotes({});
+      setPreferredVenueBucket(null);
+      setExcludedVenueBuckets([]);
       setPlan(result.data ?? null);
     } catch {
       setError('Failed to generate session plan');
@@ -854,6 +898,34 @@ export default function PlannerPage() {
     setError(null);
     setIsReviewConfirmed(false);
     setChatStepIndex(Math.max(0, visibleQuestions.length - 1));
+  };
+
+  const setLocationVote = (location: SessionPlanLocation, vote: LocationVote) => {
+    const key = (location.displayName || location.name).toLowerCase();
+    setLocationVotes(prev => {
+      if (prev[key] === vote) {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      }
+
+      return {
+        ...prev,
+        [key]: vote,
+      };
+    });
+  };
+
+  const togglePreferredVenueBucket = (venueBucket?: string) => {
+    if (!venueBucket) return;
+    setPreferredVenueBucket(prev => (prev === venueBucket ? null : venueBucket));
+  };
+
+  const toggleExcludedVenueBucket = (venueBucket?: string) => {
+    if (!venueBucket) return;
+    setExcludedVenueBuckets(prev =>
+      prev.includes(venueBucket) ? prev.filter(item => item !== venueBucket) : [...prev, venueBucket]
+    );
   };
 
   return (
@@ -1106,9 +1178,212 @@ export default function PlannerPage() {
             )}
           </Card>
 
-          <div className="grid gap-6 lg:grid-cols-2">
-            <Card>
-              <h4 className="mb-3 text-lg font-semibold text-gray-900">Timeline</h4>
+          <Card>
+            <div className="mb-4 flex flex-wrap gap-2">
+              {[
+                { id: 'locations', label: `Locations (${displayedLocations.length})` },
+                { id: 'shot-list', label: `Shot List (${displayedShots.length})` },
+                { id: 'timeline', label: `Timeline (${plan.timeline.length})` },
+                { id: 'prep', label: 'Prep + Backup' },
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveReviewTab(tab.id as ReviewTab)}
+                  className={`rounded-full px-3 py-1.5 text-sm font-medium ${
+                    activeReviewTab === tab.id
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {activeReviewTab === 'locations' && (
+              <div className="space-y-4">
+                <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+                  Use the feedback controls to pressure-test location quality. Thumbs affect ordering locally, “Prefer this type” boosts similar spots in review, and “Exclude this type” removes that venue type from the current plan review.
+                </div>
+
+                {displayedLocations.map(location => {
+                  const locationKey = (location.displayName || location.name).toLowerCase();
+                  const currentVote = locationVotes[locationKey];
+                  const isPreferredType = !!location.venueBucket && preferredVenueBucket === location.venueBucket;
+                  const isExcludedType = !!location.venueBucket && excludedVenueBuckets.includes(location.venueBucket);
+
+                  return (
+                    <div key={location.name} className="rounded-lg border border-gray-200 p-3">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="font-semibold text-gray-900">{location.displayName || location.name}</p>
+                          {location.displayName && location.displayName !== location.name && (
+                            <p className="mt-1 text-xs text-gray-500">AI label: {location.name}</p>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setLocationVote(location, 'up')}
+                            className={`rounded-full border px-2 py-1 text-xs ${
+                              currentVote === 'up'
+                                ? 'border-emerald-600 bg-emerald-50 text-emerald-700'
+                                : 'border-gray-300 bg-white text-gray-700'
+                            }`}
+                          >
+                            👍 Relevant
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setLocationVote(location, 'down')}
+                            className={`rounded-full border px-2 py-1 text-xs ${
+                              currentVote === 'down'
+                                ? 'border-red-600 bg-red-50 text-red-700'
+                                : 'border-gray-300 bg-white text-gray-700'
+                            }`}
+                          >
+                            👎 Not relevant
+                          </button>
+                          {location.venueBucket && (
+                            <button
+                              type="button"
+                              onClick={() => togglePreferredVenueBucket(location.venueBucket)}
+                              className={`rounded-full border px-2 py-1 text-xs ${
+                                isPreferredType
+                                  ? 'border-blue-600 bg-blue-50 text-blue-700'
+                                  : 'border-gray-300 bg-white text-gray-700'
+                              }`}
+                            >
+                              ⭐ Prefer this type
+                            </button>
+                          )}
+                          {location.venueBucket && (
+                            <button
+                              type="button"
+                              onClick={() => toggleExcludedVenueBucket(location.venueBucket)}
+                              className={`rounded-full border px-2 py-1 text-xs ${
+                                isExcludedType
+                                  ? 'border-amber-600 bg-amber-50 text-amber-700'
+                                  : 'border-gray-300 bg-white text-gray-700'
+                              }`}
+                            >
+                              🚫 Exclude this type
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="mt-2 rounded-md bg-blue-50/60 px-3 py-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Why this location was picked</p>
+                        <p className="mt-1 text-sm text-gray-700">{location.whyItWorks}</p>
+                        {Array.isArray(location.selectionReasons) && location.selectionReasons.length > 0 && (
+                          <ul className="mt-1 list-disc space-y-1 pl-5 text-xs text-gray-700">
+                            {location.selectionReasons.map(reason => (
+                              <li key={`${location.name}-${reason}`}>{reason}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-gray-600">
+                        {typeof location.confidenceScore === 'number' && (
+                          <span className="rounded-full bg-gray-100 px-2 py-1">Confidence: {location.confidenceScore.toFixed(1)}/10</span>
+                        )}
+                        {location.venueBucket && (
+                          <span className="rounded-full bg-gray-100 px-2 py-1">Type: {location.venueBucket}</span>
+                        )}
+                        {location.sourceQuery && (
+                          <span className="rounded-full bg-gray-100 px-2 py-1">Source: {location.sourceQuery}</span>
+                        )}
+                      </div>
+                      {location.latitude != null && location.longitude != null && (
+                        <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
+                          <p className="text-blue-700">
+                            Coordinates: {Number(location.latitude).toFixed(5)}, {Number(location.longitude).toFixed(5)}
+                          </p>
+                          <a
+                            href={
+                              location.googleMapsUrl ||
+                              `https://maps.google.com/?q=${Number(location.latitude)},${Number(location.longitude)}`
+                            }
+                            target="_blank"
+                            rel="noreferrer noopener"
+                            className="font-medium text-blue-600 hover:text-blue-700 hover:underline"
+                          >
+                            Show on Google Maps
+                          </a>
+                        </div>
+                      )}
+                      {location.latitude == null && location.longitude == null && (
+                        <a
+                          href={
+                            location.googleMapsUrl ||
+                            `https://maps.google.com/?q=${encodeURIComponent(location.displayName || location.name)}`
+                          }
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          className="mt-2 inline-block text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline"
+                        >
+                          Show on Google Maps
+                        </a>
+                      )}
+                      <p className="mt-2 text-xs text-gray-500">Micro-spots: {location.microLocations.join(' • ')}</p>
+                      <p className="mt-2 text-xs text-gray-500">Parking: {location.logistics.parking}</p>
+                      <p className="text-xs text-gray-500">Restroom: {location.logistics.restroom}</p>
+                      <p className="text-xs text-gray-500">Walk: {location.logistics.walkingDistance}</p>
+                    </div>
+                  );
+                })}
+
+                {plan.locationRefinements && plan.locationRefinements.length > 0 && (
+                  <div>
+                    <h4 className="mb-3 text-lg font-semibold text-gray-900">Refined Location Scores</h4>
+                    <div className="space-y-3">
+                      {plan.locationRefinements.map(ref => (
+                        <div key={ref.name} className="rounded-lg border border-gray-200 p-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="font-semibold text-gray-900">{ref.name}</p>
+                            <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+                              Overall {ref.overallScore}/10
+                            </span>
+                          </div>
+                          <p className="mt-1 text-sm text-gray-600">{ref.rationale}</p>
+                          <div className="mt-2 grid gap-2 text-xs text-gray-700 sm:grid-cols-3">
+                            <p>Kid-friendly: {ref.kidFriendlinessScore}/10</p>
+                            <p>Crowd risk: {ref.crowdRiskScore}/10</p>
+                            <p>Walking burden: {ref.walkingBurdenScore}/10</p>
+                          </div>
+                          <p className="mt-1 text-xs text-gray-500">Best time window: {ref.bestTimeWindow}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeReviewTab === 'shot-list' && (
+              <div className="grid gap-3 lg:grid-cols-2">
+                {displayedShots.map(shot => (
+                  <div key={`${shot.title}-${shot.microSpot}`} className="rounded-lg border border-gray-200 p-3">
+                    <p className="font-semibold text-gray-900">{shot.title}</p>
+                    <p className="mt-1 text-sm text-gray-600">{shot.description}</p>
+                    <p className="mt-2 text-xs text-gray-500">Location: {shot.location}</p>
+                    {shot.latitude != null && shot.longitude != null && (
+                      <p className="text-xs text-blue-700">
+                        Coordinates: {Number(shot.latitude).toFixed(5)}, {Number(shot.longitude).toFixed(5)}
+                      </p>
+                    )}
+                    <p className="text-xs text-gray-500">Micro-spot: {shot.microSpot}</p>
+                    <p className="text-xs text-gray-500">Pose: {shot.poseSuggestion}</p>
+                    <p className="text-xs text-gray-500">Composition: {shot.compositionSuggestion}</p>
+                    <p className="text-xs text-gray-500">Timing: {shot.timingHint}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {activeReviewTab === 'timeline' && (
               <div className="space-y-3">
                 {plan.timeline.map(item => (
                   <div key={`${item.timeBlock}-${item.focus}`} className="rounded-lg border border-gray-200 p-3">
@@ -1118,151 +1393,29 @@ export default function PlannerPage() {
                   </div>
                 ))}
               </div>
-            </Card>
+            )}
 
-            <Card>
-              <h4 className="mb-3 text-lg font-semibold text-gray-900">Location + Micro-Location Suggestions</h4>
-              <div className="space-y-3">
-                {plan.locationSuggestions.map(location => (
-                  <div key={location.name} className="rounded-lg border border-gray-200 p-3">
-                    <p className="font-semibold text-gray-900">{location.displayName || location.name}</p>
-                    {location.displayName && location.displayName !== location.name && (
-                      <p className="mt-1 text-xs text-gray-500">AI label: {location.name}</p>
-                    )}
-                    <div className="mt-2 rounded-md bg-blue-50/60 px-3 py-2">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Why this location was picked</p>
-                      <p className="mt-1 text-sm text-gray-700">{location.whyItWorks}</p>
-                      {Array.isArray(location.selectionReasons) && location.selectionReasons.length > 0 && (
-                        <ul className="mt-1 list-disc space-y-1 pl-5 text-xs text-gray-700">
-                          {location.selectionReasons.map(reason => (
-                            <li key={`${location.name}-${reason}`}>{reason}</li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                    <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-gray-600">
-                      {typeof location.confidenceScore === 'number' && (
-                        <span className="rounded-full bg-gray-100 px-2 py-1">Confidence: {location.confidenceScore.toFixed(1)}/10</span>
-                      )}
-                      {location.venueBucket && (
-                        <span className="rounded-full bg-gray-100 px-2 py-1">Type: {location.venueBucket}</span>
-                      )}
-                      {location.sourceQuery && (
-                        <span className="rounded-full bg-gray-100 px-2 py-1">Source: {location.sourceQuery}</span>
-                      )}
-                    </div>
-                    {location.latitude != null && location.longitude != null && (
-                      <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
-                        <p className="text-blue-700">
-                          Coordinates: {Number(location.latitude).toFixed(5)}, {Number(location.longitude).toFixed(5)}
-                        </p>
-                        <a
-                          href={
-                            location.googleMapsUrl ||
-                            `https://maps.google.com/?q=${Number(location.latitude)},${Number(location.longitude)}`
-                          }
-                          target="_blank"
-                          rel="noreferrer noopener"
-                          className="font-medium text-blue-600 hover:text-blue-700 hover:underline"
-                        >
-                          Show on Google Maps
-                        </a>
-                      </div>
-                    )}
-                    {location.latitude == null && location.longitude == null && (
-                      <a
-                        href={
-                          location.googleMapsUrl ||
-                          `https://maps.google.com/?q=${encodeURIComponent(location.displayName || location.name)}`
-                        }
-                        target="_blank"
-                        rel="noreferrer noopener"
-                        className="mt-2 inline-block text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline"
-                      >
-                        Show on Google Maps
-                      </a>
-                    )}
-                    <p className="mt-2 text-xs text-gray-500">Micro-spots: {location.microLocations.join(' • ')}</p>
-                    <p className="mt-2 text-xs text-gray-500">Parking: {location.logistics.parking}</p>
-                    <p className="text-xs text-gray-500">Restroom: {location.logistics.restroom}</p>
-                    <p className="text-xs text-gray-500">Walk: {location.logistics.walkingDistance}</p>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          </div>
-
-          {plan.locationRefinements && plan.locationRefinements.length > 0 && (
-            <Card>
-              <h4 className="mb-3 text-lg font-semibold text-gray-900">Refined Location Scores</h4>
-              <div className="space-y-3">
-                {plan.locationRefinements.map(ref => (
-                  <div key={ref.name} className="rounded-lg border border-gray-200 p-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="font-semibold text-gray-900">{ref.name}</p>
-                      <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
-                        Overall {ref.overallScore}/10
-                      </span>
-                    </div>
-                    <p className="mt-1 text-sm text-gray-600">{ref.rationale}</p>
-                    <div className="mt-2 grid gap-2 text-xs text-gray-700 sm:grid-cols-3">
-                      <p>Kid-friendly: {ref.kidFriendlinessScore}/10</p>
-                      <p>Crowd risk: {ref.crowdRiskScore}/10</p>
-                      <p>Walking burden: {ref.walkingBurdenScore}/10</p>
-                    </div>
-                    <p className="mt-1 text-xs text-gray-500">Best time window: {ref.bestTimeWindow}</p>
-                    {ref.recommendedMicroSpots?.length > 0 && (
-                      <p className="mt-1 text-xs text-gray-500">
-                        Recommended micro-spots: {ref.recommendedMicroSpots.join(' • ')}
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </Card>
-          )}
-
-          <Card>
-            <h4 className="mb-3 text-lg font-semibold text-gray-900">Grounded Shot List</h4>
-            <div className="grid gap-3 lg:grid-cols-2">
-              {plan.shotList.map(shot => (
-                <div key={`${shot.title}-${shot.microSpot}`} className="rounded-lg border border-gray-200 p-3">
-                  <p className="font-semibold text-gray-900">{shot.title}</p>
-                  <p className="mt-1 text-sm text-gray-600">{shot.description}</p>
-                  <p className="mt-2 text-xs text-gray-500">Location: {shot.location}</p>
-                  {shot.latitude != null && shot.longitude != null && (
-                    <p className="text-xs text-blue-700">
-                      Coordinates: {Number(shot.latitude).toFixed(5)}, {Number(shot.longitude).toFixed(5)}
-                    </p>
-                  )}
-                  <p className="text-xs text-gray-500">Micro-spot: {shot.microSpot}</p>
-                  <p className="text-xs text-gray-500">Pose: {shot.poseSuggestion}</p>
-                  <p className="text-xs text-gray-500">Composition: {shot.compositionSuggestion}</p>
-                  <p className="text-xs text-gray-500">Timing: {shot.timingHint}</p>
+            {activeReviewTab === 'prep' && (
+              <div className="grid gap-6 lg:grid-cols-2">
+                <div>
+                  <h4 className="mb-3 text-lg font-semibold text-gray-900">Client Prep Checklist</h4>
+                  <ul className="list-inside list-disc space-y-1 text-sm text-gray-700">
+                    {plan.clientPrepChecklist.map(item => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
                 </div>
-              ))}
-            </div>
+                <div>
+                  <h4 className="mb-3 text-lg font-semibold text-gray-900">Contingency Plans</h4>
+                  <ul className="list-inside list-disc space-y-1 text-sm text-gray-700">
+                    {plan.contingencyPlans.map(item => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            )}
           </Card>
-
-          <div className="grid gap-6 lg:grid-cols-2">
-            <Card>
-              <h4 className="mb-3 text-lg font-semibold text-gray-900">Client Prep Checklist</h4>
-              <ul className="list-inside list-disc space-y-1 text-sm text-gray-700">
-                {plan.clientPrepChecklist.map(item => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            </Card>
-
-            <Card>
-              <h4 className="mb-3 text-lg font-semibold text-gray-900">Contingency Plans</h4>
-              <ul className="list-inside list-disc space-y-1 text-sm text-gray-700">
-                {plan.contingencyPlans.map(item => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            </Card>
-          </div>
         </>
       )}
     </div>
