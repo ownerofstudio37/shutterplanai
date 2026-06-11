@@ -111,6 +111,23 @@ type ReviewTab = 'locations' | 'shot-list' | 'timeline' | 'prep';
 type LocationVote = 'up' | 'down';
 type WorkflowStage = 'intake' | 'review' | 'apply';
 
+type PlannerPreset = {
+  id: string;
+  label: string;
+  description: string;
+  shootType: string;
+  locationMode: LocationMode;
+  duration: string;
+  mood: string;
+  subjectDetails: string;
+  mustHaveShots: string;
+  constraints: string;
+  familyPacing?: string;
+  engagementStory?: string;
+  brandingGoals?: string;
+  eventPriorities?: string;
+};
+
 interface LocationRefinement {
   name: string;
   kidFriendlinessScore: number;
@@ -266,6 +283,61 @@ const CHAT_QUESTIONS: ChatQuestion[] = [
   },
 ];
 
+const PLANNER_PRESETS: PlannerPreset[] = [
+  {
+    id: 'family-30',
+    label: 'Family 30 min',
+    description: 'Short, efficient family session with kid-friendly pacing.',
+    shootType: 'Family Session',
+    locationMode: 'find-locations',
+    duration: '30 minutes',
+    mood: 'Warm + candid',
+    subjectDetails: 'Immediate family with young kids, want efficient transitions and easy walking',
+    mustHaveShots: 'Whole family portrait, siblings together, each child solo, parents together',
+    constraints: 'Need stroller-friendly access, quick transitions, minimal walking',
+    familyPacing: 'Fast-paced flow with short attention spans and minimal reset time',
+  },
+  {
+    id: 'engagement-golden-hour',
+    label: 'Engagement golden hour',
+    description: 'Romantic, cinematic engagement session timed for soft evening light.',
+    shootType: 'Engagement Session',
+    locationMode: 'find-locations',
+    duration: '90 minutes',
+    mood: 'Romantic + cinematic',
+    subjectDetails: 'Couple wants candid connection with a polished editorial finish',
+    mustHaveShots: 'Wide scenic portraits, walking candids, close connection shots, ring detail',
+    constraints: 'Need sunset-friendly sequence with easy outfit flow and low crowd pressure',
+    engagementStory: 'Want the session to feel intimate, story-driven, and golden-hour focused',
+  },
+  {
+    id: 'branding-downtown',
+    label: 'Branding downtown',
+    description: 'Urban branding session for website, speaking, and social content.',
+    shootType: 'Branding Session',
+    locationMode: 'find-locations',
+    duration: '60 minutes',
+    mood: 'Polished + professional',
+    subjectDetails: 'Solo business owner who needs a confident mix of polished and approachable images',
+    mustHaveShots: 'Website hero portrait, horizontal banner crop, speaking/profile image, social media variety',
+    constraints: 'Need clean backgrounds, modern architecture, and quick location changes',
+    brandingGoals: 'Website hero images, speaking profile photos, social content batch',
+  },
+  {
+    id: 'event-coverage',
+    label: 'Event coverage',
+    description: 'Coverage plan for speakers, details, atmosphere, and networking moments.',
+    shootType: 'Event Session',
+    locationMode: 'use-provided',
+    duration: '120 minutes',
+    mood: 'Documentary + candid',
+    subjectDetails: 'Business event with speakers, audience reactions, sponsor details, and networking',
+    mustHaveShots: 'Speaker on stage, audience reactions, sponsor signage, venue details, candid networking',
+    constraints: 'Need run-of-show awareness, low disruption, and coverage of key transitions',
+    eventPriorities: 'Keynote moments, sponsor visibility, attendee candids, room-wide establishing shots',
+  },
+];
+
 function getSessionCategory(shootTypeValue: string): SessionCategory {
   const value = shootTypeValue.toLowerCase();
   if (/family|newborn|maternity|kids|children/.test(value)) return 'family';
@@ -392,6 +464,7 @@ export default function PlannerPage() {
   const [preferredVenueBucket, setPreferredVenueBucket] = useState<string | null>(null);
   const [excludedVenueBuckets, setExcludedVenueBuckets] = useState<string[]>([]);
   const [isAiTyping, setIsAiTyping] = useState(false);
+  const [activePresetId, setActivePresetId] = useState<string | null>(null);
 
   const [plan, setPlan] = useState<SessionPlan | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -451,6 +524,7 @@ export default function PlannerPage() {
 
   const setAnswerForQuestion = (id: ChatQuestionId, value: string) => {
     setIsReviewConfirmed(false);
+    setActivePresetId(null);
 
     switch (id) {
       case 'shootType':
@@ -956,6 +1030,38 @@ export default function PlannerPage() {
     );
   };
 
+  const applyPreset = (preset: PlannerPreset) => {
+    const presetCity = businessProfile?.baseLocation || businessProfile?.zipCode || city;
+    const presetProvidedLocations =
+      preset.locationMode === 'use-provided'
+        ? providedLocations || 'Main stage, sponsor wall, networking area, venue exterior'
+        : '';
+    const nextCategory = getSessionCategory(preset.shootType);
+    const nextQuestions = CHAT_QUESTIONS.filter(
+      question => !question.showWhen || question.showWhen(preset.locationMode, nextCategory)
+    );
+
+    setActivePresetId(preset.id);
+    setPlan(null);
+    setError(null);
+    setIsReviewConfirmed(false);
+    setShootType(preset.shootType);
+    setLocationMode(preset.locationMode);
+    setSubjectDetails(preset.subjectDetails);
+    setCity(preset.locationMode === 'find-locations' ? presetCity : city);
+    setShootDate('');
+    setDuration(preset.duration);
+    setMood(preset.mood);
+    setMustHaveShots(preset.mustHaveShots);
+    setConstraints(preset.constraints);
+    setProvidedLocations(presetProvidedLocations);
+    setFamilyPacing(preset.familyPacing || '');
+    setEngagementStory(preset.engagementStory || '');
+    setBrandingGoals(preset.brandingGoals || '');
+    setEventPriorities(preset.eventPriorities || '');
+    setChatStepIndex(nextQuestions.length);
+  };
+
   const workflowStages: Array<{ id: WorkflowStage; label: string; description: string }> = [
     { id: 'intake', label: '1. Intake', description: 'Answer the planning chat' },
     { id: 'review', label: '2. Plan Review', description: 'Inspect locations and shot flow' },
@@ -1042,6 +1148,51 @@ export default function PlannerPage() {
         <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
           {workflowStage === 'intake' ? (
             <>
+              <div className="mb-4 rounded-xl border border-indigo-200 bg-indigo-50 p-4">
+                <div className="mb-3 flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-indigo-900">Quick-start presets</p>
+                    <p className="text-xs text-indigo-700">Start with a proven planning setup, then tweak anything in the intake summary.</p>
+                  </div>
+                  {activePresetId && (
+                    <span className="rounded-full bg-white px-2 py-1 text-xs font-medium text-indigo-700">
+                      Active preset: {PLANNER_PRESETS.find(preset => preset.id === activePresetId)?.label}
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  {PLANNER_PRESETS.map(preset => (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => applyPreset(preset)}
+                      className={`rounded-xl border px-4 py-3 text-left transition ${
+                        activePresetId === preset.id
+                          ? 'border-indigo-600 bg-white shadow-sm'
+                          : 'border-indigo-200 bg-white/80 hover:border-indigo-300 hover:bg-white'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">{preset.label}</p>
+                          <p className="mt-1 text-xs text-gray-600">{preset.description}</p>
+                        </div>
+                        <span className="rounded-full bg-indigo-100 px-2 py-1 text-[11px] font-medium text-indigo-700">
+                          {preset.duration}
+                        </span>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
+                        <span className="rounded-full bg-gray-100 px-2 py-1 text-gray-700">{preset.shootType}</span>
+                        <span className="rounded-full bg-gray-100 px-2 py-1 text-gray-700">
+                          {preset.locationMode === 'use-provided' ? 'Provided locations' : 'Find locations'}
+                        </span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div className="mb-3 flex items-center justify-between text-xs text-gray-600">
                 <span>Step {Math.min(chatStepIndex + 1, visibleQuestions.length)} of {visibleQuestions.length}</span>
                 <span>{Math.round((Math.min(chatStepIndex, visibleQuestions.length) / Math.max(visibleQuestions.length, 1)) * 100)}% complete</span>
