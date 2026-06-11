@@ -248,6 +248,131 @@ function getCityHotspotOverrides(city: string): string[] {
   return [];
 }
 
+function buildVenueSeedCandidates(rawText: string, city: string): string[] {
+  const text = rawText.replace(/\s+/g, ' ').trim();
+  if (!text) return [];
+
+  const cityToken = normalizeText(city).split(' ')[0] || '';
+  const stopWords = new Set([
+    'best',
+    'top',
+    'near',
+    'with',
+    'from',
+    'this',
+    'that',
+    'your',
+    'guide',
+    'ideas',
+    'photo',
+    'photos',
+    'photoshoot',
+    'photography',
+    'reddit',
+    'blog',
+    'session',
+    'locations',
+  ]);
+
+  const venueHint = /(park|garden|trail|square|plaza|waterfront|district|depot|farm|forest|lake|creek|beach|promenade|overlook|arboretum|museum|downtown|old town|historic)/i;
+  const phrases = text.match(/\b[A-Z][a-zA-Z'&.-]*(?:\s+[A-Z][a-zA-Z'&.-]*){1,5}\b/g) ?? [];
+
+  const cleaned = phrases
+    .map(phrase => phrase.replace(/[|:;,]+$/g, '').trim())
+    .filter(Boolean)
+    .filter(phrase => phrase.length >= 5 && phrase.length <= 80)
+    .filter(phrase => {
+      const lower = normalizeText(phrase);
+      if (!lower) return false;
+      if (Array.from(stopWords).some(word => lower === word || lower.startsWith(`${word} `))) return false;
+      if (cityToken && lower === cityToken) return false;
+      return venueHint.test(phrase) || (cityToken && lower.includes(cityToken));
+    });
+
+  return Array.from(new Set(cleaned)).slice(0, 18);
+}
+
+async function discoverWebHotspotSeeds(
+  city: string,
+  sessionCategory: SearchCandidateInput['sessionCategory']
+): Promise<string[]> {
+  const serpApiKey = process.env.SERPAPI_API_KEY;
+  const braveApiKey = process.env.BRAVE_SEARCH_API_KEY;
+  const baseQuery = `${city} best photoshoot locations photographer`;
+  const categoryHint =
+    sessionCategory === 'family'
+      ? 'family portraits'
+      : sessionCategory === 'engagement'
+        ? 'engagement photos'
+        : sessionCategory === 'event'
+          ? 'event portraits'
+          : 'portrait photography';
+
+  const queries = [
+    `${baseQuery} ${categoryHint}`,
+    `${city} site:reddit.com photoshoot locations`,
+    `${city} photographer blog location guide`,
+  ];
+
+  const harvestedText: string[] = [];
+
+  if (serpApiKey) {
+    for (const q of queries) {
+      const url = `https://serpapi.com/search.json?engine=google&q=${encodeURIComponent(q)}&num=8&api_key=${encodeURIComponent(serpApiKey)}`;
+      try {
+        const response = await fetch(url, {
+          headers: { Accept: 'application/json', 'User-Agent': 'ShutterPlanAI/1.0' },
+          cache: 'no-store',
+        });
+        if (!response.ok) continue;
+
+        const payload = (await response.json()) as {
+          organic_results?: Array<{ title?: string; snippet?: string }>;
+        };
+
+        (payload.organic_results ?? []).forEach(item => {
+          harvestedText.push([item.title ?? '', item.snippet ?? ''].join(' '));
+        });
+      } catch {
+        // ignore search provider errors
+      }
+
+      await sleep(180);
+    }
+  } else if (braveApiKey) {
+    for (const q of queries) {
+      const url = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(q)}&count=8`;
+      try {
+        const response = await fetch(url, {
+          headers: {
+            Accept: 'application/json',
+            'User-Agent': 'ShutterPlanAI/1.0',
+            'X-Subscription-Token': braveApiKey,
+          },
+          cache: 'no-store',
+        });
+        if (!response.ok) continue;
+
+        const payload = (await response.json()) as {
+          web?: { results?: Array<{ title?: string; description?: string }> };
+        };
+
+        (payload.web?.results ?? []).forEach(item => {
+          harvestedText.push([item.title ?? '', item.description ?? ''].join(' '));
+        });
+      } catch {
+        // ignore search provider errors
+      }
+
+      await sleep(180);
+    }
+  }
+
+  if (harvestedText.length === 0) return [];
+
+  return buildVenueSeedCandidates(harvestedText.join(' '), city);
+}
+
 function getOverpassTagFilters(sessionCategory: SearchCandidateInput['sessionCategory']) {
   const common = [
     { key: 'leisure', value: 'park|garden|nature_reserve', relevanceScore: 12 },
@@ -369,7 +494,8 @@ function getSearchQueries(
 export async function searchLocationCandidates(input: SearchCandidateInput): Promise<LocationCandidate[]> {
   const city = input.city.trim();
   const localOverrides = getCityHotspotOverrides(city);
-  const mergedPreferred = [...(input.preferredTerms ?? []), ...localOverrides];
+  const webSeeds = await discoverWebHotspotSeeds(city, input.sessionCategory);
+  const mergedPreferred = [...(input.preferredTerms ?? []), ...localOverrides, ...webSeeds];
   const queries = getSearchQueries(input.sessionCategory, mergedPreferred);
   const blocked = (input.bannedTerms ?? []).map(t => t.toLowerCase()).filter(Boolean);
   const limit = input.limit ?? 8;
