@@ -493,6 +493,7 @@ export default function PlannerPage() {
             latitude: anchor?.latitude ?? 0,
             longitude: anchor?.longitude ?? 0,
             date: shootDate || new Date().toISOString(),
+            durationMinutes,
             sessionCategory,
             locations: plan.locationSuggestions.map(location => ({
               name: location.displayName || location.name,
@@ -504,7 +505,13 @@ export default function PlannerPage() {
           }),
         });
 
-        const result = (await response.json()) as { goldenHours?: PlannerIntelligence['goldenHours']; logistics?: PlannerIntelligence['logistics']; optimizedRoute?: number[] };
+        const result = (await response.json()) as {
+          goldenHours?: PlannerIntelligence['goldenHours'];
+          weather?: PlannerIntelligence['weather'];
+          confidence?: PlannerIntelligence['confidence'];
+          logistics?: PlannerIntelligence['logistics'];
+          optimizedRoute?: number[];
+        };
         if (!response.ok || !result.goldenHours || !Array.isArray(result.logistics) || !Array.isArray(result.optimizedRoute)) {
           setIntelligence(null);
           return;
@@ -512,6 +519,8 @@ export default function PlannerPage() {
 
         setIntelligence({
           goldenHours: result.goldenHours,
+          weather: result.weather,
+          confidence: result.confidence,
           logistics: result.logistics,
           optimizedRoute: result.optimizedRoute,
         });
@@ -523,7 +532,7 @@ export default function PlannerPage() {
     };
 
     void runIntelligencePass();
-  }, [plan, sessionCategory, shootDate]);
+  }, [durationMinutes, plan, sessionCategory, shootDate]);
 
   const locationIndex = useMemo(() => {
     const map = new Map<string, SessionPlanLocation>();

@@ -165,6 +165,25 @@ export type PlannerIntelligence = {
     goldenHourStart: string;
     goldenHourEnd: string;
   };
+  weather?: {
+    cloudCover: number;
+    uvIndex: number;
+    windSpeed: number;
+    windGustSpeed: number;
+    precipitationProbability: number;
+    recommendations: string[];
+    provider: 'open-meteo' | 'fallback';
+  };
+  confidence?: {
+    overall: number;
+    windows: Array<{
+      label: string;
+      startsAt: string;
+      endsAt: string;
+      confidence: number;
+      summary: string;
+    }>;
+  };
   logistics: Array<{
     parkingDifficulty: number;
     restroomAccessibility: number;

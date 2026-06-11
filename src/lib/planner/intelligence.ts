@@ -8,7 +8,25 @@ export interface WeatherData {
   uvIndex: number;
   windSpeed: number;
   windGustSpeed: number;
+  precipitationProbability: number;
   recommendations: string[];
+  provider: 'open-meteo' | 'fallback';
+}
+
+export interface WeatherWindowConfidence {
+  label: string;
+  startsAt: string;
+  endsAt: string;
+  confidence: number;
+  summary: string;
+}
+
+export interface ForecastIntelligence {
+  weather: WeatherData;
+  confidence: {
+    overall: number;
+    windows: WeatherWindowConfidence[];
+  };
 }
 
 export interface LogisticsScore {
@@ -59,6 +77,246 @@ export function calculateGoldenHours(latitude: number, longitude: number, date: 
   const goldenHourEnd = new Date(sunset.getTime());
   
   return { sunrise, sunset, goldenHourStart, goldenHourEnd };
+}
+
+type OpenMeteoResponse = {
+  daily?: {
+    sunrise?: string[];
+    sunset?: string[];
+  };
+  hourly?: {
+    time?: string[];
+    cloud_cover?: number[];
+    uv_index?: number[];
+    wind_speed_10m?: number[];
+    wind_gusts_10m?: number[];
+    precipitation_probability?: number[];
+  };
+};
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function summarizeConfidence(score: number) {
+  if (score >= 85) return 'Excellent conditions';
+  if (score >= 70) return 'Good conditions';
+  if (score >= 55) return 'Usable with care';
+  return 'High weather risk';
+}
+
+function calculateConfidenceScore(metrics: {
+  precipitationProbability: number;
+  cloudCover: number;
+  windSpeed: number;
+  windGustSpeed: number;
+  uvIndex: number;
+}) {
+  let score = 100;
+
+  score -= clamp(metrics.precipitationProbability, 0, 100) * 0.5;
+  score -= Math.abs(clamp(metrics.cloudCover, 0, 100) - 35) * 0.3;
+  score -= Math.max(0, metrics.windSpeed - 8) * 2;
+  score -= Math.max(0, metrics.windGustSpeed - 14) * 1.5;
+  score -= Math.max(0, metrics.uvIndex - 8) * 3;
+
+  return Math.round(clamp(score, 5, 100));
+}
+
+function getWindowAverages(
+  hourly: OpenMeteoResponse['hourly'],
+  startsAt: Date,
+  endsAt: Date
+) {
+  const times = hourly?.time ?? [];
+  if (!times.length) return null;
+
+  const collect = (values?: number[]) => {
+    if (!values || values.length !== times.length) return [] as number[];
+    return values.filter((_value, index) => {
+      const timestamp = new Date(times[index]);
+      return timestamp >= startsAt && timestamp <= endsAt;
+    });
+  };
+
+  const avg = (values: number[], fallback = 0) => {
+    if (!values.length) return fallback;
+    return values.reduce((sum, value) => sum + value, 0) / values.length;
+  };
+
+  const cloudCover = avg(collect(hourly?.cloud_cover), 50);
+  const uvIndex = avg(collect(hourly?.uv_index), 4);
+  const windSpeed = avg(collect(hourly?.wind_speed_10m), 10);
+  const windGustSpeed = avg(collect(hourly?.wind_gusts_10m), 14);
+  const precipitationProbability = avg(collect(hourly?.precipitation_probability), 20);
+
+  return {
+    cloudCover,
+    uvIndex,
+    windSpeed,
+    windGustSpeed,
+    precipitationProbability,
+  };
+}
+
+function createFallbackForecast(date: Date): ForecastIntelligence {
+  const estimated = calculateGoldenHours(0, 0, date);
+  const baseMetrics = {
+    cloudCover: 50,
+    uvIndex: 4,
+    windSpeed: 10,
+    windGustSpeed: 14,
+    precipitationProbability: 20,
+  };
+
+  const confidence = calculateConfidenceScore(baseMetrics);
+  const window: WeatherWindowConfidence = {
+    label: 'Planned shoot window',
+    startsAt: date.toISOString(),
+    endsAt: new Date(date.getTime() + 60 * 60 * 1000).toISOString(),
+    confidence,
+    summary: `${summarizeConfidence(confidence)} (fallback estimate)`,
+  };
+
+  return {
+    weather: {
+      goldenHourStart: estimated.goldenHourStart.toISOString(),
+      goldenHourEnd: estimated.goldenHourEnd.toISOString(),
+      sunsetTime: estimated.sunset.toISOString(),
+      sunriseTime: estimated.sunrise.toISOString(),
+      cloudCover: baseMetrics.cloudCover,
+      uvIndex: baseMetrics.uvIndex,
+      windSpeed: baseMetrics.windSpeed,
+      windGustSpeed: baseMetrics.windGustSpeed,
+      precipitationProbability: baseMetrics.precipitationProbability,
+      recommendations: ['Forecast provider unavailable. Using conservative fallback estimate.'],
+      provider: 'fallback',
+    },
+    confidence: {
+      overall: confidence,
+      windows: [window],
+    },
+  };
+}
+
+export async function getForecastIntelligence(
+  params: { latitude: number; longitude: number; date: Date; durationMinutes?: number },
+  fetcher: typeof fetch = fetch
+): Promise<ForecastIntelligence> {
+  const { latitude, longitude, date } = params;
+  const durationMinutes = Math.max(20, Math.min(240, params.durationMinutes ?? 90));
+
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    return createFallbackForecast(date);
+  }
+
+  try {
+    const endpoint = new URL('https://api.open-meteo.com/v1/forecast');
+    endpoint.searchParams.set('latitude', String(latitude));
+    endpoint.searchParams.set('longitude', String(longitude));
+    endpoint.searchParams.set('timezone', 'auto');
+    endpoint.searchParams.set('forecast_days', '2');
+    endpoint.searchParams.set('daily', 'sunrise,sunset');
+    endpoint.searchParams.set(
+      'hourly',
+      'cloud_cover,uv_index,wind_speed_10m,wind_gusts_10m,precipitation_probability'
+    );
+
+    const response = await fetcher(endpoint.toString(), {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      cache: 'no-store',
+    });
+
+    if (!response.ok) {
+      return createFallbackForecast(date);
+    }
+
+    const data = (await response.json()) as OpenMeteoResponse;
+    const sunrise = data.daily?.sunrise?.[0] ? new Date(data.daily.sunrise[0]) : null;
+    const sunset = data.daily?.sunset?.[0] ? new Date(data.daily.sunset[0]) : null;
+
+    if (!sunrise || !sunset || Number.isNaN(sunrise.getTime()) || Number.isNaN(sunset.getTime())) {
+      return createFallbackForecast(date);
+    }
+
+    const shootStart = new Date(date);
+    const shootEnd = new Date(shootStart.getTime() + durationMinutes * 60 * 1000);
+    const eveningGoldenStart = new Date(sunset.getTime() - 60 * 60 * 1000);
+    const eveningGoldenEnd = sunset;
+
+    const plannedWindowMetrics = getWindowAverages(data.hourly, shootStart, shootEnd);
+    const goldenWindowMetrics = getWindowAverages(data.hourly, eveningGoldenStart, eveningGoldenEnd);
+    const baselineMetrics = {
+      cloudCover: plannedWindowMetrics?.cloudCover ?? 45,
+      uvIndex: plannedWindowMetrics?.uvIndex ?? 4,
+      windSpeed: plannedWindowMetrics?.windSpeed ?? 8,
+      windGustSpeed: plannedWindowMetrics?.windGustSpeed ?? 12,
+      precipitationProbability: plannedWindowMetrics?.precipitationProbability ?? 15,
+    };
+
+    const plannedConfidence = calculateConfidenceScore(baselineMetrics);
+    const goldenConfidence = calculateConfidenceScore(
+      goldenWindowMetrics ?? {
+        ...baselineMetrics,
+        cloudCover: clamp(baselineMetrics.cloudCover - 5, 0, 100),
+      }
+    );
+
+    const windows: WeatherWindowConfidence[] = [
+      {
+        label: 'Planned shoot window',
+        startsAt: shootStart.toISOString(),
+        endsAt: shootEnd.toISOString(),
+        confidence: plannedConfidence,
+        summary: summarizeConfidence(plannedConfidence),
+      },
+      {
+        label: 'Golden hour window',
+        startsAt: eveningGoldenStart.toISOString(),
+        endsAt: eveningGoldenEnd.toISOString(),
+        confidence: goldenConfidence,
+        summary: summarizeConfidence(goldenConfidence),
+      },
+    ];
+
+    const overall = Math.round((plannedConfidence * 0.65 + goldenConfidence * 0.35));
+    const recommendations: string[] = [];
+    if (baselineMetrics.precipitationProbability >= 45) {
+      recommendations.push('High precipitation risk. Prepare weather backup options.');
+    }
+    if (baselineMetrics.windGustSpeed >= 20) {
+      recommendations.push('Strong gusts expected. Plan stable posing and hair/wrap control.');
+    }
+    if (baselineMetrics.uvIndex >= 8) {
+      recommendations.push('UV risk is high. Favor shade and short direct-sun intervals.');
+    }
+    if (recommendations.length === 0) {
+      recommendations.push('Weather and light profile look stable for this session window.');
+    }
+
+    return {
+      weather: {
+        goldenHourStart: eveningGoldenStart.toISOString(),
+        goldenHourEnd: eveningGoldenEnd.toISOString(),
+        sunsetTime: sunset.toISOString(),
+        sunriseTime: sunrise.toISOString(),
+        cloudCover: Math.round(baselineMetrics.cloudCover),
+        uvIndex: Number(baselineMetrics.uvIndex.toFixed(1)),
+        windSpeed: Number(baselineMetrics.windSpeed.toFixed(1)),
+        windGustSpeed: Number(baselineMetrics.windGustSpeed.toFixed(1)),
+        precipitationProbability: Math.round(baselineMetrics.precipitationProbability),
+        recommendations,
+        provider: 'open-meteo',
+      },
+      confidence: {
+        overall,
+        windows,
+      },
+    };
+  } catch {
+    return createFallbackForecast(date);
+  }
 }
 
 /**

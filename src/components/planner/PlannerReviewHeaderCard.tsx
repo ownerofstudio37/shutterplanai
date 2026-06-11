@@ -9,6 +9,25 @@ type PlannerIntelligence = {
     goldenHourStart: string;
     goldenHourEnd: string;
   };
+  weather?: {
+    cloudCover: number;
+    uvIndex: number;
+    windSpeed: number;
+    windGustSpeed: number;
+    precipitationProbability: number;
+    recommendations: string[];
+    provider: 'open-meteo' | 'fallback';
+  };
+  confidence?: {
+    overall: number;
+    windows: Array<{
+      label: string;
+      startsAt: string;
+      endsAt: string;
+      confidence: number;
+      summary: string;
+    }>;
+  };
   optimizedRoute: number[];
 };
 
@@ -172,11 +191,43 @@ export function PlannerReviewHeaderCard({
               <span className="rounded-full bg-white px-2 py-1 font-medium text-indigo-700">
                 Sunset: {new Date(intelligence.goldenHours.sunset).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
               </span>
+              {typeof intelligence.confidence?.overall === 'number' && (
+                <span className="rounded-full bg-white px-2 py-1 font-medium text-indigo-700">
+                  Forecast confidence: {intelligence.confidence.overall}%
+                </span>
+              )}
+              {intelligence.weather && (
+                <span className="rounded-full bg-white px-2 py-1 font-medium text-indigo-700">
+                  Rain risk: {intelligence.weather.precipitationProbability}%
+                </span>
+              )}
+              {intelligence.weather && (
+                <span className="rounded-full bg-white px-2 py-1 font-medium text-indigo-700">
+                  Provider: {intelligence.weather.provider}
+                </span>
+              )}
             </div>
             {intelligence.optimizedRoute.length > 1 && (
               <Button variant="secondary" onClick={onApplyOptimizedRouteOrder}>Apply optimized route order</Button>
             )}
           </div>
+          {intelligence.confidence?.windows?.length ? (
+            <div className="mt-3 grid gap-2 md:grid-cols-2">
+              {intelligence.confidence.windows.map(window => (
+                <div key={`${window.label}-${window.startsAt}`} className="rounded-lg border border-indigo-200 bg-white px-3 py-2 text-xs text-indigo-900">
+                  <p className="font-semibold">{window.label}: {window.confidence}%</p>
+                  <p>{window.summary}</p>
+                </div>
+              ))}
+            </div>
+          ) : null}
+          {intelligence.weather?.recommendations?.length ? (
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-xs">
+              {intelligence.weather.recommendations.slice(0, 2).map(item => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          ) : null}
         </div>
       )}
 
