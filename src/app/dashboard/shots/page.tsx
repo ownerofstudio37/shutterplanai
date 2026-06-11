@@ -64,6 +64,26 @@ function getAuthHeader() {
   return headers;
 }
 
+function getShotStatusClass(status: ShotItem['status']) {
+  switch (status) {
+    case 'approved':
+      return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+    case 'taken':
+      return 'border-blue-200 bg-blue-50 text-blue-700';
+    case 'rejected':
+      return 'border-red-200 bg-red-50 text-red-700';
+    default:
+      return 'border-amber-200 bg-amber-50 text-amber-800';
+  }
+}
+
+function formatDate(value?: string | null) {
+  if (!value) return 'Unscheduled';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Unscheduled';
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
 export default function ShotsPage() {
   const [projects, setProjects] = useState<ProjectOption[]>([]);
   const [shots, setShots] = useState<ShotItem[]>([]);
@@ -150,10 +170,12 @@ export default function ShotsPage() {
   };
 
   useEffect(() => {
-    void (async () => {
-      await loadProjects();
-      await loadShots();
-    })();
+    queueMicrotask(() => {
+      void (async () => {
+        await loadProjects();
+        await loadShots();
+      })();
+    });
   }, []);
 
   const createShot = async (event: React.FormEvent) => {
@@ -428,17 +450,48 @@ export default function ShotsPage() {
     });
   }, [projectFilter, searchQuery, shots, statusFilter]);
 
+  const shotCounts = useMemo(() => {
+    return {
+      planned: shots.filter(shot => shot.status === 'planned').length,
+      taken: shots.filter(shot => shot.status === 'taken').length,
+      approved: shots.filter(shot => shot.status === 'approved').length,
+      mapped: shots.filter(shot => shot.latitude != null && shot.longitude != null).length,
+    };
+  }, [shots]);
+
   return (
-    <div className="space-y-6">
-      <Card>
-        <div className="mb-4 flex items-center justify-between gap-4">
+    <div className="space-y-5">
+      <section className="rounded-lg border border-[#d8d2c8] bg-[#1f2933] p-5 text-white shadow-sm md:p-6">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#c6b9a5]">Shot library</p>
+        <h1 className="mt-3 text-3xl font-semibold tracking-normal">Coverage, micro-spots, and proof points.</h1>
+        <p className="mt-3 max-w-2xl text-sm leading-6 text-[#d1d5db]">
+          Build a field-ready shot library with exact locations, client logistics, image references, and AI-generated coverage ideas.
+        </p>
+        <div className="mt-6 grid gap-3 sm:grid-cols-4">
+          {[
+            ['Planned', shotCounts.planned],
+            ['Taken', shotCounts.taken],
+            ['Approved', shotCounts.approved],
+            ['Mapped', shotCounts.mapped],
+          ].map(([label, value]) => (
+            <div key={label} className="rounded-lg border border-white/10 bg-white/10 px-3 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#c6b9a5]">{label}</p>
+              <p className="mt-1 text-2xl font-semibold">{isLoading ? '-' : value}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <Card className="border border-[#d8d2c8] shadow-sm">
+        <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
-            <h3 className="text-lg font-semibold text-gray-900">AI Shot Suggestions</h3>
-            <p className="mt-1 text-sm text-gray-600">
-              Generate fresh shot ideas for a project from Gemini and add them to your shot list.
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7c6f64]">AI coverage assistant</p>
+            <h2 className="mt-2 text-xl font-semibold text-[#1f2933]">Generate shot ideas</h2>
+            <p className="mt-1 text-sm text-[#5f6b76]">
+              Turn a creative brief into coverage ideas you can add to the active shot library.
             </p>
           </div>
-          <Button type="button" onClick={() => void generateSuggestions()} isLoading={isGenerating}>
+          <Button type="button" onClick={() => void generateSuggestions()} isLoading={isGenerating} className="bg-[#1f2933] hover:bg-[#111827]">
             {isGenerating ? 'Generating...' : 'Generate Ideas'}
           </Button>
         </div>
@@ -446,7 +499,7 @@ export default function ShotsPage() {
         <div className="grid gap-3 md:grid-cols-2">
           <select
             aria-label="Project for AI shot suggestions"
-            className="w-full rounded-lg border border-gray-300 px-4 py-2"
+            className="w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] px-4 py-2 text-sm outline-none focus:border-[#1f2933]"
             value={aiProjectId}
             onChange={event => setAiProjectId(event.target.value)}
             disabled={isGenerating || projects.length === 0}
@@ -464,7 +517,7 @@ export default function ShotsPage() {
           <textarea
             value={creativeBrief}
             onChange={event => setCreativeBrief(event.target.value)}
-            className="min-h-24 w-full rounded-lg border border-gray-300 px-4 py-2"
+            className="min-h-24 w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] px-4 py-2 text-sm outline-none focus:border-[#1f2933]"
             placeholder="Optional creative brief: mood, lens, lighting, story, subject, brand direction..."
           />
         </div>
@@ -482,20 +535,20 @@ export default function ShotsPage() {
         {aiSuggestions.length > 0 && (
           <div className="mt-6 grid gap-4 lg:grid-cols-2">
             {aiSuggestions.map(suggestion => (
-              <div key={suggestion.title} className="rounded-lg border border-violet-200 bg-violet-50/50 p-4">
-                <h4 className="font-semibold text-gray-900">{suggestion.title}</h4>
-                <p className="mt-2 text-sm text-gray-700">{suggestion.description}</p>
-                <dl className="mt-3 space-y-2 text-sm text-gray-600">
+              <div key={suggestion.title} className="rounded-lg border border-[#d8d2c8] bg-[#faf9f6] p-4">
+                <h4 className="font-semibold text-[#1f2933]">{suggestion.title}</h4>
+                <p className="mt-2 text-sm leading-6 text-[#5f6b76]">{suggestion.description}</p>
+                <dl className="mt-3 space-y-2 text-sm text-[#5f6b76]">
                   <div>
-                    <dt className="font-medium text-gray-800">Location</dt>
+                    <dt className="font-medium text-[#1f2933]">Location</dt>
                     <dd>{suggestion.location || 'Flexible'}</dd>
                   </div>
                   <div>
-                    <dt className="font-medium text-gray-800">Notes</dt>
+                    <dt className="font-medium text-[#1f2933]">Notes</dt>
                     <dd>{suggestion.notes || 'None'}</dd>
                   </div>
                   <div>
-                    <dt className="font-medium text-gray-800">Timing hint</dt>
+                    <dt className="font-medium text-[#1f2933]">Timing hint</dt>
                     <dd>{suggestion.plannedTimeHint || 'No timing hint'}</dd>
                   </div>
                 </dl>
@@ -513,12 +566,14 @@ export default function ShotsPage() {
         )}
       </Card>
 
-      <Card>
-        <h3 className="mb-4 text-lg font-semibold text-gray-900">Add Shot</h3>
+      <Card className="border border-[#d8d2c8] shadow-sm">
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7c6f64]">Manual capture</p>
+        <h2 className="mt-2 text-xl font-semibold text-[#1f2933]">Add a mapped shot</h2>
+        <p className="mt-1 text-sm text-[#5f6b76]">Store exact micro-spot details so the shot is useful on-location later.</p>
         <form onSubmit={createShot} className="space-y-3">
           <select
             aria-label="Select project"
-            className="w-full rounded-lg border border-gray-300 px-4 py-2"
+            className="w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] px-4 py-2 text-sm outline-none focus:border-[#1f2933]"
             value={projectId}
             onChange={event => setProjectId(event.target.value)}
             disabled={isCreating || projects.length === 0}
@@ -535,21 +590,21 @@ export default function ShotsPage() {
           </select>
 
           <input
-            className="w-full rounded-lg border border-gray-300 px-4 py-2"
+            className="w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] px-4 py-2 text-sm outline-none focus:border-[#1f2933]"
             value={title}
             onChange={event => setTitle(event.target.value)}
             placeholder="Shot title"
             disabled={isCreating}
           />
           <textarea
-            className="min-h-24 w-full rounded-lg border border-gray-300 px-4 py-2"
+            className="min-h-24 w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] px-4 py-2 text-sm outline-none focus:border-[#1f2933]"
             value={description}
             onChange={event => setDescription(event.target.value)}
             placeholder="Shot description"
             disabled={isCreating}
           />
           <input
-            className="w-full rounded-lg border border-gray-300 px-4 py-2"
+            className="w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] px-4 py-2 text-sm outline-none focus:border-[#1f2933]"
             value={location}
             onChange={event => setLocation(event.target.value)}
             placeholder="Location (optional)"
@@ -558,14 +613,14 @@ export default function ShotsPage() {
 
           <div className="grid gap-3 md:grid-cols-2">
             <input
-              className="w-full rounded-lg border border-gray-300 px-4 py-2"
+              className="w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] px-4 py-2 text-sm outline-none focus:border-[#1f2933]"
               value={latitude}
               onChange={event => setLatitude(event.target.value)}
               placeholder="Latitude (e.g. 30.2672)"
               disabled={isCreating}
             />
             <input
-              className="w-full rounded-lg border border-gray-300 px-4 py-2"
+              className="w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] px-4 py-2 text-sm outline-none focus:border-[#1f2933]"
               value={longitude}
               onChange={event => setLongitude(event.target.value)}
               placeholder="Longitude (e.g. -97.7431)"
@@ -574,7 +629,7 @@ export default function ShotsPage() {
           </div>
 
           <input
-            className="w-full rounded-lg border border-gray-300 px-4 py-2"
+            className="w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] px-4 py-2 text-sm outline-none focus:border-[#1f2933]"
             value={microSpotName}
             onChange={event => setMicroSpotName(event.target.value)}
             placeholder="Micro-spot name (e.g. Weeping willow by lake)"
@@ -583,14 +638,14 @@ export default function ShotsPage() {
 
           <div className="grid gap-3 md:grid-cols-2">
             <input
-              className="w-full rounded-lg border border-gray-300 px-4 py-2"
+              className="w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] px-4 py-2 text-sm outline-none focus:border-[#1f2933]"
               value={walkingDistance}
               onChange={event => setWalkingDistance(event.target.value)}
               placeholder="Walking distance (e.g. 4 min from lot)"
               disabled={isCreating}
             />
             <input
-              className="w-full rounded-lg border border-gray-300 px-4 py-2"
+              className="w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] px-4 py-2 text-sm outline-none focus:border-[#1f2933]"
               value={restroomLocation}
               onChange={event => setRestroomLocation(event.target.value)}
               placeholder="Nearest restroom location"
@@ -599,33 +654,36 @@ export default function ShotsPage() {
           </div>
 
           <textarea
-            className="min-h-20 w-full rounded-lg border border-gray-300 px-4 py-2"
+            className="min-h-20 w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] px-4 py-2 text-sm outline-none focus:border-[#1f2933]"
             value={parkingNotes}
             onChange={event => setParkingNotes(event.target.value)}
             placeholder="Parking notes"
             disabled={isCreating}
           />
           <textarea
-            className="min-h-20 w-full rounded-lg border border-gray-300 px-4 py-2"
+            className="min-h-20 w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] px-4 py-2 text-sm outline-none focus:border-[#1f2933]"
             value={backgroundDescription}
             onChange={event => setBackgroundDescription(event.target.value)}
             placeholder="Background description"
             disabled={isCreating}
           />
 
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-[#5f6b76]">
             Tip: Add coordinates now so this shot appears on the Locations map immediately.
           </p>
 
-          <Button type="submit" isLoading={isCreating} disabled={projects.length === 0}>
+          <Button type="submit" isLoading={isCreating} disabled={projects.length === 0} className="bg-[#1f2933] hover:bg-[#111827]">
             {isCreating ? 'Adding...' : 'Add Shot'}
           </Button>
         </form>
       </Card>
 
-      <Card>
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-gray-900">Planned Shots</h3>
+      <Card className="border border-[#d8d2c8] shadow-sm">
+        <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7c6f64]">Shot workspace</p>
+            <h2 className="mt-2 text-xl font-semibold text-[#1f2933]">Planned shots</h2>
+          </div>
           <Button variant="ghost" onClick={() => void loadShots()}>
             Refresh
           </Button>
@@ -635,7 +693,7 @@ export default function ShotsPage() {
           <input
             value={searchQuery}
             onChange={event => setSearchQuery(event.target.value)}
-            className="w-full rounded-lg border border-gray-300 px-4 py-2"
+            className="w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] px-4 py-2 text-sm outline-none focus:border-[#1f2933]"
             placeholder="Search shots by title, description, project, or location"
             aria-label="Search shots"
           />
@@ -643,7 +701,7 @@ export default function ShotsPage() {
             aria-label="Filter shots by project"
             value={projectFilter}
             onChange={event => setProjectFilter(event.target.value)}
-            className="w-full rounded-lg border border-gray-300 px-4 py-2"
+            className="w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] px-4 py-2 text-sm outline-none focus:border-[#1f2933]"
           >
             <option value="all">All projects</option>
             {projects.map(project => (
@@ -656,7 +714,7 @@ export default function ShotsPage() {
             aria-label="Filter shots by status"
             value={statusFilter}
             onChange={event => setStatusFilter(event.target.value as 'all' | ShotItem['status'])}
-            className="w-full rounded-lg border border-gray-300 px-4 py-2"
+            className="w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] px-4 py-2 text-sm outline-none focus:border-[#1f2933]"
           >
             <option value="all">All statuses</option>
             <option value="planned">Planned</option>
@@ -673,17 +731,17 @@ export default function ShotsPage() {
         )}
 
         {isLoading ? (
-          <p className="text-gray-600">Loading shots...</p>
+          <p className="text-[#5f6b76]">Loading shots...</p>
         ) : shots.length === 0 ? (
-          <p className="text-gray-600">No shots planned yet.</p>
+          <p className="rounded-lg border border-dashed border-[#d8d2c8] bg-[#faf9f6] p-4 text-sm text-[#5f6b76]">No shots planned yet.</p>
         ) : filteredShots.length === 0 ? (
-          <p className="text-gray-600">No shots match your search and filters.</p>
+          <p className="rounded-lg border border-dashed border-[#d8d2c8] bg-[#faf9f6] p-4 text-sm text-[#5f6b76]">No shots match your search and filters.</p>
         ) : (
-          <div className="space-y-3">
+          <div className="grid gap-3 lg:grid-cols-2">
             {filteredShots.map(shot => (
-              <div key={shot.id} className="rounded-lg border border-gray-200 p-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
+              <article key={shot.id} className="rounded-lg border border-[#d8d2c8] bg-white p-4">
+                <div className="flex flex-col gap-4">
+                  <div className="min-w-0">
                     {shot.image_url && (
                       <img
                         src={shot.image_url}
@@ -691,22 +749,40 @@ export default function ShotsPage() {
                         className="mb-3 h-32 w-full max-w-sm rounded-lg object-cover"
                       />
                     )}
-                    <h4 className="font-semibold text-gray-900">{shot.title}</h4>
-                    <p className="mt-1 text-sm text-gray-600">{shot.description || 'No description'}</p>
-                    <p className="mt-2 text-xs text-gray-500">
-                      Project: {shot.project_title ?? 'Unknown'} · Status: {shot.status}
-                      {shot.location ? ` · ${shot.location}` : ''}
-                    </p>
-                    {(shot.micro_spot_name || (shot.latitude != null && shot.longitude != null)) && (
-                      <p className="mt-1 text-xs text-blue-600">
-                        {shot.micro_spot_name ? `Micro-spot: ${shot.micro_spot_name}` : 'Map pin ready'}
-                        {shot.latitude != null && shot.longitude != null
-                          ? ` · ${Number(shot.latitude).toFixed(5)}, ${Number(shot.longitude).toFixed(5)}`
-                          : ''}
-                      </p>
-                    )}
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h4 className="font-semibold text-[#1f2933]">{shot.title}</h4>
+                        <p className="mt-2 text-sm leading-6 text-[#5f6b76]">{shot.description || 'No description'}</p>
+                      </div>
+                      <span className={`shrink-0 rounded-md border px-2 py-1 text-xs font-medium ${getShotStatusClass(shot.status)}`}>
+                        {shot.status}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex gap-2">
+
+                  <div className="grid gap-2 text-xs text-[#5f6b76] sm:grid-cols-2">
+                    <p className="rounded-md bg-[#f6f3ee] px-3 py-2"><span className="font-semibold text-[#1f2933]">Project:</span> {shot.project_title ?? 'Unknown'}</p>
+                    <p className="rounded-md bg-[#f6f3ee] px-3 py-2"><span className="font-semibold text-[#1f2933]">Date:</span> {formatDate(shot.planned_time)}</p>
+                    <p className="rounded-md bg-[#f6f3ee] px-3 py-2"><span className="font-semibold text-[#1f2933]">Location:</span> {shot.location || 'Not set'}</p>
+                    <p className="rounded-md bg-[#f6f3ee] px-3 py-2"><span className="font-semibold text-[#1f2933]">Micro-spot:</span> {shot.micro_spot_name || 'Not set'}</p>
+                  </div>
+
+                  {(shot.parking_notes || shot.restroom_location || shot.walking_distance || shot.background_description) && (
+                    <div className="grid gap-2 text-xs text-[#5f6b76] sm:grid-cols-2">
+                      {shot.parking_notes && <p className="rounded-md bg-[#faf9f6] px-3 py-2"><span className="font-semibold text-[#1f2933]">Parking:</span> {shot.parking_notes}</p>}
+                      {shot.restroom_location && <p className="rounded-md bg-[#faf9f6] px-3 py-2"><span className="font-semibold text-[#1f2933]">Restroom:</span> {shot.restroom_location}</p>}
+                      {shot.walking_distance && <p className="rounded-md bg-[#faf9f6] px-3 py-2"><span className="font-semibold text-[#1f2933]">Walking:</span> {shot.walking_distance}</p>}
+                      {shot.background_description && <p className="rounded-md bg-[#faf9f6] px-3 py-2"><span className="font-semibold text-[#1f2933]">Background:</span> {shot.background_description}</p>}
+                    </div>
+                  )}
+
+                  {shot.latitude != null && shot.longitude != null && (
+                    <p className="rounded-md bg-[#faf9f6] px-3 py-2 text-xs text-[#5f6b76]">
+                      Map pin: {Number(shot.latitude).toFixed(5)}, {Number(shot.longitude).toFixed(5)}
+                    </p>
+                  )}
+
+                  <div className="flex flex-wrap gap-2 border-t border-[#e4ded5] pt-3">
                     <Button variant="secondary" size="sm" onClick={() => openEditModal(shot)}>
                       Edit
                     </Button>
@@ -715,7 +791,7 @@ export default function ShotsPage() {
                     </Button>
                   </div>
                 </div>
-              </div>
+              </article>
             ))}
           </div>
         )}
