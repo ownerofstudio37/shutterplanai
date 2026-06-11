@@ -148,6 +148,11 @@ export type PlannerDraftState = {
   brandingGoals?: string;
   eventPriorities?: string;
   shootDate?: string;
+  // V2: multi-day fields (behind feature flag — ignored by single-day flow)
+  multiDay?: boolean;
+  sessionDates?: string[]; // ISO date strings e.g. ['2026-07-01', '2026-07-02']
+  dailyDurationMinutes?: number; // per-day shoot duration override
+  maxTravelMinutesPerDay?: number; // travel budget per day
 };
 
 export type PlannerDraft = {

@@ -19,6 +19,11 @@ interface DraftPlan {
     brandingGoals?: string;
     eventPriorities?: string;
     shootDate?: string;
+    // V2: multi-day fields (optional, ignored by single-day flow)
+    multiDay?: boolean;
+    sessionDates?: string[];
+    dailyDurationMinutes?: number;
+    maxTravelMinutesPerDay?: number;
   };
   createdAt: string;
   updatedAt: string;

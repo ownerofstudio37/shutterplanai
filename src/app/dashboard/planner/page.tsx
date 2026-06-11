@@ -13,6 +13,7 @@ import { PlannerMobileReviewContent } from '@/components/planner/PlannerMobileRe
 import { PlannerGeneratingSkeleton } from '@/components/planner/PlannerGeneratingSkeleton';
 import { PlannerDesktopReviewContent } from '@/components/planner/PlannerDesktopReviewContent';
 import { tokenUtils } from '@/lib/auth';
+import { SessionTemplatePanel, type SessionTemplatePayload } from '@/components/planner/SessionTemplatePanel';
 import {
   type SessionPlan,
   type SessionPlanLocation,
@@ -1186,6 +1187,34 @@ export default function PlannerPage() {
     setChatStepIndex(nextQuestions.length);
   };
 
+  const loadTemplate = (payload: SessionTemplatePayload) => {
+    const nextCategory = getSessionCategory(payload.shootType || shootType);
+    const nextMode = payload.locationMode ?? locationMode;
+    const nextQuestions = CHAT_QUESTIONS.filter(
+      question => !question.showWhen || question.showWhen(nextMode, nextCategory)
+    );
+
+    setActivePresetId(null);
+    setPlan(null);
+    setError(null);
+    setIsReviewConfirmed(false);
+    if (payload.shootType) setShootType(payload.shootType);
+    if (payload.locationMode) setLocationMode(payload.locationMode);
+    if (payload.city) setCity(payload.city);
+    if (payload.duration) setDuration(payload.duration);
+    if (payload.mood) setMood(payload.mood);
+    if (payload.subjectDetails) setSubjectDetails(payload.subjectDetails);
+    if (payload.mustHaveShots) setMustHaveShots(payload.mustHaveShots);
+    if (payload.constraints) setConstraints(payload.constraints);
+    if (payload.providedLocations !== undefined) setProvidedLocations(payload.providedLocations);
+    if (payload.familyPacing !== undefined) setFamilyPacing(payload.familyPacing);
+    if (payload.engagementStory !== undefined) setEngagementStory(payload.engagementStory);
+    if (payload.brandingGoals !== undefined) setBrandingGoals(payload.brandingGoals);
+    if (payload.eventPriorities !== undefined) setEventPriorities(payload.eventPriorities);
+    if (payload.shootDate !== undefined) setShootDate(payload.shootDate);
+    setChatStepIndex(nextQuestions.length);
+  };
+
   const workflowStages: Array<{ id: WorkflowStage; label: string; description: string }> = [
     { id: 'intake', label: '1. Intake', description: 'Answer the planning chat' },
     { id: 'review', label: '2. Plan Review', description: 'Inspect locations and shot flow' },
@@ -1453,6 +1482,28 @@ export default function PlannerPage() {
   return (
     <div className="space-y-6">
       <PlannerWorkflowStages stages={workflowStages} currentStage={workflowStage} hasPlan={!!plan} />
+
+      {workflowStage === 'intake' && (
+        <SessionTemplatePanel
+          currentPayload={{
+            shootType,
+            locationMode,
+            city,
+            duration,
+            mood,
+            subjectDetails,
+            mustHaveShots,
+            constraints,
+            providedLocations,
+            familyPacing: familyPacing || undefined,
+            engagementStory: engagementStory || undefined,
+            brandingGoals: brandingGoals || undefined,
+            eventPriorities: eventPriorities || undefined,
+            shootDate: shootDate || undefined,
+          }}
+          onLoadTemplate={loadTemplate}
+        />
+      )}
 
       <PlannerIntakeCard
         workflowStage={workflowStage}
