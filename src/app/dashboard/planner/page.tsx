@@ -790,6 +790,35 @@ export default function PlannerPage() {
     }
   };
 
+  const persistFeedback = async (applied: boolean = false) => {
+    if (!plan) return;
+
+    try {
+      await fetch('/api/planner/feedback', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeader(),
+        },
+        body: JSON.stringify({
+          sessionId: `${shootType}-${city}-${Date.now()}`,
+          locationVotes,
+          preferredVenueBucket,
+          excludedVenueBuckets,
+          applied,
+          planMetadata: {
+            sessionCategory: sessionCategory,
+            city: city || undefined,
+            duration: duration || undefined,
+            shootType: shootType || undefined,
+          },
+        }),
+      });
+    } catch (error) {
+      console.warn('Failed to persist planner feedback:', error);
+    }
+  };
+
   const applyPlanToWorkspace = async () => {
     if (!plan) return;
 
@@ -934,6 +963,9 @@ export default function PlannerPage() {
       if (failedShots.length > 0) {
         setError(`Created ${createdShots} shots, but ${failedShots.length} failed. ${failedReasons.slice(0, 2).join(' | ')}`);
       }
+
+      // Persist feedback before navigating away
+      await persistFeedback(true);
 
       router.push(`/dashboard/shot-board?project=${projectId}`);
     } catch {
