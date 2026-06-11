@@ -32,6 +32,7 @@ interface SearchCandidateInput {
   };
   bannedTerms?: string[];
   limit?: number;
+  preferredTerms?: string[];
 }
 
 function isLikelyUsZip(value?: string) {
@@ -213,9 +214,31 @@ function normalizeText(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-function getSearchQueries(sessionCategory: SearchCandidateInput['sessionCategory']) {
+function getSearchQueries(
+  sessionCategory: SearchCandidateInput['sessionCategory'],
+  preferredTerms: string[] = []
+) {
+  const preferred = preferredTerms
+    .map(term => normalizeText(term))
+    .filter(Boolean)
+    .slice(0, 8)
+    .map(query => ({ query, relevanceScore: 12 }));
+
+  const common = [
+    { query: 'city park', relevanceScore: 9 },
+    { query: 'state park', relevanceScore: 9 },
+    { query: 'nature preserve', relevanceScore: 9 },
+    { query: 'greenway trail', relevanceScore: 8 },
+    { query: 'town square', relevanceScore: 8 },
+    { query: 'lakefront park', relevanceScore: 8 },
+    { query: 'riverwalk', relevanceScore: 8 },
+    { query: 'historic courthouse square', relevanceScore: 8 },
+    { query: 'botanical garden', relevanceScore: 10 },
+  ];
+
   if (sessionCategory === 'family') {
     return [
+      ...preferred,
       { query: 'botanical garden', relevanceScore: 10 },
       { query: 'community park', relevanceScore: 10 },
       { query: 'garden', relevanceScore: 9 },
@@ -224,11 +247,13 @@ function getSearchQueries(sessionCategory: SearchCandidateInput['sessionCategory
       { query: 'historic town square', relevanceScore: 8 },
       { query: 'arboretum', relevanceScore: 8 },
       { query: 'waterfront promenade', relevanceScore: 7 },
+      ...common,
     ];
   }
 
   if (sessionCategory === 'engagement') {
     return [
+      ...preferred,
       { query: 'botanical garden', relevanceScore: 10 },
       { query: 'downtown plaza', relevanceScore: 10 },
       { query: 'historic district', relevanceScore: 10 },
@@ -237,11 +262,13 @@ function getSearchQueries(sessionCategory: SearchCandidateInput['sessionCategory
       { query: 'arts district', relevanceScore: 9 },
       { query: 'scenic overlook', relevanceScore: 8 },
       { query: 'park', relevanceScore: 7 },
+      ...common,
     ];
   }
 
   if (sessionCategory === 'event') {
     return [
+      ...preferred,
       { query: 'downtown plaza', relevanceScore: 10 },
       { query: 'hotel lobby', relevanceScore: 10 },
       { query: 'conference center', relevanceScore: 9 },
@@ -249,10 +276,12 @@ function getSearchQueries(sessionCategory: SearchCandidateInput['sessionCategory
       { query: 'waterfront', relevanceScore: 8 },
       { query: 'garden', relevanceScore: 8 },
       { query: 'architectural plaza', relevanceScore: 8 },
+      ...common,
     ];
   }
 
   return [
+    ...preferred,
     { query: 'downtown arts district', relevanceScore: 10 },
     { query: 'architectural plaza', relevanceScore: 10 },
     { query: 'museum exterior', relevanceScore: 9 },
@@ -260,11 +289,12 @@ function getSearchQueries(sessionCategory: SearchCandidateInput['sessionCategory
     { query: 'historic district', relevanceScore: 9 },
     { query: 'garden', relevanceScore: 8 },
     { query: 'riverwalk', relevanceScore: 8 },
+    ...common,
   ];
 }
 
 export async function searchLocationCandidates(input: SearchCandidateInput): Promise<LocationCandidate[]> {
-  const queries = getSearchQueries(input.sessionCategory);
+  const queries = getSearchQueries(input.sessionCategory, input.preferredTerms ?? []);
   const blocked = (input.bannedTerms ?? []).map(t => t.toLowerCase()).filter(Boolean);
   const city = input.city.trim();
   const limit = input.limit ?? 8;
@@ -297,7 +327,13 @@ export async function searchLocationCandidates(input: SearchCandidateInput): Pro
     return `${lon - dLon},${lat + dLat},${lon + dLon},${lat - dLat}`;
   }
 
-  type RawCandidate = LocationCandidate & { distanceKm: number | null };
+  type RawCandidate = LocationCandidate & {
+    distanceKm: number | null;
+    className?: string;
+    placeType?: string;
+    importance: number;
+    score: number;
+  };
   const collected: RawCandidate[] = [];
   const seenKeys = new Set<string>();
   // Track which query types have already found at least one result so we don't
@@ -333,17 +369,32 @@ export async function searchLocationCandidates(input: SearchCandidateInput): Pro
         });
 
         if (response.ok) {
-          const results = (await response.json()) as Array<{ lat?: string; lon?: string; display_name?: string }>;
+          const results = (await response.json()) as Array<{
+            lat?: string;
+            lon?: string;
+            display_name?: string;
+            class?: string;
+            type?: string;
+            importance?: number;
+          }>;
           let foundThisQuery = 0;
 
           for (const result of results) {
             const lat = Number(result.lat);
             const lon = Number(result.lon);
             const displayName = result.display_name ?? '';
+            const className = result.class ?? '';
+            const placeType = result.type ?? '';
+            const importance = Number(result.importance ?? 0);
             if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
 
             const lower = normalizeText(displayName);
             if (blocked.some(t => lower.includes(t))) continue;
+
+            const isAdministrativeOnly =
+              className === 'boundary' ||
+              (className === 'place' && /(city|town|village|hamlet|county|state|region|country)/i.test(placeType));
+            if (isAdministrativeOnly) continue;
 
             const key = normalizeText(displayName || `${lat.toFixed(4)},${lon.toFixed(4)}`);
             if (seenKeys.has(key)) continue;
@@ -355,6 +406,12 @@ export async function searchLocationCandidates(input: SearchCandidateInput): Pro
               if (distanceKm > radiusKm) continue;
             }
 
+            const poiBoost = /(park|garden|trail|promenade|plaza|square|waterfront|arboretum|district|overlook)/i.test(lower)
+              ? 6
+              : 0;
+            const distancePenalty = distanceKm == null ? 0 : distanceKm * 0.12;
+            const score = entry.relevanceScore * 10 + importance * 8 + poiBoost - distancePenalty;
+
             collected.push({
               name: displayName.split(',')[0]?.trim() || displayName,
               latitude: lat,
@@ -363,6 +420,10 @@ export async function searchLocationCandidates(input: SearchCandidateInput): Pro
               sourceQuery: entry.query,
               relevanceScore: entry.relevanceScore,
               distanceKm,
+              className,
+              placeType,
+              importance: Number.isFinite(importance) ? importance : 0,
+              score,
             });
             foundThisQuery++;
           }
@@ -380,6 +441,7 @@ export async function searchLocationCandidates(input: SearchCandidateInput): Pro
 
   return collected
     .sort((a, b) => {
+      if (a.score !== b.score) return b.score - a.score;
       if (a.relevanceScore !== b.relevanceScore) return b.relevanceScore - a.relevanceScore;
       if (a.distanceKm == null && b.distanceKm == null) return 0;
       if (a.distanceKm == null) return 1;

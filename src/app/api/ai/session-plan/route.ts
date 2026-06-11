@@ -143,6 +143,12 @@ export async function POST(request: NextRequest) {
       .filter(Boolean)
       .slice(0, 12);
 
+    const preferredLocationTerms = (businessContext?.preferredLocationTypes ?? '')
+      .split(',')
+      .map(term => term.trim().toLowerCase())
+      .filter(Boolean)
+      .slice(0, 12);
+
     const bannedTerms = [
       'high school',
       'jail',
@@ -172,6 +178,7 @@ export async function POST(request: NextRequest) {
           // starts at 25 km and expands to 50/80 km for small cities.
           bannedTerms,
           limit: 8,
+          preferredTerms: preferredLocationTerms,
         })
       : [];
 
