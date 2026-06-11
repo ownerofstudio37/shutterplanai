@@ -13,6 +13,9 @@ import { PlannerReviewHeaderCard } from '@/components/planner/PlannerReviewHeade
 import { PlannerReviewTabs } from '@/components/planner/PlannerReviewTabs';
 import { PlannerMapReviewPanel } from '@/components/planner/PlannerMapReviewPanel';
 import { PlannerLocationReviewPanel } from '@/components/planner/PlannerLocationReviewPanel';
+import { PlannerShotListPanel } from '@/components/planner/PlannerShotListPanel';
+import { PlannerTimelinePanel } from '@/components/planner/PlannerTimelinePanel';
+import { PlannerPrepPanel } from '@/components/planner/PlannerPrepPanel';
 import { tokenUtils } from '@/lib/auth';
 
 interface SessionPlanLocation {
@@ -2399,162 +2402,35 @@ export default function PlannerPage() {
             )}
 
             {activeReviewTab === 'shot-list' && (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900 flex-1">
-                    {displayedShots.length} shots planned for this session
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => regenerateSection('shot-list')}
-                    disabled={isRegenerating === 'shot-list'}
-                    className="ml-3 rounded-lg border border-purple-300 bg-white px-3 py-2 text-sm font-medium text-purple-700 hover:bg-purple-50 disabled:opacity-50 whitespace-nowrap"
-                  >
-                    {isRegenerating === 'shot-list' ? '⟳ Regenerating...' : '⟳ Regenerate List'}
-                  </button>
-                </div>
-
-                {emptyShotMessage && (
-                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                    <p className="font-semibold">No visible shots right now</p>
-                    <p className="mt-1">{emptyShotMessage}</p>
-                  </div>
-                )}
-
-                <div className="grid gap-3 lg:grid-cols-2">
-                {displayedShots.map(shot => {
-                  const shotIndex = plan.shotList.indexOf(shot);
-                  return (
-                  <div key={`${shot.title}-${shot.microSpot}`} className="rounded-lg border border-gray-200 p-3">
-                    <InlineEditableField
-                      isEditing={isEditMode}
-                      title="Shot title"
-                      value={shot.title}
-                      onChange={value => updateShotField(shotIndex, 'title', value)}
-                      className="w-full rounded border border-gray-300 px-2 py-1 text-sm font-semibold text-gray-900"
-                      displayClassName="font-semibold text-gray-900"
-                    />
-                    <InlineEditableField
-                      isEditing={isEditMode}
-                      title="Shot description"
-                      value={shot.description}
-                      onChange={value => updateShotField(shotIndex, 'description', value)}
-                      className="mt-1 min-h-16 w-full rounded border border-gray-300 px-2 py-1 text-sm text-gray-700"
-                      displayClassName="mt-1 text-sm text-gray-600"
-                      multiline
-                    />
-                    <InlineEditableField
-                      isEditing={isEditMode}
-                      title="Shot location"
-                      value={shot.location}
-                      onChange={value => updateShotField(shotIndex, 'location', value)}
-                      className="mt-2 w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-700"
-                      displayClassName="mt-2 text-xs text-gray-500"
-                    />
-                    {shot.latitude != null && shot.longitude != null && (
-                      <p className="text-xs text-blue-700">
-                        Coordinates: {Number(shot.latitude).toFixed(5)}, {Number(shot.longitude).toFixed(5)}
-                      </p>
-                    )}
-                    <p className="text-xs text-gray-500">Micro-spot: {shot.microSpot}</p>
-                    <p className="text-xs text-gray-500">Pose: {shot.poseSuggestion}</p>
-                    <p className="text-xs text-gray-500">Composition: {shot.compositionSuggestion}</p>
-                    <p className="text-xs text-gray-500">Timing: {shot.timingHint}</p>
-                  </div>
-                );})}
-                </div>
-              </div>
+              <PlannerShotListPanel
+                displayedShots={displayedShots}
+                allShots={plan.shotList}
+                emptyShotMessage={emptyShotMessage}
+                isEditMode={isEditMode}
+                isRegenerating={isRegenerating === 'shot-list'}
+                onRegenerate={() => regenerateSection('shot-list')}
+                onUpdateShotField={updateShotField}
+              />
             )}
 
             {activeReviewTab === 'timeline' && (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900 flex-1">
-                    {plan.timeline.length} timeline blocks planned
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => regenerateSection('timeline')}
-                    disabled={isRegenerating === 'timeline'}
-                    className="ml-3 rounded-lg border border-purple-300 bg-white px-3 py-2 text-sm font-medium text-purple-700 hover:bg-purple-50 disabled:opacity-50 whitespace-nowrap"
-                  >
-                    {isRegenerating === 'timeline' ? '⟳ Regenerating...' : '⟳ Regenerate Timeline'}
-                  </button>
-                </div>
-
-                {plan.timeline.map((item, index) => (
-                  <div key={`${item.timeBlock}-${item.focus}`} className="rounded-lg border border-gray-200 p-3">
-                    <InlineEditableField
-                      isEditing={isEditMode}
-                      title="Timeline time block"
-                      value={item.timeBlock}
-                      onChange={value => updateTimelineField(index, 'timeBlock', value)}
-                      className="w-full rounded border border-gray-300 px-2 py-1 text-sm font-semibold text-gray-900"
-                      displayClassName="text-sm font-semibold text-gray-900"
-                    />
-                    <InlineEditableField
-                      isEditing={isEditMode}
-                      title="Timeline focus"
-                      value={item.focus}
-                      onChange={value => updateTimelineField(index, 'focus', value)}
-                      className="mt-1 w-full rounded border border-gray-300 px-2 py-1 text-sm text-blue-700"
-                      displayClassName="text-sm text-blue-700"
-                    />
-                    <InlineEditableField
-                      isEditing={isEditMode}
-                      title="Timeline notes"
-                      value={item.notes}
-                      onChange={value => updateTimelineField(index, 'notes', value)}
-                      className="mt-1 min-h-14 w-full rounded border border-gray-300 px-2 py-1 text-sm text-gray-700"
-                      displayClassName="mt-1 text-sm text-gray-600"
-                      multiline
-                    />
-                  </div>
-                ))}
-              </div>
+              <PlannerTimelinePanel
+                timeline={plan.timeline}
+                isEditMode={isEditMode}
+                isRegenerating={isRegenerating === 'timeline'}
+                onRegenerate={() => regenerateSection('timeline')}
+                onUpdateTimelineField={updateTimelineField}
+              />
             )}
 
             {activeReviewTab === 'prep' && (
-              <div className="grid gap-6 lg:grid-cols-2">
-                <div>
-                  <h4 className="mb-3 text-lg font-semibold text-gray-900">Client Prep Checklist</h4>
-                  <ul className="list-inside list-disc space-y-1 text-sm text-gray-700">
-                    {plan.clientPrepChecklist.map((item, index) => (
-                      <li key={`${item}-${index}`}>
-                        {isEditMode ? (
-                          <input
-                            title="Prep checklist item"
-                            className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
-                            value={item}
-                            onChange={event => updateChecklistItem(index, event.target.value)}
-                          />
-                        ) : (
-                          item
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-                <div>
-                  <h4 className="mb-3 text-lg font-semibold text-gray-900">Contingency Plans</h4>
-                  <ul className="list-inside list-disc space-y-1 text-sm text-gray-700">
-                    {plan.contingencyPlans.map((item, index) => (
-                      <li key={`${item}-${index}`}>
-                        {isEditMode ? (
-                          <input
-                            title="Contingency item"
-                            className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
-                            value={item}
-                            onChange={event => updateContingencyItem(index, event.target.value)}
-                          />
-                        ) : (
-                          item
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
+              <PlannerPrepPanel
+                checklist={plan.clientPrepChecklist}
+                contingencyPlans={plan.contingencyPlans}
+                isEditMode={isEditMode}
+                onUpdateChecklistItem={updateChecklistItem}
+                onUpdateContingencyItem={updateContingencyItem}
+              />
             )}
                 </>
               )}
