@@ -92,6 +92,20 @@ type PlannerIntakeCardProps = {
   error: PlannerErrorInfo | null;
 };
 
+function getDraftStatusLabel(status: DraftSaveStatus) {
+  if (status === 'saving') return 'Saving';
+  if (status === 'saved') return 'Saved';
+  if (status === 'error') return 'Sync issue';
+  return 'Idle';
+}
+
+function getDraftStatusClass(status: DraftSaveStatus) {
+  if (status === 'saving') return 'border-blue-200 bg-blue-50 text-blue-700';
+  if (status === 'saved') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+  if (status === 'error') return 'border-red-200 bg-red-50 text-red-700';
+  return 'border-[#e4ded5] bg-[#faf9f6] text-[#5f6b76]';
+}
+
 export function PlannerIntakeCard({
   workflowStage,
   shootType,
@@ -133,70 +147,92 @@ export function PlannerIntakeCard({
   draftSaveStatus,
   error,
 }: PlannerIntakeCardProps) {
-  const renderQuestionSummary = (question: IntakeQuestion, tone: 'green' | 'blue') => {
+  const answeredCount = Math.min(chatStepIndex, visibleQuestions.length);
+  const progressPercent = Math.round((answeredCount / Math.max(visibleQuestions.length, 1)) * 100);
+  const locationLabel = city || businessProfile?.baseLocation || businessProfile?.zipCode || 'Location pending';
+
+  const renderQuestionSummary = (question: IntakeQuestion, mode: 'editable' | 'locked') => {
     const answer = getAnswerForQuestion(question.id);
     if (!answer && !question.required) return null;
 
-    const accentClass = tone === 'green' ? 'text-green-700' : 'text-blue-700';
-    const containerClass = tone === 'green' ? 'border-green-200 bg-white/70' : 'bg-white/80';
-
     return (
       <div
-        key={`${tone}-${question.id}`}
-        className={`rounded-lg px-3 py-2 ${containerClass} ${tone === 'green' ? 'border md:flex md:items-start md:justify-between' : ''}`}
+        key={`${mode}-${question.id}`}
+        className="rounded-lg border border-[#e4ded5] bg-white px-3 py-3"
       >
-        <div>
-          <p className={`text-[11px] font-semibold uppercase tracking-wide ${accentClass}`}>
-            {getAdaptivePrompt(question, sessionCategory)}
-          </p>
-          <p className="mt-1 text-sm text-gray-800">{answer || '—'}</p>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#7c6f64]">
+              {getAdaptivePrompt(question, sessionCategory)}
+            </p>
+            <p className="mt-1 text-sm leading-5 text-[#1f2933]">{answer || '-'}</p>
+          </div>
+          {mode === 'editable' && (
+            <Button variant="ghost" size="sm" onClick={() => onJumpToQuestion(question.id)}>
+              Edit
+            </Button>
+          )}
         </div>
-        {tone === 'green' && (
-          <Button variant="ghost" onClick={() => onJumpToQuestion(question.id)}>
-            Edit
-          </Button>
-        )}
       </div>
     );
   };
 
   return (
-    <Card>
-      <div className="mb-4 flex items-center justify-between">
-        <div>
-          <h3 className="text-xl font-semibold text-gray-900">
-            {workflowStage === 'intake' ? 'AI Planning Chat' : 'Intake Summary'}
-          </h3>
-          <p className="text-sm text-gray-600">
-            {workflowStage === 'intake'
-              ? 'Answer a quick chat questionnaire, then generate a full plan.'
-              : 'Your approved intake answers are summarized here for quick edits before regenerating.'}
-          </p>
-          <div className="mt-2 flex flex-wrap gap-2 text-xs">
-            <span className="rounded-full bg-indigo-50 px-2 py-1 font-medium text-indigo-700">Session: {shootType}</span>
-            <span className="rounded-full bg-emerald-50 px-2 py-1 font-medium text-emerald-700">
-              Mode: {locationMode === 'use-provided' ? 'Using provided locations' : 'Find locations'}
-            </span>
-            {locationMode === 'find-locations' && (city || businessProfile?.baseLocation || businessProfile?.zipCode) && (
-              <span className="rounded-full bg-gray-100 px-2 py-1 font-medium text-gray-700">
-                Area: {city || businessProfile?.baseLocation || businessProfile?.zipCode}
-              </span>
+    <Card className="overflow-hidden border border-[#d8d2c8] p-0 shadow-sm">
+      <div className="border-b border-[#e4ded5] bg-white p-5 md:p-6">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+          <div className="max-w-3xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7c6f64]">
+              AI planning brief
+            </p>
+            <h3 className="mt-2 text-2xl font-semibold tracking-normal text-[#1f2933]">
+              {workflowStage === 'intake' ? 'Build the session brief' : 'Approved intake summary'}
+            </h3>
+            <p className="mt-2 text-sm leading-6 text-[#5f6b76]">
+              Give the planner the same context you would collect before a professional shoot: people, pacing, location constraints, must-have frames, and client prep needs.
+            </p>
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-2 xl:min-w-[420px]">
+            {workflowStage !== 'intake' && (
+              <Button variant="secondary" onClick={onEditAnswers} className="bg-[#ebe5db] hover:bg-[#ded8ce]">
+                Reopen intake
+              </Button>
             )}
+            <Button
+              isLoading={isGenerating}
+              onClick={onGeneratePlan}
+              disabled={!isChatComplete || !isReviewConfirmed || isGenerating}
+              className="bg-[#1f2933] hover:bg-[#111827]"
+            >
+              {isGenerating ? 'Generating...' : hasPlan ? 'Regenerate plan' : 'Generate full plan'}
+            </Button>
           </div>
         </div>
-        <div className="hidden flex-wrap gap-2 md:flex">
-          {workflowStage !== 'intake' && (
-            <Button variant="secondary" onClick={onEditAnswers}>
-              Reopen intake
-            </Button>
-          )}
-          <Button isLoading={isGenerating} onClick={onGeneratePlan} disabled={!isChatComplete || !isReviewConfirmed || isGenerating}>
-            {isGenerating ? 'Generating...' : hasPlan ? 'Regenerate Plan' : 'Generate Full Plan'}
-          </Button>
+
+        <div className="mt-5 grid gap-3 md:grid-cols-4">
+          <div className="rounded-lg border border-[#e4ded5] bg-[#faf9f6] px-3 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#7c6f64]">Session</p>
+            <p className="mt-1 truncate text-sm font-semibold text-[#1f2933]">{shootType}</p>
+          </div>
+          <div className="rounded-lg border border-[#e4ded5] bg-[#faf9f6] px-3 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#7c6f64]">Location mode</p>
+            <p className="mt-1 text-sm font-semibold text-[#1f2933]">
+              {locationMode === 'use-provided' ? 'Provided spots' : 'Find locations'}
+            </p>
+          </div>
+          <div className="rounded-lg border border-[#e4ded5] bg-[#faf9f6] px-3 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#7c6f64]">Area</p>
+            <p className="mt-1 truncate text-sm font-semibold text-[#1f2933]">{locationLabel}</p>
+          </div>
+          <div className={`rounded-lg border px-3 py-3 ${getDraftStatusClass(draftSaveStatus)}`}>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] opacity-80">Draft</p>
+            <p className="mt-1 text-sm font-semibold">{getDraftStatusLabel(draftSaveStatus)}</p>
+          </div>
         </div>
       </div>
 
-      <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+      <div className="bg-[#faf9f6] p-4 md:p-5">
         {workflowStage === 'intake' ? (
           <>
             {resumableDraft && (
@@ -210,99 +246,98 @@ export function PlannerIntakeCard({
 
             <PlannerPresetGrid presets={presets} activePresetId={activePresetId} onApplyPreset={onApplyPreset} />
 
-            <div className="mb-3 flex items-center justify-between text-xs text-gray-600">
-              <span>
-                Step {Math.min(chatStepIndex + 1, visibleQuestions.length)} of {visibleQuestions.length}
-              </span>
-              <span>
-                {Math.round((Math.min(chatStepIndex, visibleQuestions.length) / Math.max(visibleQuestions.length, 1)) * 100)}% complete
-              </span>
-            </div>
-
-            <progress
-              className="mb-4 h-2 w-full overflow-hidden rounded [&::-webkit-progress-bar]:rounded [&::-webkit-progress-bar]:bg-gray-200 [&::-webkit-progress-value]:rounded [&::-webkit-progress-value]:bg-blue-600"
-              value={Math.min(chatStepIndex, visibleQuestions.length)}
-              max={Math.max(visibleQuestions.length, 1)}
-            />
-
-            {visibleQuestions.slice(0, chatStepIndex).map(question => (
-              <div key={`answered-${question.id}`} className="mb-4 space-y-2">
-                <div className="mr-12 rounded-2xl rounded-bl-md bg-white px-3 py-2 text-sm text-gray-800 shadow-sm">
-                  {getAdaptivePrompt(question, sessionCategory)}
-                </div>
-                <div className="ml-12 rounded-2xl rounded-br-md bg-blue-600 px-3 py-2 text-sm text-white shadow-sm">
-                  {getAnswerForQuestion(question.id) || '—'}
-                </div>
+            <div className="rounded-lg border border-[#d8d2c8] bg-white p-4">
+              <div className="mb-3 flex items-center justify-between gap-3 text-xs text-[#5f6b76]">
+                <span className="font-semibold">Brief progress</span>
+                <span>
+                  {answeredCount} of {visibleQuestions.length} answered - {progressPercent}%
+                </span>
               </div>
-            ))}
 
-            {!isChatComplete && activeQuestion && (
-              <div className="space-y-2">
-                {isAiTyping && (
-                  <div className="mr-12 inline-flex items-center gap-1 rounded-2xl rounded-bl-md bg-white px-3 py-2 text-xs text-gray-500 shadow-sm">
-                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-gray-400" />
-                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-gray-400 [animation-delay:120ms]" />
-                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-gray-400 [animation-delay:240ms]" />
-                    Planner is preparing the next question...
-                  </div>
-                )}
+              <progress
+                className="mb-5 h-2 w-full overflow-hidden rounded [&::-webkit-progress-bar]:rounded [&::-webkit-progress-bar]:bg-[#ebe5db] [&::-webkit-progress-value]:rounded [&::-webkit-progress-value]:bg-[#1f2933]"
+                value={answeredCount}
+                max={Math.max(visibleQuestions.length, 1)}
+              />
 
-                {!isAiTyping && (
-                  <div className="mr-12 rounded-2xl rounded-bl-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm">
-                    {activePrompt}
+              {visibleQuestions.slice(0, chatStepIndex).map(question => (
+                <div key={`answered-${question.id}`} className="mb-4 grid gap-2 md:grid-cols-[0.85fr_1fr]">
+                  <div className="rounded-lg border border-[#e4ded5] bg-[#faf9f6] px-3 py-2 text-sm text-[#5f6b76]">
+                    {getAdaptivePrompt(question, sessionCategory)}
                   </div>
-                )}
+                  <div className="rounded-lg bg-[#1f2933] px-3 py-2 text-sm text-white">
+                    {getAnswerForQuestion(question.id) || '-'}
+                  </div>
+                </div>
+              ))}
 
-                {activeQuestion.options && activeQuestion.options.length > 0 ? (
-                  <div className="ml-12 mt-2 flex flex-wrap gap-2">
-                    {activeQuestion.options.map(option => (
-                      <button
-                        key={`${activeQuestion.id}-${option}`}
-                        type="button"
-                        onClick={() => onSubmitAnswerValue(option)}
-                        className="rounded-full border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:border-blue-400 hover:text-blue-700"
-                      >
-                        {option}
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="ml-12">
-                    {activeProfileTemplates.length > 0 && (
-                      <div className="mb-2">
-                        <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-gray-500">From your business profile</p>
-                        <div className="flex flex-wrap gap-2">
-                          {activeProfileTemplates.map(option => (
+              {!isChatComplete && activeQuestion && (
+                <div className="space-y-3">
+                  {isAiTyping ? (
+                    <div className="inline-flex items-center gap-1 rounded-lg border border-[#e4ded5] bg-[#faf9f6] px-3 py-2 text-xs text-[#5f6b76]">
+                      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#8b8178]" />
+                      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#8b8178] [animation-delay:120ms]" />
+                      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#8b8178] [animation-delay:240ms]" />
+                      Preparing the next planning question...
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border border-[#d8d2c8] bg-[#f6f3ee] px-4 py-3 text-sm font-semibold text-[#1f2933]">
+                      {activePrompt}
+                    </div>
+                  )}
+
+                  {activeQuestion.options && activeQuestion.options.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {activeQuestion.options.map(option => (
+                        <button
+                          key={`${activeQuestion.id}-${option}`}
+                          type="button"
+                          onClick={() => onSubmitAnswerValue(option)}
+                          className="rounded-md border border-[#d8d2c8] bg-white px-3 py-2 text-sm font-medium text-[#1f2933] transition hover:border-[#1f2933]"
+                        >
+                          {option}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div>
+                      {activeProfileTemplates.length > 0 && (
+                        <div className="mb-3">
+                          <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#7c6f64]">
+                            From your business profile
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {activeProfileTemplates.map(option => (
+                              <button
+                                key={`${activeQuestion.id}-profile-${option}`}
+                                type="button"
+                                onClick={() => onSubmitAnswerValue(option)}
+                                className="rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-800 hover:border-emerald-300"
+                              >
+                                {option}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {activeQuickReplies.length > 0 && (
+                        <div className="mb-3 flex flex-wrap gap-2">
+                          {activeQuickReplies.map(option => (
                             <button
-                              key={`${activeQuestion.id}-profile-${option}`}
+                              key={`${activeQuestion.id}-quick-${option}`}
                               type="button"
                               onClick={() => onSubmitAnswerValue(option)}
-                              className="rounded-full border border-emerald-200 bg-white px-2.5 py-1 text-xs text-emerald-700 hover:border-emerald-300"
+                              className="rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs font-medium text-blue-800 hover:border-blue-300"
                             >
                               {option}
                             </button>
                           ))}
                         </div>
-                      </div>
-                    )}
+                      )}
 
-                    {activeQuickReplies.length > 0 && (
-                      <div className="mb-2 flex flex-wrap gap-2">
-                        {activeQuickReplies.map(option => (
-                          <button
-                            key={`${activeQuestion.id}-quick-${option}`}
-                            type="button"
-                            onClick={() => onSubmitAnswerValue(option)}
-                            className="rounded-full border border-blue-200 bg-white px-2.5 py-1 text-xs text-blue-700 hover:border-blue-300"
-                          >
-                            {option}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                    <div className="sticky bottom-0 rounded-2xl bg-gray-50 pb-1 pt-1">
                       <textarea
-                        className="mt-2 min-h-20 w-full rounded-2xl rounded-br-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm"
+                        className="min-h-24 w-full rounded-lg border border-[#d8d2c8] bg-white px-3 py-3 text-sm text-[#1f2933] outline-none transition focus:border-[#1f2933]"
                         value={draftAnswer}
                         onChange={event => onDraftAnswerChange(event.target.value)}
                         placeholder={activePlaceholder}
@@ -313,62 +348,74 @@ export function PlannerIntakeCard({
                           }
                         }}
                       />
-                      <p className="mt-1 text-[11px] text-gray-500">Tip: press Cmd/Ctrl + Enter to continue quickly.</p>
-                      <div className="mt-3 flex items-center gap-2">
-                        <Button variant="secondary" onClick={onGoBackQuestion} disabled={chatStepIndex === 0}>
-                          Back
-                        </Button>
-                        <Button onClick={onSubmitCurrentAnswer}>
-                          {chatStepIndex === visibleQuestions.length - 1 ? 'Finish intake' : 'Continue'}
-                        </Button>
+                      <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <p className="text-[11px] text-[#5f6b76]">Press Cmd/Ctrl + Enter to continue quickly.</p>
+                        <div className="flex gap-2">
+                          <Button variant="secondary" onClick={onGoBackQuestion} disabled={chatStepIndex === 0} className="bg-[#ebe5db] hover:bg-[#ded8ce]">
+                            Back
+                          </Button>
+                          <Button onClick={onSubmitCurrentAnswer} className="bg-[#1f2933] hover:bg-[#111827]">
+                            {chatStepIndex === visibleQuestions.length - 1 ? 'Finish intake' : 'Continue'}
+                          </Button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {isChatComplete && (
-              <div className="space-y-3 rounded border border-green-200 bg-green-50 p-3 text-sm text-green-900">
-                <p className="font-semibold">Intake complete. Review before generating.</p>
-                <div className="space-y-2">{visibleQuestions.map(question => renderQuestionSummary(question, 'green'))}</div>
-                <div className="flex flex-wrap gap-2">
-                  <Button variant="secondary" onClick={onEditAnswers}>
-                    Edit answers
-                  </Button>
-                  <Button onClick={onReviewAnswers} disabled={isReviewConfirmed}>
-                    {isReviewConfirmed ? 'Review confirmed' : 'Looks good — unlock generate'}
-                  </Button>
+                  )}
                 </div>
-              </div>
-            )}
+              )}
+
+              {isChatComplete && (
+                <div className="space-y-3 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <p className="font-semibold">Brief complete. Confirm before generation.</p>
+                      <p className="mt-1 text-xs text-emerald-800">
+                        The AI planner will use these answers to build locations, timeline, shot list, prep notes, and contingencies.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button variant="secondary" onClick={onEditAnswers}>Edit answers</Button>
+                      <Button onClick={onReviewAnswers} disabled={isReviewConfirmed}>
+                        {isReviewConfirmed ? 'Review confirmed' : 'Unlock generate'}
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="grid gap-2 md:grid-cols-2">
+                    {visibleQuestions.map(question => renderQuestionSummary(question, 'editable'))}
+                  </div>
+                </div>
+              )}
+            </div>
           </>
         ) : (
-          <div className="space-y-3 rounded border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
-            <p className="font-semibold">Intake is locked for review.</p>
-            <div className="grid gap-2 md:grid-cols-2">{visibleQuestions.map(question => renderQuestionSummary(question, 'blue'))}</div>
+          <div className="space-y-3 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950">
+            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div>
+                <p className="font-semibold">Intake is locked for review.</p>
+                <p className="mt-1 text-xs text-blue-800">Reopen intake to change the source brief, then regenerate the plan.</p>
+              </div>
+              <Button variant="secondary" onClick={onEditAnswers}>Reopen intake</Button>
+            </div>
+            <div className="grid gap-2 md:grid-cols-2">{visibleQuestions.map(question => renderQuestionSummary(question, 'locked'))}</div>
           </div>
         )}
       </div>
 
-      <p className="mt-2 text-xs text-gray-500">
-        Duration target: {durationMinutes} min • Expected shot range: {expectedShotRange.min}-{expectedShotRange.max}
-      </p>
-      <p className="mt-1 text-xs text-gray-500">
-        Draft status:{' '}
-        {draftSaveStatus === 'saving' && <span className="text-blue-600">Saving…</span>}
-        {draftSaveStatus === 'saved' && <span className="text-emerald-600">Saved</span>}
-        {draftSaveStatus === 'error' && <span className="text-red-600">Unable to sync</span>}
-        {draftSaveStatus === 'idle' && <span>Idle</span>}
-      </p>
-      {!city.trim() && (
-        <p className="mt-1 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-          City is blank. Planner will fall back to your account base location/ZIP if available.
-        </p>
-      )}
+      <div className="border-t border-[#e4ded5] bg-white px-5 py-4 text-xs text-[#5f6b76]">
+        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <p>
+            Duration target: {durationMinutes} min. Expected shot range: {expectedShotRange.min}-{expectedShotRange.max}.
+          </p>
+          {!city.trim() && (
+            <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800">
+              City is blank. Planner will fall back to your account base location or ZIP if available.
+            </p>
+          )}
+        </div>
+      </div>
 
-      <div className="sticky bottom-3 z-10 mt-4 md:hidden">
-        <div className="rounded-2xl border border-gray-200 bg-white/95 p-3 shadow-lg backdrop-blur">
+      <div className="sticky bottom-3 z-10 mx-4 mb-4 md:hidden">
+        <div className="rounded-lg border border-[#d8d2c8] bg-white/95 p-3 shadow-lg backdrop-blur">
           <div className="flex flex-col gap-2">
             {workflowStage !== 'intake' && (
               <Button variant="secondary" onClick={onEditAnswers}>
@@ -376,14 +423,14 @@ export function PlannerIntakeCard({
               </Button>
             )}
             <Button isLoading={isGenerating} onClick={onGeneratePlan} disabled={!isChatComplete || !isReviewConfirmed || isGenerating}>
-              {isGenerating ? 'Generating...' : hasPlan ? 'Regenerate Plan' : 'Generate Full Plan'}
+              {isGenerating ? 'Generating...' : hasPlan ? 'Regenerate plan' : 'Generate full plan'}
             </Button>
           </div>
         </div>
       </div>
 
       {error && (
-        <div className={`mt-3 rounded-lg border px-4 py-3 text-sm ${
+        <div className={`mx-5 mb-5 rounded-lg border px-4 py-3 text-sm ${
           error.isWarning
             ? 'border-amber-200 bg-amber-50 text-amber-800'
             : 'border-red-200 bg-red-50 text-red-700'
