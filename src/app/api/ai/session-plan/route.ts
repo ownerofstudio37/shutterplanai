@@ -161,6 +161,14 @@ export async function POST(request: NextRequest) {
     const isFamilySession = /family|newborn|maternity|kids|children/i.test(shootType);
     const sessionCategory = getSessionCategory(shootType);
     const businessContext = await getBusinessContextForUser(auth.userId);
+    const locationMode = payload?.locationMode === 'use-provided' ? 'use-provided' : 'find-locations';
+    const providedLocations = Array.isArray(payload?.providedLocations)
+      ? payload.providedLocations
+          .map((item: unknown) => (typeof item === 'string' ? item.trim() : ''))
+          .filter(Boolean)
+          .slice(0, 12)
+      : [];
+    const useProvidedLocations = locationMode === 'use-provided' && providedLocations.length > 0;
 
     if (!payload?.shootType || typeof payload.shootType !== 'string') {
       return NextResponse.json(
@@ -205,17 +213,36 @@ export async function POST(request: NextRequest) {
           }
         : undefined;
 
-    const locationCandidates = city
-      ? await searchLocationCandidates({
+    const locationCandidates = useProvidedLocations
+      ? await geocodeLocations(
+          providedLocations.map((name: string) => ({ name })),
           city,
-          sessionCategory,
-          // No radius cap here — the cascade inside searchLocationCandidates
-          // starts at 25 km and expands to 50/80 km for small cities.
-          bannedTerms,
-          limit: 8,
-          preferredTerms: preferredLocationTerms,
-        })
-      : [];
+          { near: nearCity, bannedTerms }
+        ).then(results =>
+          results.map(result => ({
+            name: result.name,
+            displayName: result.displayName,
+            latitude: result.latitude,
+            longitude: result.longitude,
+            sourceQuery: 'user-provided',
+            relevanceScore: 15,
+            fitScore: 10,
+            confidenceScore: result.latitude != null && result.longitude != null ? 9 : 6,
+            featureSignals: ['user-provided-location'],
+            venueBucket: 'other' as const,
+          }))
+        )
+      : city
+        ? await searchLocationCandidates({
+            city,
+            sessionCategory,
+            // No radius cap here — the cascade inside searchLocationCandidates
+            // starts at 25 km and expands to 50/80 km for small cities.
+            bannedTerms,
+            limit: 8,
+            preferredTerms: preferredLocationTerms,
+          })
+        : [];
 
     const plan: SessionPlan = await generateSessionPlan({
       shootType: payload.shootType,
@@ -310,8 +337,10 @@ export async function POST(request: NextRequest) {
       : finalizedLocations;
 
     const locationSource =
-      locationCandidates.length > 0
-        ? 'grounded-candidates'
+      useProvidedLocations
+        ? 'user-provided'
+        : locationCandidates.length > 0
+          ? 'grounded-candidates'
         : groundedLocations.some(location => location.latitude != null && location.longitude != null)
           ? 'fallback-geocode'
           : 'city-fallback';

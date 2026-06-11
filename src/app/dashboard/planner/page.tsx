@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/Card';
@@ -57,11 +57,33 @@ interface SessionPlan {
   locationRefinements?: LocationRefinement[];
   planningDiagnostics?: {
     locationCandidateCount: number;
-    locationSource: 'grounded-candidates' | 'fallback-geocode' | 'city-fallback';
+    locationSource: 'grounded-candidates' | 'fallback-geocode' | 'city-fallback' | 'user-provided';
     resolvedCity: string;
     usedAccountFallbackCity: boolean;
   };
 }
+
+type LocationMode = 'find-locations' | 'use-provided';
+type ChatQuestionId =
+  | 'shootType'
+  | 'locationMode'
+  | 'providedLocations'
+  | 'city'
+  | 'subjectDetails'
+  | 'shootDate'
+  | 'duration'
+  | 'mood'
+  | 'mustHaveShots'
+  | 'constraints';
+
+type ChatQuestion = {
+  id: ChatQuestionId;
+  prompt: string;
+  placeholder?: string;
+  options?: string[];
+  required?: boolean;
+  showWhen?: (mode: LocationMode) => boolean;
+};
 
 interface LocationRefinement {
   name: string;
@@ -133,6 +155,67 @@ function getExpectedShotRange(durationMinutes: number) {
   return { min: 12, max: 18 };
 }
 
+const CHAT_QUESTIONS: ChatQuestion[] = [
+  {
+    id: 'shootType',
+    prompt: 'What type of shoot are you planning?',
+    options: ['Family Session', 'Engagement Session', 'Portrait Session', 'Event Session'],
+    required: true,
+  },
+  {
+    id: 'locationMode',
+    prompt: 'Do you want me to find locations, or are your locations already selected?',
+    options: ['Find locations for me', 'I already have locations'],
+    required: true,
+  },
+  {
+    id: 'providedLocations',
+    prompt: 'List your chosen locations (comma-separated).',
+    placeholder: 'Example: Trinity River Greenbelt, White Rock Lake, Historic Downtown Square',
+    showWhen: mode => mode === 'use-provided',
+    required: true,
+  },
+  {
+    id: 'city',
+    prompt: 'What city/area should I center the plan around?',
+    placeholder: 'Dallas, TX',
+    showWhen: mode => mode === 'find-locations',
+  },
+  {
+    id: 'subjectDetails',
+    prompt: 'Who is being photographed?',
+    placeholder: '5 people, 2 toddlers, grandparents included',
+    required: true,
+  },
+  {
+    id: 'shootDate',
+    prompt: 'When is the shoot? (optional)',
+    placeholder: '2026-06-28 6:30 PM',
+  },
+  {
+    id: 'duration',
+    prompt: 'How long is the session?',
+    placeholder: '60 minutes',
+    required: true,
+  },
+  {
+    id: 'mood',
+    prompt: 'What mood/style do you want?',
+    placeholder: 'Warm, candid, storytelling',
+    required: true,
+  },
+  {
+    id: 'mustHaveShots',
+    prompt: 'Any must-have shots?',
+    placeholder: 'Whole family portrait, siblings, parents together',
+  },
+  {
+    id: 'constraints',
+    prompt: 'Any constraints I should plan around?',
+    placeholder: 'Mobility, weather risk, permit limits, short toddler attention span',
+  },
+];
+
 export default function PlannerPage() {
   const router = useRouter();
 
@@ -144,6 +227,10 @@ export default function PlannerPage() {
   const [mood, setMood] = useState('Warm, candid, emotional');
   const [mustHaveShots, setMustHaveShots] = useState('Whole family portrait, parents together, each kid solo');
   const [constraints, setConstraints] = useState('Need stroller-friendly paths and quick transitions');
+  const [locationMode, setLocationMode] = useState<LocationMode>('find-locations');
+  const [providedLocations, setProvidedLocations] = useState('');
+  const [chatStepIndex, setChatStepIndex] = useState(0);
+  const [draftAnswer, setDraftAnswer] = useState('');
 
   const [plan, setPlan] = useState<SessionPlan | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -153,6 +240,91 @@ export default function PlannerPage() {
 
   const durationMinutes = useMemo(() => parseDurationMinutes(duration), [duration]);
   const expectedShotRange = useMemo(() => getExpectedShotRange(durationMinutes), [durationMinutes]);
+
+  const visibleQuestions = useMemo(
+    () => CHAT_QUESTIONS.filter(question => !question.showWhen || question.showWhen(locationMode)),
+    [locationMode]
+  );
+
+  useEffect(() => {
+    if (chatStepIndex > visibleQuestions.length) {
+      setChatStepIndex(visibleQuestions.length);
+    }
+  }, [chatStepIndex, visibleQuestions.length]);
+
+  const getAnswerForQuestion = (id: ChatQuestionId) => {
+    switch (id) {
+      case 'shootType':
+        return shootType;
+      case 'locationMode':
+        return locationMode === 'find-locations' ? 'Find locations for me' : 'I already have locations';
+      case 'providedLocations':
+        return providedLocations;
+      case 'city':
+        return city;
+      case 'subjectDetails':
+        return subjectDetails;
+      case 'shootDate':
+        return shootDate;
+      case 'duration':
+        return duration;
+      case 'mood':
+        return mood;
+      case 'mustHaveShots':
+        return mustHaveShots;
+      case 'constraints':
+        return constraints;
+      default:
+        return '';
+    }
+  };
+
+  const setAnswerForQuestion = (id: ChatQuestionId, value: string) => {
+    switch (id) {
+      case 'shootType':
+        setShootType(value);
+        break;
+      case 'locationMode':
+        setLocationMode(value === 'I already have locations' ? 'use-provided' : 'find-locations');
+        break;
+      case 'providedLocations':
+        setProvidedLocations(value);
+        break;
+      case 'city':
+        setCity(value);
+        break;
+      case 'subjectDetails':
+        setSubjectDetails(value);
+        break;
+      case 'shootDate':
+        setShootDate(value);
+        break;
+      case 'duration':
+        setDuration(value);
+        break;
+      case 'mood':
+        setMood(value);
+        break;
+      case 'mustHaveShots':
+        setMustHaveShots(value);
+        break;
+      case 'constraints':
+        setConstraints(value);
+        break;
+      default:
+        break;
+    }
+  };
+
+  const activeQuestion = visibleQuestions[chatStepIndex] ?? null;
+
+  useEffect(() => {
+    if (!activeQuestion) {
+      setDraftAnswer('');
+      return;
+    }
+    setDraftAnswer(getAnswerForQuestion(activeQuestion.id));
+  }, [activeQuestion]);
 
   const locationIndex = useMemo(() => {
     const map = new Map<string, SessionPlanLocation>();
@@ -174,6 +346,12 @@ export default function PlannerPage() {
     setIsGenerating(true);
     setError(null);
 
+    const providedLocationList = providedLocations
+      .split(/\n|,/)
+      .map(item => item.trim())
+      .filter(Boolean)
+      .slice(0, 12);
+
     try {
       const response = await fetch('/api/ai/session-plan', {
         method: 'POST',
@@ -190,6 +368,8 @@ export default function PlannerPage() {
           mood,
           mustHaveShots,
           constraints,
+          locationMode: locationMode === 'use-provided' ? 'use-provided' : 'find-locations',
+          providedLocations: providedLocationList,
         }),
       });
 
@@ -411,30 +591,109 @@ export default function PlannerPage() {
     }
   };
 
+  const isChatComplete = chatStepIndex >= visibleQuestions.length;
+
+  const submitCurrentAnswer = () => {
+    if (!activeQuestion) return;
+
+    const value = draftAnswer.trim();
+    if (activeQuestion.required && value.length === 0) {
+      setError('Please answer the current question before continuing.');
+      return;
+    }
+
+    setError(null);
+    setAnswerForQuestion(activeQuestion.id, value);
+    setChatStepIndex(prev => Math.min(prev + 1, visibleQuestions.length));
+  };
+
+  const goBackQuestion = () => {
+    setError(null);
+    setChatStepIndex(prev => Math.max(0, prev - 1));
+  };
+
   return (
     <div className="space-y-6">
       <Card>
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <h3 className="text-xl font-semibold text-gray-900">Describe My Shoot</h3>
-            <p className="text-sm text-gray-600">One input → full session plan, locations, poses, compositions, and shot list.</p>
+            <h3 className="text-xl font-semibold text-gray-900">AI Planning Chat</h3>
+            <p className="text-sm text-gray-600">Answer a quick chat questionnaire, then generate a full plan.</p>
           </div>
-          <Button isLoading={isGenerating} onClick={() => void generatePlan()}>
+          <Button isLoading={isGenerating} onClick={() => void generatePlan()} disabled={!isChatComplete || isGenerating}>
             {isGenerating ? 'Generating...' : 'Generate Full Plan'}
           </Button>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-2">
-          <input className="w-full rounded-lg border border-gray-300 px-4 py-2" value={shootType} onChange={e => setShootType(e.target.value)} placeholder="Shoot type" />
-          <input className="w-full rounded-lg border border-gray-300 px-4 py-2" value={city} onChange={e => setCity(e.target.value)} placeholder="City / area" />
-          <input className="w-full rounded-lg border border-gray-300 px-4 py-2" value={shootDate} onChange={e => setShootDate(e.target.value)} placeholder="Shoot date/time (optional)" />
-          <input className="w-full rounded-lg border border-gray-300 px-4 py-2" value={duration} onChange={e => setDuration(e.target.value)} placeholder="Session duration (e.g. 60 min, 2 hours)" />
-          <input className="w-full rounded-lg border border-gray-300 px-4 py-2" value={mood} onChange={e => setMood(e.target.value)} placeholder="Mood/style" />
-        </div>
+        <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+          <div className="mb-3 flex items-center justify-between text-xs text-gray-600">
+            <span>Step {Math.min(chatStepIndex + 1, visibleQuestions.length)} of {visibleQuestions.length}</span>
+            <span>{Math.round((Math.min(chatStepIndex, visibleQuestions.length) / Math.max(visibleQuestions.length, 1)) * 100)}% complete</span>
+          </div>
 
-        <textarea className="mt-3 min-h-20 w-full rounded-lg border border-gray-300 px-4 py-2" value={subjectDetails} onChange={e => setSubjectDetails(e.target.value)} placeholder="Who is being photographed? ages, group size, etc." />
-        <textarea className="mt-3 min-h-20 w-full rounded-lg border border-gray-300 px-4 py-2" value={mustHaveShots} onChange={e => setMustHaveShots(e.target.value)} placeholder="Must-have shots" />
-        <textarea className="mt-3 min-h-20 w-full rounded-lg border border-gray-300 px-4 py-2" value={constraints} onChange={e => setConstraints(e.target.value)} placeholder="Constraints (weather, mobility, permits, timing, kids attention span...)" />
+          <progress
+            className="mb-4 h-2 w-full overflow-hidden rounded [&::-webkit-progress-bar]:rounded [&::-webkit-progress-bar]:bg-gray-200 [&::-webkit-progress-value]:rounded [&::-webkit-progress-value]:bg-blue-600"
+            value={Math.min(chatStepIndex, visibleQuestions.length)}
+            max={Math.max(visibleQuestions.length, 1)}
+          />
+
+          {visibleQuestions.slice(0, chatStepIndex).map(question => (
+            <div key={`answered-${question.id}`} className="mb-3">
+              <p className="text-sm font-medium text-gray-800">AI: {question.prompt}</p>
+              <p className="mt-1 rounded bg-white px-3 py-2 text-sm text-gray-700">You: {getAnswerForQuestion(question.id) || '—'}</p>
+            </div>
+          ))}
+
+          {!isChatComplete && activeQuestion && (
+            <div className="rounded bg-white p-3">
+              <p className="text-sm font-semibold text-gray-900">AI: {activeQuestion.prompt}</p>
+
+              {activeQuestion.options && activeQuestion.options.length > 0 ? (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {activeQuestion.options.map(option => (
+                    <button
+                      key={`${activeQuestion.id}-${option}`}
+                      type="button"
+                      onClick={() => {
+                        setDraftAnswer(option);
+                        setError(null);
+                      }}
+                      className={`rounded-full border px-3 py-1.5 text-sm ${
+                        draftAnswer === option
+                          ? 'border-blue-600 bg-blue-50 text-blue-700'
+                          : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
+                      }`}
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <textarea
+                  className="mt-2 min-h-20 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  value={draftAnswer}
+                  onChange={e => setDraftAnswer(e.target.value)}
+                  placeholder={activeQuestion.placeholder || 'Type your answer...'}
+                />
+              )}
+
+              <div className="mt-3 flex items-center gap-2">
+                <Button variant="secondary" onClick={goBackQuestion} disabled={chatStepIndex === 0}>
+                  Back
+                </Button>
+                <Button onClick={submitCurrentAnswer}>
+                  {chatStepIndex === visibleQuestions.length - 1 ? 'Finish intake' : 'Continue'}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {isChatComplete && (
+            <div className="rounded bg-green-50 p-3 text-sm text-green-800">
+              Intake complete. Generate the plan whenever you are ready.
+            </div>
+          )}
+        </div>
 
         <p className="mt-2 text-xs text-gray-500">
           Duration target: {durationMinutes} min • Expected shot range: {expectedShotRange.min}-{expectedShotRange.max}
