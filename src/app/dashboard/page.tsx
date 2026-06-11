@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { tokenUtils } from '@/lib/auth';
 import Link from 'next/link';
+import type { PlannerAnalyticsSummary } from '@/app/api/planner/analytics/route';
 
 interface ProjectItem {
   id: string;
@@ -92,6 +93,7 @@ function getProgressWidthClass(count: number, total: number) {
 export default function Dashboard() {
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [shots, setShots] = useState<ShotItem[]>([]);
+  const [plannerStats, setPlannerStats] = useState<PlannerAnalyticsSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -101,14 +103,16 @@ export default function Dashboard() {
       setError(null);
 
       try {
-        const [projectsResponse, shotsResponse] = await Promise.all([
+        const [projectsResponse, shotsResponse, analyticsResponse] = await Promise.all([
           fetch('/api/projects', { headers: getAuthHeader() }),
           fetch('/api/shots', { headers: getAuthHeader() }),
+          fetch('/api/planner/analytics', { headers: getAuthHeader() }),
         ]);
 
-        const [projectsResult, shotsResult] = await Promise.all([
+        const [projectsResult, shotsResult, analyticsResult] = await Promise.all([
           projectsResponse.json(),
           shotsResponse.json(),
+          analyticsResponse.json(),
         ]);
 
         if (!projectsResult.success) {
@@ -121,6 +125,9 @@ export default function Dashboard() {
 
         setProjects(projectsResult.data ?? []);
         setShots(shotsResult.data ?? []);
+        if (analyticsResult.success) {
+          setPlannerStats(analyticsResult.data as PlannerAnalyticsSummary);
+        }
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : 'Failed to load dashboard');
       } finally {
@@ -281,6 +288,64 @@ export default function Dashboard() {
           </div>
         </Card>
       </div>
+
+      {(isLoading || plannerStats) && (
+        <Card>
+          <h3 className="mb-4 text-lg font-semibold text-gray-900">Planner Activity</h3>
+          {isLoading ? (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="animate-pulse rounded-xl bg-gray-100 p-4 h-20" />
+              ))}
+            </div>
+          ) : plannerStats ? (
+            <>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                  <p className="text-2xl font-bold text-gray-900">{plannerStats.generate.total}</p>
+                  <p className="mt-1 text-sm text-gray-600">Plans Generated</p>
+                  {plannerStats.generate.total > 0 && (
+                    <p className="mt-1 text-xs font-medium text-green-600">{plannerStats.generate.successRate}% success</p>
+                  )}
+                </div>
+                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                  <p className="text-2xl font-bold text-gray-900">{plannerStats.refine.total}</p>
+                  <p className="mt-1 text-sm text-gray-600">Refines Run</p>
+                  {plannerStats.refine.failed > 0 && (
+                    <p className="mt-1 text-xs text-red-500">{plannerStats.refine.failed} failed</p>
+                  )}
+                </div>
+                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                  <p className="text-2xl font-bold text-gray-900">{plannerStats.apply.success}</p>
+                  <p className="mt-1 text-sm text-gray-600">Projects Applied</p>
+                  {plannerStats.apply.failed > 0 && (
+                    <p className="mt-1 text-xs text-red-500">{plannerStats.apply.failed} failed</p>
+                  )}
+                </div>
+                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                  <p className="text-2xl font-bold text-gray-900">{plannerStats.shareLinksCreated}</p>
+                  <p className="mt-1 text-sm text-gray-600">Share Links</p>
+                </div>
+              </div>
+              {(plannerStats.draftsResumed > 0 || plannerStats.routesOptimized > 0) && (
+                <div className="mt-3 flex gap-4 text-sm text-gray-500">
+                  {plannerStats.draftsResumed > 0 && (
+                    <span>{plannerStats.draftsResumed} draft{plannerStats.draftsResumed !== 1 ? 's' : ''} resumed</span>
+                  )}
+                  {plannerStats.routesOptimized > 0 && (
+                    <span>{plannerStats.routesOptimized} route{plannerStats.routesOptimized !== 1 ? 's' : ''} optimized</span>
+                  )}
+                </div>
+              )}
+              <Link href="/dashboard/planner">
+                <Button variant="ghost" className="mt-4 w-full">
+                  Open AI Planner →
+                </Button>
+              </Link>
+            </>
+          ) : null}
+        </Card>
+      )}
 
       <Card>
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Upcoming Shoots</h3>

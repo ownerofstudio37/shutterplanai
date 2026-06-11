@@ -2,6 +2,75 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/serverAuth';
 import { createSupabaseAdminClient } from '@/lib/supabase/server';
 
+export interface PlannerAnalyticsSummary {
+  generate: { total: number; success: number; failed: number; successRate: number };
+  refine: { total: number; success: number; failed: number };
+  apply: { total: number; success: number; failed: number };
+  shareLinksCreated: number;
+  draftsResumed: number;
+  routesOptimized: number;
+}
+
+export async function GET(request: NextRequest) {
+  const authResult = await requireAuth(request);
+  if (!authResult.success) {
+    return NextResponse.json({ success: false, error: authResult.error }, { status: authResult.status });
+  }
+
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from('planner_analytics')
+      .select('event_name')
+      .eq('user_id', authResult.userId);
+
+    if (error) {
+      return NextResponse.json({ success: false, error: 'Failed to load analytics' }, { status: 500 });
+    }
+
+    const counts: Record<string, number> = {};
+    for (const row of data ?? []) {
+      counts[row.event_name] = (counts[row.event_name] ?? 0) + 1;
+    }
+
+    const generateSuccess = counts['planner_generate_success'] ?? 0;
+    const generateFailed = counts['planner_generate_failed'] ?? 0;
+    const generateTotal = generateSuccess + generateFailed;
+
+    const refineSuccess = counts['planner_refine_success'] ?? 0;
+    const refineFailed = counts['planner_refine_failed'] ?? 0;
+
+    const applySuccess = counts['planner_apply_success'] ?? 0;
+    const applyFailed = counts['planner_apply_failed'] ?? 0;
+
+    const summary: PlannerAnalyticsSummary = {
+      generate: {
+        total: generateTotal,
+        success: generateSuccess,
+        failed: generateFailed,
+        successRate: generateTotal === 0 ? 0 : Math.round((generateSuccess / generateTotal) * 100),
+      },
+      refine: {
+        total: refineSuccess + refineFailed,
+        success: refineSuccess,
+        failed: refineFailed,
+      },
+      apply: {
+        total: applySuccess + applyFailed,
+        success: applySuccess,
+        failed: applyFailed,
+      },
+      shareLinksCreated: counts['planner_share_link_created'] ?? 0,
+      draftsResumed: counts['planner_draft_resumed'] ?? 0,
+      routesOptimized: counts['planner_route_optimized'] ?? 0,
+    };
+
+    return NextResponse.json({ success: true, data: summary });
+  } catch {
+    return NextResponse.json({ success: false, error: 'Failed to load analytics' }, { status: 500 });
+  }
+}
+
 export async function POST(request: NextRequest) {
   const authResult = await requireAuth(request);
   if (!authResult.success) {
