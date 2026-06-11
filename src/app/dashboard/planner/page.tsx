@@ -487,6 +487,7 @@ export default function PlannerPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isRefining, setIsRefining] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
+  const [feedbackSaveStatus, setFeedbackSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
 
   const durationMinutes = useMemo(() => parseDurationMinutes(duration), [duration]);
   const expectedShotRange = useMemo(() => getExpectedShotRange(durationMinutes), [durationMinutes]);
@@ -794,7 +795,8 @@ export default function PlannerPage() {
     if (!plan) return;
 
     try {
-      await fetch('/api/planner/feedback', {
+      setFeedbackSaveStatus('saving');
+      const response = await fetch('/api/planner/feedback', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -814,8 +816,16 @@ export default function PlannerPage() {
           },
         }),
       });
+
+      if (response.ok) {
+        setFeedbackSaveStatus('saved');
+        setTimeout(() => setFeedbackSaveStatus('idle'), 3000);
+      } else {
+        setFeedbackSaveStatus('idle');
+      }
     } catch (error) {
       console.warn('Failed to persist planner feedback:', error);
+      setFeedbackSaveStatus('idle');
     }
   };
 
@@ -1658,27 +1668,45 @@ export default function PlannerPage() {
           </Card>
 
           <Card>
-            <div className="mb-4 hidden flex-wrap gap-2 md:flex">
-              {[
-                { id: 'map', label: `Map (${displayedLocations.filter(location => location.latitude != null && location.longitude != null).length})` },
-                { id: 'locations', label: `Locations (${displayedLocations.length})` },
-                { id: 'shot-list', label: `Shot List (${displayedShots.length})` },
-                { id: 'timeline', label: `Timeline (${plan.timeline.length})` },
-                { id: 'prep', label: 'Prep + Backup' },
-              ].map(tab => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setActiveReviewTab(tab.id as ReviewTab)}
-                  className={`rounded-full px-3 py-1.5 text-sm font-medium ${
-                    activeReviewTab === tab.id
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
+            <div className="mb-4 hidden flex-wrap items-center justify-between gap-2 md:flex">
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { id: 'map', label: `Map (${displayedLocations.filter(location => location.latitude != null && location.longitude != null).length})` },
+                  { id: 'locations', label: `Locations (${displayedLocations.length})` },
+                  { id: 'shot-list', label: `Shot List (${displayedShots.length})` },
+                  { id: 'timeline', label: `Timeline (${plan.timeline.length})` },
+                  { id: 'prep', label: 'Prep + Backup' },
+                ].map(tab => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setActiveReviewTab(tab.id as ReviewTab)}
+                    className={`rounded-full px-3 py-1.5 text-sm font-medium ${
+                      activeReviewTab === tab.id
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                {feedbackSaveStatus === 'saving' && (
+                  <>
+                    <div className="h-2 w-2 animate-pulse rounded-full bg-blue-500"></div>
+                    <span>Saving feedback...</span>
+                  </>
+                )}
+                {feedbackSaveStatus === 'saved' && (
+                  <>
+                    <svg className="h-4 w-4 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                    <span className="text-green-600">Feedback saved</span>
+                  </>
+                )}
+              </div>
             </div>
 
             <div className="mb-4 space-y-3 md:hidden">
