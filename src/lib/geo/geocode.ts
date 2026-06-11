@@ -214,6 +214,15 @@ function normalizeText(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+function getVenueBucket(input: { displayName: string; className?: string; placeType?: string }) {
+  const haystack = `${input.displayName} ${input.className ?? ''} ${input.placeType ?? ''}`.toLowerCase();
+  if (/(depot|station|historic|district|square|plaza|downtown|old town)/.test(haystack)) return 'urban-historic';
+  if (/(waterfront|lake|river|creek|beach|marina|pier)/.test(haystack)) return 'waterfront';
+  if (/(farm|ranch|barn|venue|gatherings|wedding|estate)/.test(haystack)) return 'private-venue';
+  if (/(forest|trail|preserve|garden|arboretum|nature|park)/.test(haystack)) return 'nature-park';
+  return 'other';
+}
+
 function getCityHotspotOverrides(city: string): string[] {
   const normalized = normalizeText(city);
 
@@ -582,8 +591,11 @@ export async function searchLocationCandidates(input: SearchCandidateInput): Pro
       const poiBoost = /(park|garden|trail|promenade|plaza|square|waterfront|arboretum|district|overlook|farm|depot|lake|creek)/i.test(lower)
         ? 6
         : 0;
+      const lowValuePenalty = /(tot park|tot lot|playground|dog park|skate park|sports complex|ball field)/i.test(lower)
+        ? 12
+        : 0;
       const distancePenalty = distanceKm == null ? 0 : distanceKm * 0.12;
-      const score = entry.relevanceScore * 10 + importance * 8 + poiBoost - distancePenalty;
+      const score = entry.relevanceScore * 10 + importance * 8 + poiBoost - lowValuePenalty - distancePenalty;
 
       collected.push({
         name: displayName.split(',')[0]?.trim() || displayName,
@@ -805,14 +817,44 @@ export async function searchLocationCandidates(input: SearchCandidateInput): Pro
     }
   }
 
-  return collected
-    .sort((a, b) => {
+  const ranked = collected.sort((a, b) => {
       if (a.score !== b.score) return b.score - a.score;
       if (a.relevanceScore !== b.relevanceScore) return b.relevanceScore - a.relevanceScore;
       if (a.distanceKm == null && b.distanceKm == null) return 0;
       if (a.distanceKm == null) return 1;
       if (b.distanceKm == null) return -1;
       return a.distanceKm - b.distanceKm;
-    })
-    .slice(0, limit);
+    });
+
+  // Diversity pass: avoid returning mostly parks when other strong venue types exist.
+  const cappedByBucket: RawCandidate[] = [];
+  const bucketCounts = new Map<string, number>();
+  const maxPerBucket = 2;
+
+  for (const candidate of ranked) {
+    const bucket = getVenueBucket({
+      displayName: candidate.displayName || candidate.name,
+      className: candidate.className,
+      placeType: candidate.placeType,
+    });
+    const current = bucketCounts.get(bucket) ?? 0;
+    if (current >= maxPerBucket) continue;
+    bucketCounts.set(bucket, current + 1);
+    cappedByBucket.push(candidate);
+    if (cappedByBucket.length >= limit) break;
+  }
+
+  // Fill remaining slots with next-best ranked candidates if diversity cap leaves gaps.
+  if (cappedByBucket.length < limit) {
+    for (const candidate of ranked) {
+      const exists = cappedByBucket.some(item =>
+        normalizeText(item.displayName || item.name) === normalizeText(candidate.displayName || candidate.name)
+      );
+      if (exists) continue;
+      cappedByBucket.push(candidate);
+      if (cappedByBucket.length >= limit) break;
+    }
+  }
+
+  return cappedByBucket.slice(0, limit);
 }
