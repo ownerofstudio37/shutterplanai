@@ -14,6 +14,7 @@ import { PlannerGeneratingSkeleton } from '@/components/planner/PlannerGeneratin
 import { PlannerDesktopReviewContent } from '@/components/planner/PlannerDesktopReviewContent';
 import { tokenUtils } from '@/lib/auth';
 import { SessionTemplatePanel, type SessionTemplatePayload } from '@/components/planner/SessionTemplatePanel';
+import { MultiDaySessionConfig } from '@/components/planner/MultiDaySessionConfig';
 import {
   type SessionPlan,
   type SessionPlanLocation,
@@ -110,6 +111,12 @@ export default function PlannerPage() {
   const [shareUrl, setShareUrl] = useState<string>('');
   const [shareToken, setShareToken] = useState<string>('');
   const [shareLinkError, setShareLinkError] = useState<string>('');
+
+  // V2: multi-day state
+  const [multiDay, setMultiDay] = useState(false);
+  const [sessionDates, setSessionDates] = useState<string[]>([]);
+  const [dailyDurationMinutes, setDailyDurationMinutes] = useState<number | undefined>(undefined);
+  const [maxTravelMinutesPerDay, setMaxTravelMinutesPerDay] = useState<number | undefined>(undefined);
 
   const durationMinutes = useMemo(() => parseDurationMinutes(duration), [duration]);
   const expectedShotRange = useMemo(() => getExpectedShotRange(durationMinutes), [durationMinutes]);
@@ -243,6 +250,11 @@ export default function PlannerPage() {
       brandingGoals,
       eventPriorities,
       shootDate,
+      // V2: multi-day fields
+      multiDay: multiDay || undefined,
+      sessionDates: sessionDates.length > 0 ? sessionDates : undefined,
+      dailyDurationMinutes,
+      maxTravelMinutesPerDay,
     },
   });
 
@@ -269,6 +281,11 @@ export default function PlannerPage() {
     setBrandingGoals(draftState.brandingGoals || '');
     setEventPriorities(draftState.eventPriorities || '');
     setShootDate(draftState.shootDate || '');
+    // V2: multi-day fields
+    setMultiDay(draftState.multiDay ?? false);
+    setSessionDates(draftState.sessionDates ?? []);
+    setDailyDurationMinutes(draftState.dailyDurationMinutes);
+    setMaxTravelMinutesPerDay(draftState.maxTravelMinutesPerDay);
     setPlan(null);
     setError(null);
     setIsReviewConfirmed(true);
@@ -469,6 +486,10 @@ export default function PlannerPage() {
     brandingGoals,
     eventPriorities,
     shootDate,
+    multiDay,
+    sessionDates,
+    dailyDurationMinutes,
+    maxTravelMinutesPerDay,
   ]);
 
   useEffect(() => {
@@ -701,6 +722,11 @@ export default function PlannerPage() {
           constraints: constraintsPayload,
           locationMode: locationMode === 'use-provided' ? 'use-provided' : 'find-locations',
           providedLocations: providedLocationList,
+          // V2: multi-day fields (ignored by single-day AI handler, reserved for multi-day)
+          multiDay: multiDay || undefined,
+          sessionDates: multiDay && sessionDates.length > 0 ? sessionDates : undefined,
+          dailyDurationMinutes: multiDay ? dailyDurationMinutes : undefined,
+          maxTravelMinutesPerDay: multiDay ? maxTravelMinutesPerDay : undefined,
         }),
       });
 
@@ -1212,6 +1238,11 @@ export default function PlannerPage() {
     if (payload.brandingGoals !== undefined) setBrandingGoals(payload.brandingGoals);
     if (payload.eventPriorities !== undefined) setEventPriorities(payload.eventPriorities);
     if (payload.shootDate !== undefined) setShootDate(payload.shootDate);
+    // V2: multi-day fields
+    if (payload.multiDay !== undefined) setMultiDay(payload.multiDay);
+    if (payload.sessionDates !== undefined) setSessionDates(payload.sessionDates);
+    if (payload.dailyDurationMinutes !== undefined) setDailyDurationMinutes(payload.dailyDurationMinutes);
+    if (payload.maxTravelMinutesPerDay !== undefined) setMaxTravelMinutesPerDay(payload.maxTravelMinutesPerDay);
     setChatStepIndex(nextQuestions.length);
   };
 
@@ -1500,8 +1531,25 @@ export default function PlannerPage() {
             brandingGoals: brandingGoals || undefined,
             eventPriorities: eventPriorities || undefined,
             shootDate: shootDate || undefined,
+            multiDay: multiDay || undefined,
+            sessionDates: sessionDates.length > 0 ? sessionDates : undefined,
+            dailyDurationMinutes,
+            maxTravelMinutesPerDay,
           }}
           onLoadTemplate={loadTemplate}
+        />
+      )}
+
+      {workflowStage === 'intake' && (
+        <MultiDaySessionConfig
+          multiDay={multiDay}
+          sessionDates={sessionDates}
+          dailyDurationMinutes={dailyDurationMinutes}
+          maxTravelMinutesPerDay={maxTravelMinutesPerDay}
+          onMultiDayChange={setMultiDay}
+          onSessionDatesChange={setSessionDates}
+          onDailyDurationChange={setDailyDurationMinutes}
+          onMaxTravelChange={setMaxTravelMinutesPerDay}
         />
       )}
 

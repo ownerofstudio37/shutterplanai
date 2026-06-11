@@ -51,6 +51,7 @@ export function SessionTemplatePanel({ currentPayload, onLoadTemplate }: Session
   const [templates, setTemplates] = useState<SessionTemplate[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [newName, setNewName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -121,6 +122,26 @@ export function SessionTemplatePanel({ currentPayload, onLoadTemplate }: Session
     [onLoadTemplate]
   );
 
+  const deleteTemplate = useCallback(async (id: string) => {
+    setDeletingId(id);
+    try {
+      const response = await fetch(`/api/planner/templates/${id}`, {
+        method: 'DELETE',
+        headers: getAuthHeader(),
+      });
+      const body = (await response.json()) as { success: boolean; error?: string };
+      if (body.success) {
+        setTemplates(prev => prev.filter(t => t.id !== id));
+      } else {
+        setError(body.error ?? 'Failed to delete template');
+      }
+    } catch {
+      setError('Failed to delete template');
+    } finally {
+      setDeletingId(null);
+    }
+  }, []);
+
   return (
     <div className="mb-4">
       <button
@@ -182,34 +203,48 @@ export function SessionTemplatePanel({ currentPayload, onLoadTemplate }: Session
           {!isLoading && templates.length > 0 && (
             <div className="grid gap-2 md:grid-cols-2">
               {templates.map(template => (
-                <button
-                  key={template.id}
-                  type="button"
-                  onClick={() => handleLoad(template)}
-                  className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-left hover:border-emerald-300 hover:bg-emerald-50 transition"
-                >
-                  <p className="text-sm font-semibold text-gray-900">{template.name}</p>
-                  <div className="mt-1 flex flex-wrap gap-1 text-[11px]">
-                    {template.template_payload.shootType && (
-                      <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-indigo-700">
-                        {template.template_payload.shootType}
-                      </span>
-                    )}
-                    {template.template_payload.duration && (
-                      <span className="rounded-full bg-gray-200 px-2 py-0.5 text-gray-700">
-                        {template.template_payload.duration}
-                      </span>
-                    )}
-                    {template.template_payload.city && (
-                      <span className="rounded-full bg-gray-200 px-2 py-0.5 text-gray-700">
-                        {template.template_payload.city}
-                      </span>
-                    )}
-                  </div>
-                  <p className="mt-1 text-[11px] text-gray-400">
-                    Saved {new Date(template.updated_at).toLocaleDateString()}
-                  </p>
-                </button>
+                <div key={template.id} className="relative group">
+                  <button
+                    type="button"
+                    onClick={() => handleLoad(template)}
+                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-left hover:border-emerald-300 hover:bg-emerald-50 transition"
+                  >
+                    <p className="text-sm font-semibold text-gray-900 pr-6">{template.name}</p>
+                    <div className="mt-1 flex flex-wrap gap-1 text-[11px]">
+                      {template.template_payload.shootType && (
+                        <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-indigo-700">
+                          {template.template_payload.shootType}
+                        </span>
+                      )}
+                      {template.template_payload.duration && (
+                        <span className="rounded-full bg-gray-200 px-2 py-0.5 text-gray-700">
+                          {template.template_payload.duration}
+                        </span>
+                      )}
+                      {template.template_payload.city && (
+                        <span className="rounded-full bg-gray-200 px-2 py-0.5 text-gray-700">
+                          {template.template_payload.city}
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-1 text-[11px] text-gray-400">
+                      Saved {new Date(template.updated_at).toLocaleDateString()}
+                    </p>
+                  </button>
+                  {/* Delete button */}
+                  <button
+                    type="button"
+                    disabled={deletingId === template.id}
+                    onClick={e => {
+                      e.stopPropagation();
+                      void deleteTemplate(template.id);
+                    }}
+                    aria-label={`Delete template ${template.name}`}
+                    className="absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded-full text-gray-400 opacity-0 transition hover:bg-red-100 hover:text-red-600 group-hover:opacity-100 disabled:opacity-50"
+                  >
+                    {deletingId === template.id ? '…' : '×'}
+                  </button>
+                </div>
               ))}
             </div>
           )}
