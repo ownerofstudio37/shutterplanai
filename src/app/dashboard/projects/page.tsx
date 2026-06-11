@@ -1,7 +1,5 @@
 'use client';
 
-'use client';
-
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Card } from '@/components/ui/Card';
@@ -36,6 +34,28 @@ function getAuthHeader() {
     headers.Authorization = `Bearer ${token}`;
   }
   return headers;
+}
+
+function getStatusClass(status: ProjectItem['status']) {
+  switch (status) {
+    case 'completed':
+      return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+    case 'in-progress':
+      return 'border-blue-200 bg-blue-50 text-blue-700';
+    case 'planning':
+      return 'border-amber-200 bg-amber-50 text-amber-800';
+    case 'archived':
+      return 'border-gray-200 bg-gray-100 text-gray-700';
+    default:
+      return 'border-slate-200 bg-slate-50 text-slate-700';
+  }
+}
+
+function formatDate(value?: string | null) {
+  if (!value) return 'Not scheduled';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Not scheduled';
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 export default function ProjectsPage() {
@@ -83,7 +103,9 @@ export default function ProjectsPage() {
   };
 
   useEffect(() => {
-    void loadProjects();
+    queueMicrotask(() => {
+      void loadProjects();
+    });
   }, []);
 
   const createProject = async (event: React.FormEvent) => {
@@ -218,52 +240,89 @@ export default function ProjectsPage() {
     });
   }, [projects, searchQuery, statusFilter]);
 
-  return (
-    <div className="space-y-6">
-      <Card>
-        <h3 className="mb-4 text-lg font-semibold text-gray-900">Create Project</h3>
-        <form onSubmit={createProject} className="space-y-3">
-          <input
-            value={title}
-            onChange={event => setTitle(event.target.value)}
-            placeholder="Project title"
-            className="w-full rounded-lg border border-gray-300 px-4 py-2"
-            disabled={isCreating}
-          />
-          <textarea
-            value={description}
-            onChange={event => setDescription(event.target.value)}
-            placeholder="Project description"
-            className="min-h-24 w-full rounded-lg border border-gray-300 px-4 py-2"
-            disabled={isCreating}
-          />
-          <Button type="submit" isLoading={isCreating}>
-            {isCreating ? 'Creating...' : 'Create Project'}
-          </Button>
-        </form>
-      </Card>
+  const statusCounts = useMemo(() => {
+    return {
+      active: projects.filter(project => project.status === 'planning' || project.status === 'in-progress').length,
+      draft: projects.filter(project => project.status === 'draft').length,
+      completed: projects.filter(project => project.status === 'completed').length,
+      archived: projects.filter(project => project.status === 'archived').length,
+    };
+  }, [projects]);
 
-      <Card>
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-gray-900">Your Projects</h3>
+  return (
+    <div className="space-y-5">
+      <section className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
+        <div className="rounded-lg border border-[#d8d2c8] bg-[#1f2933] p-5 text-white shadow-sm md:p-6">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#c6b9a5]">Project pipeline</p>
+          <h1 className="mt-3 text-3xl font-semibold tracking-normal">Client work, from brief to delivery.</h1>
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-[#d1d5db]">
+            Keep shoots organized by production stage, then move the best plans into shot boards and client guides.
+          </p>
+
+          <div className="mt-6 grid gap-3 sm:grid-cols-4">
+            {[
+              ['Active', statusCounts.active],
+              ['Draft', statusCounts.draft],
+              ['Completed', statusCounts.completed],
+              ['Archived', statusCounts.archived],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-lg border border-white/10 bg-white/10 px-3 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#c6b9a5]">{label}</p>
+                <p className="mt-1 text-2xl font-semibold">{isLoading ? '-' : value}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <Card className="border border-[#d8d2c8] shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7c6f64]">Quick create</p>
+          <h2 className="mt-2 text-xl font-semibold text-[#1f2933]">Start a client project</h2>
+          <form onSubmit={createProject} className="mt-4 space-y-3">
+            <input
+              value={title}
+              onChange={event => setTitle(event.target.value)}
+              placeholder="Project title"
+              className="w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] px-4 py-2 text-sm outline-none focus:border-[#1f2933]"
+              disabled={isCreating}
+            />
+            <textarea
+              value={description}
+              onChange={event => setDescription(event.target.value)}
+              placeholder="Client, shoot type, goal, deliverables..."
+              className="min-h-24 w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] px-4 py-2 text-sm outline-none focus:border-[#1f2933]"
+              disabled={isCreating}
+            />
+            <Button type="submit" isLoading={isCreating} className="bg-[#1f2933] hover:bg-[#111827]">
+              {isCreating ? 'Creating...' : 'Create project'}
+            </Button>
+          </form>
+        </Card>
+      </section>
+
+      <Card className="border border-[#d8d2c8] shadow-sm">
+        <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7c6f64]">Workspace</p>
+            <h3 className="mt-2 text-xl font-semibold text-[#1f2933]">Production projects</h3>
+          </div>
           <Button variant="ghost" onClick={() => void loadProjects()}>
             Refresh
           </Button>
         </div>
 
-        <div className="mb-4 grid gap-3 md:grid-cols-2">
+        <div className="mb-4 grid gap-3 md:grid-cols-[1fr_220px]">
           <input
             value={searchQuery}
             onChange={event => setSearchQuery(event.target.value)}
-            className="w-full rounded-lg border border-gray-300 px-4 py-2"
-            placeholder="Search projects by title, description, or tag"
+            className="w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] px-4 py-2 text-sm outline-none focus:border-[#1f2933]"
+            placeholder="Search title, description, or tag"
             aria-label="Search projects"
           />
           <select
             aria-label="Filter projects by status"
             value={statusFilter}
             onChange={event => setStatusFilter(event.target.value as 'all' | ProjectItem['status'])}
-            className="w-full rounded-lg border border-gray-300 px-4 py-2"
+            className="w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] px-4 py-2 text-sm outline-none focus:border-[#1f2933]"
           >
             <option value="all">All statuses</option>
             <option value="draft">Draft</option>
@@ -281,25 +340,42 @@ export default function ProjectsPage() {
         )}
 
         {isLoading ? (
-          <p className="text-gray-600">Loading projects...</p>
+          <p className="text-[#5f6b76]">Loading projects...</p>
         ) : projects.length === 0 ? (
-          <p className="text-gray-600">No projects yet. Create your first one above.</p>
+          <p className="rounded-lg border border-dashed border-[#d8d2c8] bg-[#faf9f6] p-4 text-sm text-[#5f6b76]">No projects yet. Create your first one above.</p>
         ) : filteredProjects.length === 0 ? (
-          <p className="text-gray-600">No projects match your search and filters.</p>
+          <p className="rounded-lg border border-dashed border-[#d8d2c8] bg-[#faf9f6] p-4 text-sm text-[#5f6b76]">No projects match your search and filters.</p>
         ) : (
-          <div className="space-y-3">
+          <div className="grid gap-3 lg:grid-cols-2">
             {filteredProjects.map(project => (
-              <div key={project.id} className="rounded-lg border border-gray-200 p-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <h4 className="font-semibold text-gray-900">{project.title}</h4>
-                    <p className="mt-1 text-sm text-gray-600">{project.description || 'No description'}</p>
-                    <p className="mt-2 text-xs uppercase tracking-wide text-gray-500">Status: {project.status}</p>
-                    {project.tags && project.tags.length > 0 && (
-                      <p className="mt-2 text-xs text-gray-500">Tags: {project.tags.join(', ')}</p>
-                    )}
+              <article key={project.id} className="rounded-lg border border-[#d8d2c8] bg-white p-4">
+                <div className="flex flex-col gap-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h4 className="truncate font-semibold text-[#1f2933]">{project.title}</h4>
+                      <p className="mt-2 line-clamp-3 text-sm leading-6 text-[#5f6b76]">{project.description || 'No description'}</p>
+                    </div>
+                    <span className={`shrink-0 rounded-md border px-2 py-1 text-xs font-medium ${getStatusClass(project.status)}`}>
+                      {project.status}
+                    </span>
                   </div>
-                  <div className="flex gap-2">
+
+                  <div className="grid gap-2 text-xs text-[#5f6b76] sm:grid-cols-2">
+                    <p className="rounded-md bg-[#f6f3ee] px-3 py-2"><span className="font-semibold text-[#1f2933]">Start:</span> {formatDate(project.start_date)}</p>
+                    <p className="rounded-md bg-[#f6f3ee] px-3 py-2"><span className="font-semibold text-[#1f2933]">End:</span> {formatDate(project.end_date)}</p>
+                  </div>
+
+                  {project.tags && project.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {project.tags.map(tag => (
+                        <span key={`${project.id}-${tag}`} className="rounded-md bg-[#f6f3ee] px-2 py-1 text-xs text-[#5f6b76]">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap gap-2 border-t border-[#e4ded5] pt-3">
                     <Link href={`/dashboard/shot-board?project=${project.id}`}>
                       <Button variant="ghost" size="sm">Export</Button>
                     </Link>
@@ -311,7 +387,7 @@ export default function ProjectsPage() {
                     </Button>
                   </div>
                 </div>
-              </div>
+              </article>
             ))}
           </div>
         )}
