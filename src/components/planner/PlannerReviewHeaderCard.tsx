@@ -74,6 +74,36 @@ type PlannerReviewHeaderCardProps = {
   durationMinutes: number;
 };
 
+function formatTime(value?: string) {
+  if (!value) return 'Pending';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Pending';
+  return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+
+function getSourceLabel(source?: string) {
+  if (source === 'grounded-candidates') return 'Grounded';
+  if (source === 'user-provided') return 'Provided';
+  if (source === 'fallback-geocode') return 'Geocoded';
+  if (source === 'city-fallback') return 'City fallback';
+  return 'Pending';
+}
+
+function getSourceClass(source?: string) {
+  if (source === 'grounded-candidates' || source === 'user-provided') {
+    return 'border-emerald-200 bg-emerald-50 text-emerald-800';
+  }
+  if (source === 'fallback-geocode') return 'border-blue-200 bg-blue-50 text-blue-800';
+  return 'border-amber-200 bg-amber-50 text-amber-800';
+}
+
+function getConfidenceClass(confidence?: number) {
+  if (typeof confidence !== 'number') return 'border-[#e4ded5] bg-[#faf9f6] text-[#5f6b76]';
+  if (confidence >= 75) return 'border-emerald-200 bg-emerald-50 text-emerald-800';
+  if (confidence >= 55) return 'border-amber-200 bg-amber-50 text-amber-800';
+  return 'border-red-200 bg-red-50 text-red-800';
+}
+
 export function PlannerReviewHeaderCard({
   projectTitle,
   creativeDirection,
@@ -102,174 +132,262 @@ export function PlannerReviewHeaderCard({
   expectedShotRange,
   durationMinutes,
 }: PlannerReviewHeaderCardProps) {
+  const source = diagnostics?.locationSource;
+  const locationCount = diagnostics?.locationCandidateCount ?? 0;
+  const confidence = intelligence?.confidence?.overall;
+  const shotCountWarning = shotCount < expectedShotRange.min || shotCount > expectedShotRange.max;
+
+  const readinessItems = [
+    {
+      label: 'Locations',
+      value: String(locationCount),
+      detail: getSourceLabel(source),
+      className: getSourceClass(source),
+    },
+    {
+      label: 'Forecast',
+      value: typeof confidence === 'number' ? `${confidence}%` : isLoadingIntelligence ? 'Loading' : 'Pending',
+      detail: intelligence?.weather?.provider ?? 'Telemetry',
+      className: getConfidenceClass(confidence),
+    },
+    {
+      label: 'Shot plan',
+      value: String(shotCount),
+      detail: `${expectedShotRange.min}-${expectedShotRange.max} expected`,
+      className: shotCountWarning
+        ? 'border-amber-200 bg-amber-50 text-amber-800'
+        : 'border-emerald-200 bg-emerald-50 text-emerald-800',
+    },
+    {
+      label: 'Client guide',
+      value: shareUrl ? 'Ready' : 'Draft',
+      detail: shareUrl ? 'Share link live' : 'Not exported',
+      className: shareUrl
+        ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+        : 'border-[#e4ded5] bg-[#faf9f6] text-[#5f6b76]',
+    },
+  ];
+
   return (
-    <Card>
-      <div className="mb-3 flex items-center justify-between">
-        <div>
-          <h3 className="text-lg font-semibold text-gray-900">{projectTitle}</h3>
-          <p className="text-sm text-gray-600">{creativeDirection}</p>
-          <div className="mt-2 flex flex-wrap gap-2 text-xs">
-            <span className={`rounded-full px-2 py-1 font-medium ${workflowStage === 'apply' ? 'bg-violet-50 text-violet-700' : 'bg-blue-50 text-blue-700'}`}>
-              Current stage: {workflowStage === 'apply' ? 'Apply to Project' : 'Plan Review'}
-            </span>
-            <span className="rounded-full bg-blue-50 px-2 py-1 font-medium text-blue-700">
-              Location source: {diagnostics?.locationSource || 'unknown'}
-            </span>
-            <span className="rounded-full bg-indigo-50 px-2 py-1 font-medium text-indigo-700">Session: {shootType}</span>
-            <span className="rounded-full bg-emerald-50 px-2 py-1 font-medium text-emerald-700">
-              Mode: {locationMode === 'use-provided' ? 'Using provided locations' : 'Find locations'}
-            </span>
-            <span className="rounded-full bg-gray-100 px-2 py-1 font-medium text-gray-700">
-              Candidates: {diagnostics?.locationCandidateCount ?? 0}
-            </span>
-            <span className="rounded-full bg-gray-100 px-2 py-1 font-medium text-gray-700">
-              Resolved city: {diagnostics?.resolvedCity || 'N/A'}
-            </span>
-            {diagnostics?.usedBusinessZipDisambiguation && (
-              <span className="rounded-full bg-emerald-50 px-2 py-1 font-medium text-emerald-700">
-                Disambiguated with business anchor: {diagnostics.businessGeoAnchorSource || 'account location'}
+    <Card className="overflow-hidden border border-[#d8d2c8] p-0 shadow-sm">
+      <div className="bg-[#1f2933] p-5 text-white md:p-6">
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+          <div className="max-w-4xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#c6b9a5]">
+              Production cockpit
+            </p>
+            <h3 className="mt-3 text-2xl font-semibold tracking-normal text-white md:text-3xl">
+              {projectTitle}
+            </h3>
+            <p className="mt-3 max-w-3xl text-sm leading-6 text-[#d1d5db]">{creativeDirection}</p>
+            <div className="mt-4 flex flex-wrap gap-2 text-xs">
+              <span className="rounded-md border border-white/10 bg-white/10 px-2 py-1 font-medium text-white">
+                {workflowStage === 'apply' ? 'Apply stage' : 'Review stage'}
               </span>
-            )}
-          </div>
-        </div>
-        <div className="hidden gap-2 md:flex">
-          <Button variant="ghost" onClick={onToggleEditMode}>{isEditMode ? 'Done editing' : 'Edit output'}</Button>
-          <Button variant="ghost" isLoading={isCreatingShareLink} disabled={isRefining || isApplying} onClick={onCreateShareLink}>
-            {isCreatingShareLink ? 'Creating link...' : 'Create share link'}
-          </Button>
-          <Button variant="ghost" isLoading={isRefining} disabled={isApplying} onClick={onRefinePlan}>
-            {isRefining ? 'Refining...' : 'Refine Plan'}
-          </Button>
-          <Button variant="secondary" isLoading={isApplying} disabled={isRefining} onClick={onApplyPlan}>
-            {isApplying ? 'Applying...' : 'Create Project + Shot List'}
-          </Button>
-          <Link href="/dashboard/shot-board">
-            <Button variant="ghost">Open Shot Board</Button>
-          </Link>
-        </div>
-      </div>
-
-      {planningSourceExplanation && (
-        <div
-          className={`mb-3 rounded-lg px-4 py-3 text-sm ${
-            planningSourceExplanation.tone === 'emerald'
-              ? 'border border-emerald-200 bg-emerald-50 text-emerald-900'
-              : planningSourceExplanation.tone === 'blue'
-                ? 'border border-blue-200 bg-blue-50 text-blue-900'
-                : 'border border-amber-200 bg-amber-50 text-amber-900'
-          }`}
-        >
-          <p className="font-semibold">{planningSourceExplanation.title}</p>
-          <p className="mt-1">{planningSourceExplanation.body}</p>
-        </div>
-      )}
-
-      {isRefining && (
-        <div className="mb-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
-          Refining the current plan now. Review scores and backup guidance will update when the pass finishes.
-        </div>
-      )}
-
-      {isLoadingIntelligence && (
-        <div className="mb-3 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
-          Computing weather, sun window, and route intelligence…
-        </div>
-      )}
-
-      {intelligence && (
-        <div className="mb-3 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
-          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-            <div className="flex flex-wrap gap-2 text-xs">
-              <span className="rounded-full bg-white px-2 py-1 font-medium text-indigo-700">
-                Golden hour: {new Date(intelligence.goldenHours.goldenHourStart).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
-                {' '}
-                - {new Date(intelligence.goldenHours.goldenHourEnd).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+              <span className="rounded-md border border-white/10 bg-white/10 px-2 py-1 font-medium text-white">
+                {shootType}
               </span>
-              <span className="rounded-full bg-white px-2 py-1 font-medium text-indigo-700">
-                Sunrise: {new Date(intelligence.goldenHours.sunrise).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+              <span className="rounded-md border border-white/10 bg-white/10 px-2 py-1 font-medium text-white">
+                {locationMode === 'use-provided' ? 'Provided locations' : 'AI location search'}
               </span>
-              <span className="rounded-full bg-white px-2 py-1 font-medium text-indigo-700">
-                Sunset: {new Date(intelligence.goldenHours.sunset).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+              <span className="rounded-md border border-white/10 bg-white/10 px-2 py-1 font-medium text-white">
+                {diagnostics?.resolvedCity || 'Location pending'}
               </span>
-              {typeof intelligence.confidence?.overall === 'number' && (
-                <span className="rounded-full bg-white px-2 py-1 font-medium text-indigo-700">
-                  Forecast confidence: {intelligence.confidence.overall}%
-                </span>
-              )}
-              {intelligence.weather && (
-                <span className="rounded-full bg-white px-2 py-1 font-medium text-indigo-700">
-                  Rain risk: {intelligence.weather.precipitationProbability}%
-                </span>
-              )}
-              {intelligence.weather && (
-                <span className="rounded-full bg-white px-2 py-1 font-medium text-indigo-700">
-                  Provider: {intelligence.weather.provider}
-                </span>
-              )}
             </div>
-            {intelligence.optimizedRoute.length > 1 && (
-              <Button variant="secondary" onClick={onApplyOptimizedRouteOrder}>Apply optimized route order</Button>
-            )}
           </div>
-          {intelligence.confidence?.windows?.length ? (
-            <div className="mt-3 grid gap-2 md:grid-cols-2">
-              {intelligence.confidence.windows.map(window => (
-                <div key={`${window.label}-${window.startsAt}`} className="rounded-lg border border-indigo-200 bg-white px-3 py-2 text-xs text-indigo-900">
-                  <p className="font-semibold">{window.label}: {window.confidence}%</p>
-                  <p>{window.summary}</p>
-                </div>
-              ))}
-            </div>
-          ) : null}
-          {intelligence.weather?.recommendations?.length ? (
-            <ul className="mt-2 list-disc space-y-1 pl-5 text-xs">
-              {intelligence.weather.recommendations.slice(0, 2).map(item => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-          ) : null}
-        </div>
-      )}
 
-      {shareUrl && (
-        <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-          <p className="font-semibold">Share link ready</p>
-          <div className="mt-2 flex flex-col gap-2 md:flex-row md:items-center">
-            <input title="Share URL" readOnly value={shareUrl} className="w-full rounded border border-emerald-300 bg-white px-2 py-1 text-xs text-emerald-900" />
-            <Button variant="secondary" disabled={isRevokingShareLink} onClick={onCopyShareLink}>Copy link</Button>
-            <Button variant="ghost" isLoading={isRevokingShareLink} disabled={isApplying || isRefining} onClick={onRevokeShareLink}>
-              {isRevokingShareLink ? 'Revoking...' : 'Revoke link'}
+          <div className="grid gap-2 sm:grid-cols-2 xl:min-w-[430px]">
+            <Button
+              variant="ghost"
+              onClick={onToggleEditMode}
+              className="border border-white/15 text-white hover:bg-white/10"
+            >
+              {isEditMode ? 'Done editing' : 'Edit output'}
+            </Button>
+            <Button
+              variant="ghost"
+              isLoading={isRefining}
+              disabled={isApplying}
+              onClick={onRefinePlan}
+              className="border border-white/15 text-white hover:bg-white/10"
+            >
+              {isRefining ? 'Refining...' : 'Refine plan'}
+            </Button>
+            <Button
+              variant="ghost"
+              isLoading={isCreatingShareLink}
+              disabled={isRefining || isApplying}
+              onClick={onCreateShareLink}
+              className="border border-white/15 text-white hover:bg-white/10"
+            >
+              {isCreatingShareLink ? 'Creating...' : 'Create client link'}
+            </Button>
+            <Button
+              isLoading={isApplying}
+              disabled={isRefining}
+              onClick={onApplyPlan}
+              className="bg-white text-[#1f2933] hover:bg-[#f3f4f6]"
+            >
+              {isApplying ? 'Applying...' : 'Create project'}
             </Button>
           </div>
         </div>
-      )}
+      </div>
 
-      {shareLinkError && (
-        <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{shareLinkError}</div>
-      )}
+      <div className="grid gap-3 border-b border-[#e4ded5] bg-white p-4 md:grid-cols-2 xl:grid-cols-4">
+        {readinessItems.map(item => (
+          <div key={item.label} className={`rounded-lg border px-4 py-3 ${item.className}`}>
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] opacity-80">{item.label}</p>
+            <p className="mt-2 text-2xl font-semibold tracking-normal">{item.value}</p>
+            <p className="mt-1 text-xs font-medium opacity-80">{item.detail}</p>
+          </div>
+        ))}
+      </div>
 
-      {(diagnostics?.locationSource !== 'grounded-candidates' ||
-        (diagnostics?.locationCandidateCount ?? 0) < 3 ||
-        shotCount < expectedShotRange.min ||
-        shotCount > expectedShotRange.max) && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          <p className="font-semibold">Validation warnings</p>
-          <ul className="mt-1 list-disc space-y-1 pl-5">
-            {diagnostics?.locationSource !== 'grounded-candidates' && (
-              <li>Location plan is using fallback mode, not fully grounded candidates.</li>
-            )}
-            {(diagnostics?.locationCandidateCount ?? 0) < 3 && (
-              <li>Fewer than 3 real location candidates found. Consider a broader nearby city or ZIP.</li>
-            )}
-            {shotCount < expectedShotRange.min || shotCount > expectedShotRange.max ? (
-              <li>
-                Shot count ({shotCount}) is outside expected {expectedShotRange.min}-{expectedShotRange.max}
-                {' '}for {durationMinutes} minutes.
-              </li>
+      <div className="space-y-3 bg-[#faf9f6] p-4 md:p-5">
+        {planningSourceExplanation && (
+          <div
+            className={`rounded-lg border px-4 py-3 text-sm ${
+              planningSourceExplanation.tone === 'emerald'
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+                : planningSourceExplanation.tone === 'blue'
+                  ? 'border-blue-200 bg-blue-50 text-blue-900'
+                  : 'border-amber-200 bg-amber-50 text-amber-900'
+            }`}
+          >
+            <p className="font-semibold">{planningSourceExplanation.title}</p>
+            <p className="mt-1">{planningSourceExplanation.body}</p>
+          </div>
+        )}
+
+        {diagnostics?.usedBusinessZipDisambiguation && (
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+            <p className="font-semibold">Business location anchor applied</p>
+            <p className="mt-1">
+              Search results were disambiguated with {diagnostics.businessGeoAnchorSource || 'the account location'}.
+            </p>
+          </div>
+        )}
+
+        {isRefining && (
+          <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+            Refining the plan now. Location scores, backup guidance, and client prep notes will update when the pass finishes.
+          </div>
+        )}
+
+        {isLoadingIntelligence && (
+          <div className="rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
+            Computing weather, sun window, and route intelligence...
+          </div>
+        )}
+
+        {intelligence && (
+          <div className="rounded-lg border border-[#d8d2c8] bg-white p-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7c6f64]">
+                  Sun and weather telemetry
+                </p>
+                <div className="mt-3 grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-4">
+                  <span className="rounded-md bg-[#f6f3ee] px-3 py-2 font-medium text-[#1f2933]">
+                    Golden: {formatTime(intelligence.goldenHours.goldenHourStart)} - {formatTime(intelligence.goldenHours.goldenHourEnd)}
+                  </span>
+                  <span className="rounded-md bg-[#f6f3ee] px-3 py-2 font-medium text-[#1f2933]">
+                    Sunrise: {formatTime(intelligence.goldenHours.sunrise)}
+                  </span>
+                  <span className="rounded-md bg-[#f6f3ee] px-3 py-2 font-medium text-[#1f2933]">
+                    Sunset: {formatTime(intelligence.goldenHours.sunset)}
+                  </span>
+                  {intelligence.weather && (
+                    <span className="rounded-md bg-[#f6f3ee] px-3 py-2 font-medium text-[#1f2933]">
+                      Rain: {intelligence.weather.precipitationProbability}%
+                    </span>
+                  )}
+                </div>
+              </div>
+              {intelligence.optimizedRoute.length > 1 && (
+                <Button variant="secondary" onClick={onApplyOptimizedRouteOrder} className="bg-[#ebe5db] hover:bg-[#ded8ce]">
+                  Apply optimized route
+                </Button>
+              )}
+            </div>
+
+            {intelligence.confidence?.windows?.length ? (
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                {intelligence.confidence.windows.map(window => (
+                  <div key={`${window.label}-${window.startsAt}`} className="rounded-lg border border-[#e4ded5] bg-[#faf9f6] px-3 py-3 text-sm text-[#1f2933]">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="font-semibold">{window.label}</p>
+                      <span className="rounded-md bg-white px-2 py-1 text-xs font-semibold text-[#5f6b76]">
+                        {window.confidence}%
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-[#5f6b76]">{window.summary}</p>
+                  </div>
+                ))}
+              </div>
             ) : null}
-          </ul>
-        </div>
-      )}
+
+            {intelligence.weather?.recommendations?.length ? (
+              <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-[#5f6b76]">
+                {intelligence.weather.recommendations.slice(0, 2).map(item => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        )}
+
+        {shareUrl && (
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="min-w-0">
+                <p className="font-semibold">Client guide link ready</p>
+                <input
+                  title="Share URL"
+                  readOnly
+                  value={shareUrl}
+                  className="mt-2 w-full rounded-md border border-emerald-300 bg-white px-2 py-2 text-xs text-emerald-900"
+                />
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="secondary" disabled={isRevokingShareLink} onClick={onCopyShareLink}>Copy link</Button>
+                <Button variant="ghost" isLoading={isRevokingShareLink} disabled={isApplying || isRefining} onClick={onRevokeShareLink}>
+                  {isRevokingShareLink ? 'Revoking...' : 'Revoke link'}
+                </Button>
+                <Link href="/dashboard/shot-board">
+                  <Button variant="ghost">Shot board</Button>
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {shareLinkError && (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{shareLinkError}</div>
+        )}
+
+        {(source !== 'grounded-candidates' ||
+          locationCount < 3 ||
+          shotCountWarning) && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <p className="font-semibold">Planner QA warnings</p>
+            <ul className="mt-1 list-disc space-y-1 pl-5">
+              {source !== 'grounded-candidates' && (
+                <li>Location plan is using fallback mode, not fully grounded candidates.</li>
+              )}
+              {locationCount < 3 && (
+                <li>Fewer than 3 real location candidates found. Consider a broader nearby city or ZIP.</li>
+              )}
+              {shotCountWarning ? (
+                <li>
+                  Shot count ({shotCount}) is outside expected {expectedShotRange.min}-{expectedShotRange.max} for {durationMinutes} minutes.
+                </li>
+              ) : null}
+            </ul>
+          </div>
+        )}
+      </div>
     </Card>
   );
 }

@@ -16,30 +16,44 @@ type PlannerWorkflowStagesProps = {
 
 export function PlannerWorkflowStages({ stages, currentStage, hasPlan }: PlannerWorkflowStagesProps) {
   return (
-    <Card>
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+    <Card className="border border-[#d8d2c8] shadow-sm">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-gray-900">Planner workflow</h2>
-          <p className="text-sm text-gray-600">Move from intake to review, then apply the approved plan to your project workspace.</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7c6f64]">Production flow</p>
+          <h2 className="mt-2 text-xl font-semibold text-[#1f2933]">From intake to client-ready guide</h2>
+          <p className="mt-1 text-sm text-[#5f6b76]">
+            Capture the brief, pressure-test logistics, then turn the approved plan into a working project.
+          </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {stages.map(stage => {
+        <div className="grid gap-2 sm:grid-cols-3 lg:min-w-[560px]">
+          {stages.map((stage, index) => {
             const isActive = currentStage === stage.id;
             const isAvailable = stage.id === 'intake' || (stage.id === 'review' && hasPlan) || (stage.id === 'apply' && hasPlan);
 
             return (
               <div
                 key={stage.id}
-                className={`rounded-2xl border px-3 py-2 text-sm ${
+                className={`rounded-lg border px-3 py-3 text-sm transition-colors ${
                   isActive
-                    ? 'border-blue-600 bg-blue-50 text-blue-700'
+                    ? 'border-[#1f2933] bg-[#1f2933] text-white'
                     : isAvailable
-                      ? 'border-gray-200 bg-white text-gray-700'
-                      : 'border-gray-200 bg-gray-50 text-gray-400'
+                      ? 'border-[#d8d2c8] bg-white text-[#1f2933]'
+                      : 'border-[#e4ded5] bg-[#faf9f6] text-[#8b8178]'
                 }`}
               >
-                <p className="font-semibold">{stage.label}</p>
-                <p className="text-xs">{stage.description}</p>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-xs font-semibold ${
+                      isActive ? 'bg-white text-[#1f2933]' : 'bg-[#ebe5db] text-[#5f6b76]'
+                    }`}
+                  >
+                    {index + 1}
+                  </span>
+                  <p className="font-semibold">{stage.label}</p>
+                </div>
+                <p className={`mt-2 text-xs leading-5 ${isActive ? 'text-[#d1d5db]' : 'text-[#5f6b76]'}`}>
+                  {stage.description}
+                </p>
               </div>
             );
           })}
