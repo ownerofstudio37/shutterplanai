@@ -129,6 +129,50 @@ type PlannerPreset = {
   eventPriorities?: string;
 };
 
+type PlannerDraftState = {
+  shootType: string;
+  city: string;
+  duration: string;
+  mood: string;
+  subjectDetails: string;
+  mustHaveShots: string;
+  constraints: string;
+  locationMode: LocationMode;
+  providedLocations: string;
+  familyPacing?: string;
+  engagementStory?: string;
+  brandingGoals?: string;
+  eventPriorities?: string;
+  shootDate?: string;
+};
+
+type PlannerDraft = {
+  id: string;
+  planState: PlannerDraftState;
+  status: 'intake' | 'review' | 'applying';
+  createdAt: string;
+  updatedAt: string;
+};
+
+type PlannerIntelligence = {
+  goldenHours: {
+    sunrise: string;
+    sunset: string;
+    goldenHourStart: string;
+    goldenHourEnd: string;
+  };
+  logistics: Array<{
+    parkingDifficulty: number;
+    restroomAccessibility: number;
+    permitLikelihood: number;
+    crowdRisk: number;
+    accessibility: number;
+    overallRisk: number;
+    warnings: string[];
+  }>;
+  optimizedRoute: number[];
+};
+
 interface LocationRefinement {
   name: string;
   kidFriendlinessScore: number;
@@ -139,6 +183,8 @@ interface LocationRefinement {
   rationale: string;
   recommendedMicroSpots: string[];
 }
+
+const PLANNER_DRAFT_STORAGE_KEY = 'planner:draft:v1';
 
 function getAuthHeader() {
   const token = tokenUtils.getToken();
@@ -489,6 +535,13 @@ export default function PlannerPage() {
   const [isApplying, setIsApplying] = useState(false);
   const [feedbackSaveStatus, setFeedbackSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [isRegenerating, setIsRegenerating] = useState<'idle' | 'locations' | 'shot-list' | 'timeline'>('idle');
+  const [draftId, setDraftId] = useState<string>('');
+  const [draftSaveStatus, setDraftSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [draftBootstrapComplete, setDraftBootstrapComplete] = useState(false);
+  const [resumableDraft, setResumableDraft] = useState<PlannerDraft | null>(null);
+  const [intelligence, setIntelligence] = useState<PlannerIntelligence | null>(null);
+  const [isLoadingIntelligence, setIsLoadingIntelligence] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
 
   const durationMinutes = useMemo(() => parseDurationMinutes(duration), [duration]);
   const expectedShotRange = useMemo(() => getExpectedShotRange(durationMinutes), [durationMinutes]);
@@ -602,6 +655,76 @@ export default function PlannerPage() {
   const isChatComplete = chatStepIndex >= visibleQuestions.length;
   const workflowStage: WorkflowStage = plan ? (isApplying ? 'apply' : 'review') : 'intake';
 
+  const buildCurrentDraft = (currentDraftId: string): PlannerDraft => ({
+    id: currentDraftId,
+    status: workflowStage === 'apply' ? 'applying' : workflowStage,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    planState: {
+      shootType,
+      city,
+      duration,
+      mood,
+      subjectDetails,
+      mustHaveShots,
+      constraints,
+      locationMode,
+      providedLocations,
+      familyPacing,
+      engagementStory,
+      brandingGoals,
+      eventPriorities,
+      shootDate,
+    },
+  });
+
+  const hydrateFromDraft = (draft: PlannerDraft) => {
+    const draftState = draft.planState;
+    const mode = draftState.locationMode ?? 'find-locations';
+    const nextCategory = getSessionCategory(draftState.shootType || 'Family Session');
+    const nextVisibleQuestions = CHAT_QUESTIONS.filter(
+      question => !question.showWhen || question.showWhen(mode, nextCategory)
+    );
+
+    setDraftId(draft.id);
+    setShootType(draftState.shootType || 'Family Session');
+    setCity(draftState.city || 'Dallas, TX');
+    setDuration(draftState.duration || '90 minutes');
+    setMood(draftState.mood || 'Warm, candid, emotional');
+    setSubjectDetails(draftState.subjectDetails || '5 people, 2 toddlers');
+    setMustHaveShots(draftState.mustHaveShots || 'Whole family portrait, parents together, each kid solo');
+    setConstraints(draftState.constraints || 'Need stroller-friendly paths and quick transitions');
+    setLocationMode(mode);
+    setProvidedLocations(draftState.providedLocations || '');
+    setFamilyPacing(draftState.familyPacing || '');
+    setEngagementStory(draftState.engagementStory || '');
+    setBrandingGoals(draftState.brandingGoals || '');
+    setEventPriorities(draftState.eventPriorities || '');
+    setShootDate(draftState.shootDate || '');
+    setPlan(null);
+    setError(null);
+    setIsReviewConfirmed(true);
+    setChatStepIndex(nextVisibleQuestions.length);
+    setResumableDraft(null);
+  };
+
+  const clearDraftStorage = async (clearId?: string) => {
+    localStorage.removeItem(PLANNER_DRAFT_STORAGE_KEY);
+    const targetDraftId = clearId || draftId;
+    if (!targetDraftId) return;
+
+    try {
+      await fetch(`/api/planner/drafts?id=${encodeURIComponent(targetDraftId)}`, {
+        method: 'DELETE',
+        headers: {
+          ...getAuthHeader(),
+        },
+      });
+    } catch {
+      // ignore draft cleanup failures
+    }
+  };
+
   useEffect(() => {
     if (!activeQuestion) {
       setDraftAnswer('');
@@ -641,6 +764,185 @@ export default function PlannerPage() {
     void loadBusinessProfile();
   }, []);
 
+  useEffect(() => {
+    const readStoredDraft = () => {
+      try {
+        const raw = localStorage.getItem(PLANNER_DRAFT_STORAGE_KEY);
+        if (!raw) return null;
+        return JSON.parse(raw) as PlannerDraft;
+      } catch {
+        return null;
+      }
+    };
+
+    const mapServerDraft = (row: Record<string, unknown>): PlannerDraft | null => {
+      const id = typeof row.id === 'string' ? row.id : null;
+      const planState = (row.plan_state || row.planState) as PlannerDraftState | undefined;
+      const status = typeof row.status === 'string' ? row.status : 'intake';
+      if (!id || !planState) return null;
+
+      return {
+        id,
+        status: status === 'applying' || status === 'review' ? status : 'intake',
+        planState,
+        createdAt: typeof row.created_at === 'string' ? row.created_at : new Date().toISOString(),
+        updatedAt: typeof row.updated_at === 'string' ? row.updated_at : new Date().toISOString(),
+      };
+    };
+
+    const bootstrapDraft = async () => {
+      const localDraft = readStoredDraft();
+      if (localDraft) {
+        setResumableDraft(localDraft);
+        setDraftId(localDraft.id);
+      }
+
+      try {
+        const response = await fetch('/api/planner/drafts', {
+          headers: {
+            ...getAuthHeader(),
+          },
+        });
+
+        const result = (await response.json()) as {
+          success?: boolean;
+          data?: Array<Record<string, unknown>>;
+        };
+
+        if (response.ok && result.success && Array.isArray(result.data) && result.data.length > 0 && !localDraft) {
+          const serverDraft = mapServerDraft(result.data[0]);
+          if (serverDraft) {
+            setResumableDraft(serverDraft);
+            setDraftId(serverDraft.id);
+          }
+        }
+      } catch {
+        // ignore bootstrap failures
+      } finally {
+        setDraftBootstrapComplete(true);
+      }
+    };
+
+    void bootstrapDraft();
+  }, []);
+
+  useEffect(() => {
+    if (!draftBootstrapComplete) return;
+
+    const resolvedDraftId = draftId || `draft-${globalThis.crypto?.randomUUID?.() || Date.now()}`;
+    if (!draftId) {
+      setDraftId(resolvedDraftId);
+    }
+
+    const draftPayload = buildCurrentDraft(resolvedDraftId);
+    const normalizedDraftPayload: PlannerDraft = {
+      ...draftPayload,
+      status: workflowStage === 'apply' ? 'applying' : workflowStage,
+      updatedAt: new Date().toISOString(),
+    };
+
+    localStorage.setItem(PLANNER_DRAFT_STORAGE_KEY, JSON.stringify(normalizedDraftPayload));
+    setDraftSaveStatus('saving');
+
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await fetch('/api/planner/drafts', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...getAuthHeader(),
+          },
+          body: JSON.stringify({ draftPlan: normalizedDraftPayload }),
+        });
+
+        if (!response.ok) {
+          setDraftSaveStatus('error');
+          return;
+        }
+
+        setDraftSaveStatus('saved');
+        window.setTimeout(() => setDraftSaveStatus('idle'), 1800);
+      } catch {
+        setDraftSaveStatus('error');
+      }
+    }, 900);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    draftBootstrapComplete,
+    draftId,
+    workflowStage,
+    shootType,
+    city,
+    duration,
+    mood,
+    subjectDetails,
+    mustHaveShots,
+    constraints,
+    locationMode,
+    providedLocations,
+    familyPacing,
+    engagementStory,
+    brandingGoals,
+    eventPriorities,
+    shootDate,
+  ]);
+
+  useEffect(() => {
+    const runIntelligencePass = async () => {
+      if (!plan || plan.locationSuggestions.length === 0) {
+        setIntelligence(null);
+        return;
+      }
+
+      const anchor =
+        plan.locationSuggestions.find(location => location.latitude != null && location.longitude != null) ||
+        plan.locationSuggestions[0];
+
+      setIsLoadingIntelligence(true);
+      try {
+        const response = await fetch('/api/planner/intelligence', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...getAuthHeader(),
+          },
+          body: JSON.stringify({
+            latitude: anchor?.latitude ?? 0,
+            longitude: anchor?.longitude ?? 0,
+            date: shootDate || new Date().toISOString(),
+            sessionCategory,
+            locations: plan.locationSuggestions.map(location => ({
+              name: location.displayName || location.name,
+              latitude: location.latitude ?? null,
+              longitude: location.longitude ?? null,
+              venueBucket: location.venueBucket,
+              logistics: location.logistics,
+            })),
+          }),
+        });
+
+        const result = (await response.json()) as { goldenHours?: PlannerIntelligence['goldenHours']; logistics?: PlannerIntelligence['logistics']; optimizedRoute?: number[] };
+        if (!response.ok || !result.goldenHours || !Array.isArray(result.logistics) || !Array.isArray(result.optimizedRoute)) {
+          setIntelligence(null);
+          return;
+        }
+
+        setIntelligence({
+          goldenHours: result.goldenHours,
+          logistics: result.logistics,
+          optimizedRoute: result.optimizedRoute,
+        });
+      } catch {
+        setIntelligence(null);
+      } finally {
+        setIsLoadingIntelligence(false);
+      }
+    };
+
+    void runIntelligencePass();
+  }, [plan, sessionCategory, shootDate]);
+
   const locationIndex = useMemo(() => {
     const map = new Map<string, SessionPlanLocation>();
     (plan?.locationSuggestions ?? []).forEach(location => {
@@ -657,6 +959,32 @@ export default function PlannerPage() {
     return map;
   }, [plan]);
 
+  const routeRankLookup = useMemo(() => {
+    const map = new Map<string, number>();
+    if (!plan || !intelligence?.optimizedRoute) return map;
+
+    intelligence.optimizedRoute.forEach((originalIndex, optimizedIndex) => {
+      const location = plan.locationSuggestions[originalIndex];
+      if (!location) return;
+      map.set((location.displayName || location.name).toLowerCase(), optimizedIndex);
+    });
+
+    return map;
+  }, [intelligence?.optimizedRoute, plan]);
+
+  const logisticsLookup = useMemo(() => {
+    const map = new Map<string, PlannerIntelligence['logistics'][number]>();
+    if (!plan || !intelligence?.logistics) return map;
+
+    plan.locationSuggestions.forEach((location, index) => {
+      const logistics = intelligence.logistics[index];
+      if (!logistics) return;
+      map.set((location.displayName || location.name).toLowerCase(), logistics);
+    });
+
+    return map;
+  }, [intelligence?.logistics, plan]);
+
   const displayedLocations = useMemo(() => {
     const locations = [...(plan?.locationSuggestions ?? [])];
 
@@ -671,12 +999,17 @@ export default function PlannerPage() {
         const bPreferred = preferredVenueBucket && b.venueBucket === preferredVenueBucket ? 1 : 0;
         const aVoteScore = aVote === 'up' ? 1 : aVote === 'down' ? -1 : 0;
         const bVoteScore = bVote === 'up' ? 1 : bVote === 'down' ? -1 : 0;
+        const aRouteRank = routeRankLookup.get(aKey);
+        const bRouteRank = routeRankLookup.get(bKey);
 
         if (aPreferred !== bPreferred) return bPreferred - aPreferred;
         if (aVoteScore !== bVoteScore) return bVoteScore - aVoteScore;
+        if (typeof aRouteRank === 'number' && typeof bRouteRank === 'number' && aRouteRank !== bRouteRank) {
+          return aRouteRank - bRouteRank;
+        }
         return (b.confidenceScore ?? 0) - (a.confidenceScore ?? 0);
       });
-  }, [excludedVenueBuckets, locationVotes, plan?.locationSuggestions, preferredVenueBucket]);
+  }, [excludedVenueBuckets, locationVotes, plan?.locationSuggestions, preferredVenueBucket, routeRankLookup]);
 
   const displayedLocationNames = useMemo(
     () => new Set(displayedLocations.map(location => (location.displayName || location.name).toLowerCase())),
@@ -1063,6 +1396,8 @@ export default function PlannerPage() {
 
       // Persist feedback before navigating away
       await persistFeedback(true);
+      await clearDraftStorage();
+      setDraftId('');
 
       router.push(`/dashboard/shot-board?project=${projectId}`);
     } catch {
@@ -1297,6 +1632,92 @@ export default function PlannerPage() {
     setActiveReviewTab(tab);
   };
 
+  const resumeDraft = () => {
+    if (!resumableDraft) return;
+    hydrateFromDraft(resumableDraft);
+  };
+
+  const dismissDraft = async () => {
+    if (resumableDraft?.id) {
+      await clearDraftStorage(resumableDraft.id);
+    } else {
+      localStorage.removeItem(PLANNER_DRAFT_STORAGE_KEY);
+    }
+    setResumableDraft(null);
+  };
+
+  const applyOptimizedRouteOrder = () => {
+    if (!plan || !intelligence?.optimizedRoute?.length) return;
+
+    const reorderedLocations = intelligence.optimizedRoute
+      .map(index => plan.locationSuggestions[index])
+      .filter(Boolean);
+
+    if (reorderedLocations.length === 0) return;
+
+    setPlan(prev =>
+      prev
+        ? {
+            ...prev,
+            locationSuggestions: reorderedLocations,
+          }
+        : prev
+    );
+    setFeedbackSaveStatus('saved');
+    setTimeout(() => setFeedbackSaveStatus('idle'), 1200);
+  };
+
+  const updateLocationField = (index: number, field: keyof SessionPlanLocation, value: string) => {
+    setPlan(prev => {
+      if (!prev) return prev;
+      const nextLocations = [...prev.locationSuggestions];
+      const target = nextLocations[index];
+      if (!target) return prev;
+      nextLocations[index] = { ...target, [field]: value };
+      return { ...prev, locationSuggestions: nextLocations };
+    });
+  };
+
+  const updateShotField = (index: number, field: keyof SessionPlanShot, value: string) => {
+    setPlan(prev => {
+      if (!prev) return prev;
+      const nextShots = [...prev.shotList];
+      const target = nextShots[index];
+      if (!target) return prev;
+      nextShots[index] = { ...target, [field]: value };
+      return { ...prev, shotList: nextShots };
+    });
+  };
+
+  const updateTimelineField = (index: number, field: keyof SessionPlanTimelineItem, value: string) => {
+    setPlan(prev => {
+      if (!prev) return prev;
+      const nextTimeline = [...prev.timeline];
+      const target = nextTimeline[index];
+      if (!target) return prev;
+      nextTimeline[index] = { ...target, [field]: value };
+      return { ...prev, timeline: nextTimeline };
+    });
+  };
+
+  const updateChecklistItem = (index: number, value: string) => {
+    setPlan(prev => {
+      if (!prev) return prev;
+      const nextChecklist = [...prev.clientPrepChecklist];
+      nextChecklist[index] = value;
+      return { ...prev, clientPrepChecklist: nextChecklist };
+    });
+  };
+
+  const updateContingencyItem = (index: number, value: string) => {
+    setPlan(prev => {
+      if (!prev) return prev;
+      const nextContingencies = [...prev.contingencyPlans];
+      nextContingencies[index] = value;
+      return { ...prev, contingencyPlans: nextContingencies };
+    });
+  };
+
   return (
     <div className="space-y-6">
       <Card>
@@ -1377,6 +1798,23 @@ export default function PlannerPage() {
         <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
           {workflowStage === 'intake' ? (
             <>
+              {resumableDraft && (
+                <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-amber-900">Resume your last planner draft</p>
+                      <p className="mt-1 text-xs text-amber-800">
+                        Saved {new Date(resumableDraft.updatedAt).toLocaleString()} • {resumableDraft.planState.shootType}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button variant="secondary" onClick={() => void dismissDraft()}>Discard draft</Button>
+                      <Button onClick={resumeDraft}>Resume draft</Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="mb-4 rounded-xl border border-indigo-200 bg-indigo-50 p-4">
                 <div className="mb-3 flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
                   <div>
@@ -1596,6 +2034,13 @@ export default function PlannerPage() {
         <p className="mt-2 text-xs text-gray-500">
           Duration target: {durationMinutes} min • Expected shot range: {expectedShotRange.min}-{expectedShotRange.max}
         </p>
+        <p className="mt-1 text-xs text-gray-500">
+          Draft status:{' '}
+          {draftSaveStatus === 'saving' && <span className="text-blue-600">Saving…</span>}
+          {draftSaveStatus === 'saved' && <span className="text-emerald-600">Saved</span>}
+          {draftSaveStatus === 'error' && <span className="text-red-600">Unable to sync</span>}
+          {draftSaveStatus === 'idle' && <span>Idle</span>}
+        </p>
         {!city.trim() && (
           <p className="mt-1 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
             City is blank. Planner will fall back to your account base location/ZIP if available.
@@ -1697,6 +2142,9 @@ export default function PlannerPage() {
                 </div>
               </div>
               <div className="hidden gap-2 md:flex">
+                <Button variant="ghost" onClick={() => setIsEditMode(prev => !prev)}>
+                  {isEditMode ? 'Done editing' : 'Edit output'}
+                </Button>
                 <Button variant="ghost" isLoading={isRefining} onClick={() => void refinePlan()}>
                   {isRefining ? 'Refining...' : 'Refine Plan'}
                 </Button>
@@ -1727,6 +2175,35 @@ export default function PlannerPage() {
             {isRefining && (
               <div className="mb-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
                 Refining the current plan now. Review scores and backup guidance will update when the pass finishes.
+              </div>
+            )}
+
+            {isLoadingIntelligence && (
+              <div className="mb-3 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
+                Computing weather, sun window, and route intelligence…
+              </div>
+            )}
+
+            {intelligence && (
+              <div className="mb-3 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
+                <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    <span className="rounded-full bg-white px-2 py-1 font-medium text-indigo-700">
+                      Golden hour: {new Date(intelligence.goldenHours.goldenHourStart).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                      {' '}
+                      - {new Date(intelligence.goldenHours.goldenHourEnd).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                    </span>
+                    <span className="rounded-full bg-white px-2 py-1 font-medium text-indigo-700">
+                      Sunrise: {new Date(intelligence.goldenHours.sunrise).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                    </span>
+                    <span className="rounded-full bg-white px-2 py-1 font-medium text-indigo-700">
+                      Sunset: {new Date(intelligence.goldenHours.sunset).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                    </span>
+                  </div>
+                  {intelligence.optimizedRoute.length > 1 && (
+                    <Button variant="secondary" onClick={applyOptimizedRouteOrder}>Apply optimized route order</Button>
+                  )}
+                </div>
               </div>
             )}
 
@@ -1878,6 +2355,7 @@ export default function PlannerPage() {
                               const currentVote = locationVotes[locationKey];
                               const isPreferredType = !!location.venueBucket && preferredVenueBucket === location.venueBucket;
                               const isExcludedType = !!location.venueBucket && excludedVenueBuckets.includes(location.venueBucket);
+                              const intelligenceLogistics = logisticsLookup.get(locationKey);
 
                               return (
                                 <div key={`mobile-${location.name}`} className="rounded-lg border border-gray-200 p-3">
@@ -1945,6 +2423,13 @@ export default function PlannerPage() {
                                     <p className="mt-1 text-sm text-gray-700">{location.whyItWorks}</p>
                                   </div>
                                   <p className="mt-2 text-xs text-gray-500">Micro-spots: {location.microLocations.join(' • ')}</p>
+                                  {intelligenceLogistics && (
+                                    <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-gray-700">
+                                      <span className="rounded-full bg-indigo-100 px-2 py-1">Risk: {intelligenceLogistics.overallRisk}/10</span>
+                                      <span className="rounded-full bg-indigo-100 px-2 py-1">Permit: {intelligenceLogistics.permitLikelihood}/10</span>
+                                      <span className="rounded-full bg-indigo-100 px-2 py-1">Crowd: {intelligenceLogistics.crowdRisk}/10</span>
+                                    </div>
+                                  )}
                                 </div>
                               );
                             })}
@@ -2101,6 +2586,7 @@ export default function PlannerPage() {
                   const currentVote = locationVotes[locationKey];
                   const isPreferredType = !!location.venueBucket && preferredVenueBucket === location.venueBucket;
                   const isExcludedType = !!location.venueBucket && excludedVenueBuckets.includes(location.venueBucket);
+                  const intelligenceLogistics = logisticsLookup.get(locationKey);
 
                   return (
                     <div key={location.name} className="rounded-lg border border-gray-200 p-3">
@@ -2217,6 +2703,21 @@ export default function PlannerPage() {
                         </a>
                       )}
                       <p className="mt-2 text-xs text-gray-500">Micro-spots: {location.microLocations.join(' • ')}</p>
+                      {intelligenceLogistics && (
+                        <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-gray-700">
+                          <span className="rounded-full bg-indigo-100 px-2 py-1">Risk: {intelligenceLogistics.overallRisk}/10</span>
+                          <span className="rounded-full bg-indigo-100 px-2 py-1">Permit: {intelligenceLogistics.permitLikelihood}/10</span>
+                          <span className="rounded-full bg-indigo-100 px-2 py-1">Crowd: {intelligenceLogistics.crowdRisk}/10</span>
+                          <span className="rounded-full bg-indigo-100 px-2 py-1">Parking difficulty: {intelligenceLogistics.parkingDifficulty}/10</span>
+                        </div>
+                      )}
+                      {intelligenceLogistics?.warnings?.length ? (
+                        <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-amber-700">
+                          {intelligenceLogistics.warnings.map(warning => (
+                            <li key={`${location.name}-${warning}`}>{warning}</li>
+                          ))}
+                        </ul>
+                      ) : null}
                       <p className="mt-2 text-xs text-gray-500">Parking: {location.logistics.parking}</p>
                       <p className="text-xs text-gray-500">Restroom: {location.logistics.restroom}</p>
                       <p className="text-xs text-gray-500">Walk: {location.logistics.walkingDistance}</p>
@@ -2275,11 +2776,40 @@ export default function PlannerPage() {
                 )}
 
                 <div className="grid gap-3 lg:grid-cols-2">
-                {displayedShots.map(shot => (
+                {displayedShots.map(shot => {
+                  const shotIndex = plan.shotList.indexOf(shot);
+                  return (
                   <div key={`${shot.title}-${shot.microSpot}`} className="rounded-lg border border-gray-200 p-3">
-                    <p className="font-semibold text-gray-900">{shot.title}</p>
-                    <p className="mt-1 text-sm text-gray-600">{shot.description}</p>
-                    <p className="mt-2 text-xs text-gray-500">Location: {shot.location}</p>
+                    {isEditMode ? (
+                      <input
+                        title="Shot title"
+                        className="w-full rounded border border-gray-300 px-2 py-1 text-sm font-semibold text-gray-900"
+                        value={shot.title}
+                        onChange={event => updateShotField(shotIndex, 'title', event.target.value)}
+                      />
+                    ) : (
+                      <p className="font-semibold text-gray-900">{shot.title}</p>
+                    )}
+                    {isEditMode ? (
+                      <textarea
+                        title="Shot description"
+                        className="mt-1 min-h-16 w-full rounded border border-gray-300 px-2 py-1 text-sm text-gray-700"
+                        value={shot.description}
+                        onChange={event => updateShotField(shotIndex, 'description', event.target.value)}
+                      />
+                    ) : (
+                      <p className="mt-1 text-sm text-gray-600">{shot.description}</p>
+                    )}
+                    {isEditMode ? (
+                      <input
+                        title="Shot location"
+                        className="mt-2 w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-700"
+                        value={shot.location}
+                        onChange={event => updateShotField(shotIndex, 'location', event.target.value)}
+                      />
+                    ) : (
+                      <p className="mt-2 text-xs text-gray-500">Location: {shot.location}</p>
+                    )}
                     {shot.latitude != null && shot.longitude != null && (
                       <p className="text-xs text-blue-700">
                         Coordinates: {Number(shot.latitude).toFixed(5)}, {Number(shot.longitude).toFixed(5)}
@@ -2290,7 +2820,7 @@ export default function PlannerPage() {
                     <p className="text-xs text-gray-500">Composition: {shot.compositionSuggestion}</p>
                     <p className="text-xs text-gray-500">Timing: {shot.timingHint}</p>
                   </div>
-                ))}
+                );})}
                 </div>
               </div>
             )}
@@ -2311,11 +2841,38 @@ export default function PlannerPage() {
                   </button>
                 </div>
 
-                {plan.timeline.map(item => (
+                {plan.timeline.map((item, index) => (
                   <div key={`${item.timeBlock}-${item.focus}`} className="rounded-lg border border-gray-200 p-3">
-                    <p className="text-sm font-semibold text-gray-900">{item.timeBlock}</p>
-                    <p className="text-sm text-blue-700">{item.focus}</p>
-                    <p className="mt-1 text-sm text-gray-600">{item.notes}</p>
+                    {isEditMode ? (
+                      <input
+                        title="Timeline time block"
+                        className="w-full rounded border border-gray-300 px-2 py-1 text-sm font-semibold text-gray-900"
+                        value={item.timeBlock}
+                        onChange={event => updateTimelineField(index, 'timeBlock', event.target.value)}
+                      />
+                    ) : (
+                      <p className="text-sm font-semibold text-gray-900">{item.timeBlock}</p>
+                    )}
+                    {isEditMode ? (
+                      <input
+                        title="Timeline focus"
+                        className="mt-1 w-full rounded border border-gray-300 px-2 py-1 text-sm text-blue-700"
+                        value={item.focus}
+                        onChange={event => updateTimelineField(index, 'focus', event.target.value)}
+                      />
+                    ) : (
+                      <p className="text-sm text-blue-700">{item.focus}</p>
+                    )}
+                    {isEditMode ? (
+                      <textarea
+                        title="Timeline notes"
+                        className="mt-1 min-h-14 w-full rounded border border-gray-300 px-2 py-1 text-sm text-gray-700"
+                        value={item.notes}
+                        onChange={event => updateTimelineField(index, 'notes', event.target.value)}
+                      />
+                    ) : (
+                      <p className="mt-1 text-sm text-gray-600">{item.notes}</p>
+                    )}
                   </div>
                 ))}
               </div>
@@ -2326,16 +2883,38 @@ export default function PlannerPage() {
                 <div>
                   <h4 className="mb-3 text-lg font-semibold text-gray-900">Client Prep Checklist</h4>
                   <ul className="list-inside list-disc space-y-1 text-sm text-gray-700">
-                    {plan.clientPrepChecklist.map(item => (
-                      <li key={item}>{item}</li>
+                    {plan.clientPrepChecklist.map((item, index) => (
+                      <li key={`${item}-${index}`}>
+                        {isEditMode ? (
+                          <input
+                            title="Prep checklist item"
+                            className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
+                            value={item}
+                            onChange={event => updateChecklistItem(index, event.target.value)}
+                          />
+                        ) : (
+                          item
+                        )}
+                      </li>
                     ))}
                   </ul>
                 </div>
                 <div>
                   <h4 className="mb-3 text-lg font-semibold text-gray-900">Contingency Plans</h4>
                   <ul className="list-inside list-disc space-y-1 text-sm text-gray-700">
-                    {plan.contingencyPlans.map(item => (
-                      <li key={item}>{item}</li>
+                    {plan.contingencyPlans.map((item, index) => (
+                      <li key={`${item}-${index}`}>
+                        {isEditMode ? (
+                          <input
+                            title="Contingency item"
+                            className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
+                            value={item}
+                            onChange={event => updateContingencyItem(index, event.target.value)}
+                          />
+                        ) : (
+                          item
+                        )}
+                      </li>
                     ))}
                   </ul>
                 </div>
