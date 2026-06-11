@@ -10,6 +10,7 @@ import { PlannerWorkflowStages } from '@/components/planner/PlannerWorkflowStage
 import { DraftResumeBanner } from '@/components/planner/DraftResumeBanner';
 import { PlannerPresetGrid } from '@/components/planner/PlannerPresetGrid';
 import { PlannerReviewHeaderCard } from '@/components/planner/PlannerReviewHeaderCard';
+import { PlannerReviewTabs } from '@/components/planner/PlannerReviewTabs';
 import { tokenUtils } from '@/lib/auth';
 
 interface SessionPlanLocation {
@@ -1815,6 +1816,14 @@ export default function PlannerPage() {
     }
   };
 
+  const reviewTabItems: Array<{ id: ReviewTab; label: string }> = [
+    { id: 'map', label: `Map (${displayedLocations.filter(location => location.latitude != null && location.longitude != null).length})` },
+    { id: 'locations', label: `Locations (${displayedLocations.length})` },
+    { id: 'shot-list', label: `Shot List (${displayedShots.length})` },
+    { id: 'timeline', label: `Timeline (${plan?.timeline.length ?? 0})` },
+    { id: 'prep', label: 'Prep + Backup' },
+  ];
+
   return (
     <div className="space-y-6">
       <PlannerWorkflowStages stages={workflowStages} currentStage={workflowStage} hasPlan={!!plan} />
@@ -2152,72 +2161,16 @@ export default function PlannerPage() {
           />
 
           <Card>
-            <div className="mb-4 hidden flex-wrap items-center justify-between gap-2 md:flex">
-              <div className="flex flex-wrap gap-2">
-                {[
-                  { id: 'map', label: `Map (${displayedLocations.filter(location => location.latitude != null && location.longitude != null).length})` },
-                  { id: 'locations', label: `Locations (${displayedLocations.length})` },
-                  { id: 'shot-list', label: `Shot List (${displayedShots.length})` },
-                  { id: 'timeline', label: `Timeline (${plan.timeline.length})` },
-                  { id: 'prep', label: 'Prep + Backup' },
-                ].map(tab => (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={() => setActiveReviewTab(tab.id as ReviewTab)}
-                    className={`rounded-full px-3 py-1.5 text-sm font-medium ${
-                      activeReviewTab === tab.id
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-              <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                {feedbackSaveStatus === 'saving' && (
-                  <>
-                    <div className="h-2 w-2 animate-pulse rounded-full bg-blue-500"></div>
-                    <span>Saving feedback...</span>
-                  </>
-                )}
-                {feedbackSaveStatus === 'saved' && (
-                  <>
-                    <svg className="h-4 w-4 text-green-500" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
-                    <span className="text-green-600">Feedback saved</span>
-                  </>
-                )}
-              </div>
-            </div>
-
-            <div className="mb-4 space-y-3 md:hidden">
-              {[
-                { id: 'map', label: `Map (${displayedLocations.filter(location => location.latitude != null && location.longitude != null).length})` },
-                { id: 'locations', label: `Locations (${displayedLocations.length})` },
-                { id: 'shot-list', label: `Shot List (${displayedShots.length})` },
-                { id: 'timeline', label: `Timeline (${plan.timeline.length})` },
-                { id: 'prep', label: 'Prep + Backup' },
-              ].map(tab => {
-                const reviewTab = tab.id as ReviewTab;
-                const isOpen = activeMobileReviewTab === reviewTab;
-
-                return (
-                  <div key={`mobile-${tab.id}`} className="overflow-hidden rounded-xl border border-gray-200 bg-white">
-                    <button
-                      type="button"
-                      onClick={() => toggleMobileReviewTab(reviewTab)}
-                      className="flex w-full items-center justify-between px-4 py-3 text-left"
-                    >
-                      <span className="text-sm font-semibold text-gray-900">{tab.label}</span>
-                      <span className="text-xs text-gray-500">{isOpen ? 'Hide' : 'Show'}</span>
-                    </button>
-
-                    {isOpen && (
-                      <div className="border-t border-gray-100 px-4 py-4">
-                        {reviewTab === 'map' && (
+            <PlannerReviewTabs
+              tabs={reviewTabItems}
+              activeReviewTab={activeReviewTab}
+              activeMobileReviewTab={activeMobileReviewTab}
+              onSelectTab={setActiveReviewTab}
+              onToggleMobileTab={toggleMobileReviewTab}
+              feedbackSaveStatus={feedbackSaveStatus}
+              renderMobileContent={reviewTab => (
+                <>
+                  {reviewTab === 'map' && (
                           <div className="space-y-4">
                             <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
                               Use the map to pressure-test spacing, route order, and whether the plan clusters in the right part of town.
@@ -2255,9 +2208,9 @@ export default function PlannerPage() {
                               </div>
                             )}
                           </div>
-                        )}
+                  )}
 
-                        {reviewTab === 'locations' && (
+                  {reviewTab === 'locations' && (
                           <div className="space-y-4">
                             <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
                               Use the feedback controls to pressure-test location quality. Thumbs affect ordering locally, “Prefer this type” boosts similar spots in review, and “Exclude this type” removes that venue type from the current plan review.
@@ -2354,9 +2307,9 @@ export default function PlannerPage() {
                               );
                             })}
                           </div>
-                        )}
+                  )}
 
-                        {reviewTab === 'shot-list' && (
+                  {reviewTab === 'shot-list' && (
                           <div className="space-y-3">
                             {emptyShotMessage && (
                               <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
@@ -2375,9 +2328,9 @@ export default function PlannerPage() {
                               </div>
                             ))}
                           </div>
-                        )}
+                  )}
 
-                        {reviewTab === 'timeline' && (
+                  {reviewTab === 'timeline' && (
                           <div className="space-y-3">
                             {plan.timeline.map(item => (
                               <div key={`mobile-${item.timeBlock}-${item.focus}`} className="rounded-lg border border-gray-200 p-3">
@@ -2387,9 +2340,9 @@ export default function PlannerPage() {
                               </div>
                             ))}
                           </div>
-                        )}
+                  )}
 
-                        {reviewTab === 'prep' && (
+                  {reviewTab === 'prep' && (
                           <div className="space-y-4">
                             <div>
                               <h4 className="mb-2 text-base font-semibold text-gray-900">Client Prep Checklist</h4>
@@ -2408,15 +2361,11 @@ export default function PlannerPage() {
                               </ul>
                             </div>
                           </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="hidden md:block">
+                  )}
+                </>
+              )}
+              desktopContent={(
+                <>
             {activeReviewTab === 'map' && (
               <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
                 <div className="space-y-4">
@@ -2830,7 +2779,9 @@ export default function PlannerPage() {
                 </div>
               </div>
             )}
-            </div>
+                </>
+              )}
+            />
           </Card>
 
           <div className="sticky bottom-3 z-10 md:hidden">
