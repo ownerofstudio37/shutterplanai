@@ -542,6 +542,9 @@ export default function PlannerPage() {
   const [intelligence, setIntelligence] = useState<PlannerIntelligence | null>(null);
   const [isLoadingIntelligence, setIsLoadingIntelligence] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
+  const [isCreatingShareLink, setIsCreatingShareLink] = useState(false);
+  const [shareUrl, setShareUrl] = useState<string>('');
+  const [shareLinkError, setShareLinkError] = useState<string>('');
 
   const durationMinutes = useMemo(() => parseDurationMinutes(duration), [duration]);
   const expectedShotRange = useMemo(() => getExpectedShotRange(durationMinutes), [durationMinutes]);
@@ -1718,6 +1721,55 @@ export default function PlannerPage() {
     });
   };
 
+  const createShareLink = async () => {
+    if (!plan) return;
+
+    setIsCreatingShareLink(true);
+    setShareLinkError('');
+
+    try {
+      const response = await fetch('/api/planner/export', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeader(),
+        },
+        body: JSON.stringify({
+          plan,
+          planMetadata: {
+            shootType,
+            city,
+            duration,
+            mood,
+            shootDate,
+          },
+        }),
+      });
+
+      const result = (await response.json()) as { success?: boolean; shareUrl?: string; error?: string };
+      if (!response.ok || !result.success || !result.shareUrl) {
+        setShareLinkError(result.error || 'Failed to create share link.');
+        return;
+      }
+
+      setShareUrl(result.shareUrl);
+    } catch {
+      setShareLinkError('Failed to create share link.');
+    } finally {
+      setIsCreatingShareLink(false);
+    }
+  };
+
+  const copyShareLink = async () => {
+    if (!shareUrl) return;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setShareLinkError('');
+    } catch {
+      setShareLinkError('Could not copy link. Copy manually.');
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Card>
@@ -2145,6 +2197,9 @@ export default function PlannerPage() {
                 <Button variant="ghost" onClick={() => setIsEditMode(prev => !prev)}>
                   {isEditMode ? 'Done editing' : 'Edit output'}
                 </Button>
+                <Button variant="ghost" isLoading={isCreatingShareLink} onClick={() => void createShareLink()}>
+                  {isCreatingShareLink ? 'Creating link...' : 'Create share link'}
+                </Button>
                 <Button variant="ghost" isLoading={isRefining} onClick={() => void refinePlan()}>
                   {isRefining ? 'Refining...' : 'Refine Plan'}
                 </Button>
@@ -2204,6 +2259,27 @@ export default function PlannerPage() {
                     <Button variant="secondary" onClick={applyOptimizedRouteOrder}>Apply optimized route order</Button>
                   )}
                 </div>
+              </div>
+            )}
+
+            {shareUrl && (
+              <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                <p className="font-semibold">Share link ready</p>
+                <div className="mt-2 flex flex-col gap-2 md:flex-row md:items-center">
+                  <input
+                    title="Share URL"
+                    readOnly
+                    value={shareUrl}
+                    className="w-full rounded border border-emerald-300 bg-white px-2 py-1 text-xs text-emerald-900"
+                  />
+                  <Button variant="secondary" onClick={() => void copyShareLink()}>Copy link</Button>
+                </div>
+              </div>
+            )}
+
+            {shareLinkError && (
+              <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {shareLinkError}
               </div>
             )}
 
