@@ -27,6 +27,23 @@ interface CalendarDay {
   shots: ShotItem[];
 }
 
+const MONTH_NAMES = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
 function getAuthHeader() {
   const token = tokenUtils.getToken();
   const headers: Record<string, string> = {};
@@ -50,7 +67,6 @@ function getCalendarGrid(date: Date, shots: ShotItem[]): CalendarDay[] {
   const firstDay = getFirstDayOfMonth(date);
   const previousMonthDays = getDaysInMonth(new Date(date.getFullYear(), date.getMonth() - 1, 1));
 
-  // Previous month days
   for (let i = firstDay - 1; i >= 0; i--) {
     const dayDate = new Date(date.getFullYear(), date.getMonth() - 1, previousMonthDays - i);
     days.push({
@@ -61,7 +77,6 @@ function getCalendarGrid(date: Date, shots: ShotItem[]): CalendarDay[] {
     });
   }
 
-  // Current month days
   for (let day = 1; day <= daysInMonth; day++) {
     const dayDate = new Date(date.getFullYear(), date.getMonth(), day);
     const dayShots = shots.filter(shot => {
@@ -82,8 +97,7 @@ function getCalendarGrid(date: Date, shots: ShotItem[]): CalendarDay[] {
     });
   }
 
-  // Next month days
-  const remainingDays = 42 - days.length; // 6 weeks * 7 days
+  const remainingDays = 42 - days.length;
   for (let day = 1; day <= remainingDays; day++) {
     const dayDate = new Date(date.getFullYear(), date.getMonth() + 1, day);
     days.push({
@@ -97,12 +111,50 @@ function getCalendarGrid(date: Date, shots: ShotItem[]): CalendarDay[] {
   return days;
 }
 
-const MONTH_NAMES = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
-];
+function getStatusClass(status: ShotItem['status']) {
+  if (status === 'taken') return 'bg-[#d9eee6] text-[#0f766e]';
+  if (status === 'approved') return 'bg-[#dbeafe] text-[#1d4ed8]';
+  if (status === 'rejected') return 'bg-[#fee2e2] text-[#b91c1c]';
+  return 'bg-[#ece7df] text-[#5f6b76]';
+}
 
-const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+function getStatusDotClass(status: ShotItem['status']) {
+  if (status === 'taken') return 'bg-[#0f766e]';
+  if (status === 'approved') return 'bg-[#2563eb]';
+  if (status === 'rejected') return 'bg-[#dc2626]';
+  return 'bg-[#5f6b76]';
+}
+
+function formatStatus(status: ShotItem['status']) {
+  return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
+function formatDateLabel(date: Date) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+
+  const comparable = new Date(date);
+  comparable.setHours(0, 0, 0, 0);
+
+  if (comparable.getTime() === today.getTime()) return 'Today';
+  if (comparable.getTime() === tomorrow.getTime()) return 'Tomorrow';
+
+  return date.toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+function formatTimeLabel(date: Date) {
+  return date.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
 
 export default function CalendarPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -136,10 +188,9 @@ export default function CalendarPage() {
   };
 
   useEffect(() => {
-    const fetchData = async () => {
-      await loadData();
-    };
-    void fetchData();
+    queueMicrotask(() => {
+      void loadData();
+    });
   }, []);
 
   const filteredShots = useMemo(() => {
@@ -172,12 +223,28 @@ export default function CalendarPage() {
       .slice(0, 10);
   }, [filteredShots]);
 
+  const stats = useMemo(() => {
+    const scheduled = filteredShots.filter(shot => shot.planned_time).length;
+    const currentMonthShots = calendarDays.reduce((total, day) => {
+      if (!day.isCurrentMonth) return total;
+      return total + day.shots.length;
+    }, 0);
+
+    return {
+      total: filteredShots.length,
+      scheduled,
+      upcoming: upcomingShots.length,
+      projects: new Set(filteredShots.map(shot => shot.project_id)).size,
+      currentMonthShots,
+    };
+  }, [filteredShots, calendarDays, upcomingShots]);
+
   const previousMonth = () => {
-    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1));
+    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
   };
 
   const nextMonth = () => {
-    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1));
+    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
   };
 
   const goToToday = () => {
@@ -187,11 +254,11 @@ export default function CalendarPage() {
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <Card>
-          <div className="flex items-center justify-center h-96">
+        <Card className="border border-[#d8d2c8] bg-[#faf9f6] shadow-sm">
+          <div className="flex h-96 items-center justify-center">
             <div className="text-center">
-              <div className="mx-auto h-12 w-12 animate-spin rounded-full border-b-2 border-blue-600"></div>
-              <p className="mt-4 text-gray-600">Loading calendar...</p>
+              <div className="mx-auto h-12 w-12 animate-spin rounded-full border-2 border-[#d8d2c8] border-b-[#1f2933]" />
+              <p className="mt-4 text-sm font-medium text-[#5f6b76]">Loading production calendar...</p>
             </div>
           </div>
         </Card>
@@ -201,18 +268,45 @@ export default function CalendarPage() {
 
   return (
     <div className="space-y-6">
-      {/* Filters */}
-      <Card>
+      <section className="overflow-hidden rounded-lg bg-[#1f2933] text-white shadow-sm">
+        <div className="grid gap-6 p-6 lg:grid-cols-[1.35fr_1fr] lg:p-8">
+          <div className="max-w-3xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#d8d2c8]">Shoot telemetry calendar</p>
+            <h1 className="mt-3 text-3xl font-semibold tracking-normal md:text-4xl">Keep every production day visible.</h1>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-[#d8d2c8]">
+              Scan scheduled shots, active projects, and upcoming client handoffs in a calendar built for field planning.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              ['Scheduled', stats.scheduled.toString()],
+              ['This month', stats.currentMonthShots.toString()],
+              ['Upcoming', stats.upcoming.toString()],
+              ['Projects', stats.projects.toString()],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-lg border border-white/10 bg-white/10 p-4">
+                <p className="text-xs font-medium uppercase tracking-[0.12em] text-[#d8d2c8]">{label}</p>
+                <p className="mt-2 text-2xl font-semibold text-white">{value}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <Card className="border border-[#d8d2c8] bg-[#faf9f6] shadow-sm">
         <div className="grid gap-4 md:grid-cols-2">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Project</label>
+            <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-[#7c6f64]" htmlFor="calendar-project-filter">
+              Project
+            </label>
             <select
+              id="calendar-project-filter"
               aria-label="Filter by project"
-              className="w-full rounded-lg border border-gray-300 px-4 py-2"
+              className="w-full rounded-lg border border-[#d8d2c8] bg-white px-4 py-3 text-sm font-medium text-[#1f2933] shadow-sm outline-none transition focus:border-[#1f2933] focus:ring-2 focus:ring-[#1f2933]/10"
               value={projectFilter}
               onChange={e => setProjectFilter(e.target.value)}
             >
-              <option value="all">All Projects</option>
+              <option value="all">All projects</option>
               {projects.map(project => (
                 <option key={project.id} value={project.id}>
                   {project.title}
@@ -221,14 +315,17 @@ export default function CalendarPage() {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+            <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-[#7c6f64]" htmlFor="calendar-status-filter">
+              Status
+            </label>
             <select
+              id="calendar-status-filter"
               aria-label="Filter by status"
-              className="w-full rounded-lg border border-gray-300 px-4 py-2"
+              className="w-full rounded-lg border border-[#d8d2c8] bg-white px-4 py-3 text-sm font-medium text-[#1f2933] shadow-sm outline-none transition focus:border-[#1f2933] focus:ring-2 focus:ring-[#1f2933]/10"
               value={statusFilter}
               onChange={e => setStatusFilter(e.target.value as typeof statusFilter)}
             >
-              <option value="all">All Statuses</option>
+              <option value="all">All statuses</option>
               <option value="planned">Planned</option>
               <option value="taken">Taken</option>
               <option value="approved">Approved</option>
@@ -238,175 +335,137 @@ export default function CalendarPage() {
         </div>
       </Card>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Calendar */}
-        <div className="lg:col-span-2">
-          <Card>
-            {/* Calendar Header */}
-            <div className="mb-6 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.65fr)_minmax(340px,0.85fr)]">
+        <Card className="border border-[#d8d2c8] bg-white shadow-sm">
+          <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#7c6f64]">Month board</p>
+              <h2 className="mt-2 text-2xl font-semibold text-[#1f2933]">
                 {MONTH_NAMES[currentDate.getMonth()]} {currentDate.getFullYear()}
-              </h3>
-              <div className="flex gap-2">
-                <button
-                  onClick={goToToday}
-                  className="px-3 py-1 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                >
-                  Today
-                </button>
-                <button
-                  onClick={previousMonth}
-                  className="px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  ← Prev
-                </button>
-                <button
-                  onClick={nextMonth}
-                  className="px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  Next →
-                </button>
-              </div>
+              </h2>
             </div>
-
-            {/* Day Headers */}
-            <div className="grid grid-cols-7 gap-1 mb-2">
-              {DAY_NAMES.map(day => (
-                <div key={day} className="text-center text-sm font-semibold text-gray-600 py-2">
-                  {day}
-                </div>
-              ))}
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={goToToday}
+                className="rounded-lg bg-[#1f2933] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#111827]"
+              >
+                Today
+              </button>
+              <button
+                type="button"
+                onClick={previousMonth}
+                className="rounded-lg border border-[#d8d2c8] bg-white px-4 py-2 text-sm font-semibold text-[#1f2933] transition hover:bg-[#faf9f6]"
+              >
+                Previous
+              </button>
+              <button
+                type="button"
+                onClick={nextMonth}
+                className="rounded-lg border border-[#d8d2c8] bg-white px-4 py-2 text-sm font-semibold text-[#1f2933] transition hover:bg-[#faf9f6]"
+              >
+                Next
+              </button>
             </div>
+          </div>
 
-            {/* Calendar Grid */}
-            <div className="grid grid-cols-7 gap-1 bg-gray-50 p-2 rounded-lg">
-              {calendarDays.map((calDay, idx) => (
-                <div
-                  key={idx}
-                  className={`min-h-24 p-2 rounded border text-xs ${
-                    calDay.isCurrentMonth
-                      ? 'bg-white border-gray-200 hover:bg-gray-50'
-                      : 'bg-gray-100 border-gray-100 text-gray-400'
-                  } transition-colors`}
-                >
-                  <div className={`font-semibold mb-1 ${calDay.isCurrentMonth ? 'text-gray-900' : ''}`}>
-                    {calDay.day}
-                  </div>
-                  <div className="space-y-1">
-                    {calDay.shots.slice(0, 2).map((shot, idx) => (
-                      <div
-                        key={idx}
-                        className="bg-blue-100 text-blue-700 px-1 py-0.5 rounded truncate cursor-pointer hover:bg-blue-200 transition-colors"
-                        title={shot.title}
-                      >
-                        {shot.title}
-                      </div>
-                    ))}
-                    {calDay.shots.length > 2 && (
-                      <div className="text-gray-500 text-xs px-1 py-0.5">
-                        +{calDay.shots.length - 2} more
-                      </div>
-                    )}
-                  </div>
+          <div className="grid grid-cols-7 gap-1">
+            {DAY_NAMES.map(day => (
+              <div key={day} className="py-2 text-center text-xs font-semibold uppercase tracking-[0.12em] text-[#7c6f64]">
+                {day}
+              </div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-7 gap-1 rounded-lg border border-[#d8d2c8] bg-[#ece7df] p-1">
+            {calendarDays.map(calDay => (
+              <div
+                key={calDay.date.toISOString()}
+                className={`min-h-28 rounded-md border p-2 text-xs transition ${
+                  calDay.isCurrentMonth
+                    ? 'border-[#d8d2c8] bg-white hover:bg-[#faf9f6]'
+                    : 'border-[#ece7df] bg-[#f4f1ec] text-[#9a9187]'
+                }`}
+              >
+                <div className={`mb-2 font-semibold ${calDay.isCurrentMonth ? 'text-[#1f2933]' : 'text-[#9a9187]'}`}>
+                  {calDay.day}
                 </div>
-              ))}
-            </div>
-
-            {/* Stats */}
-            <div className="mt-6 pt-6 border-t grid grid-cols-3 gap-4">
-              <div className="text-center">
-                <div className="text-2xl font-bold text-blue-600">{filteredShots.length}</div>
-                <div className="text-sm text-gray-600">Total Shots</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-green-600">
-                  {filteredShots.filter(s => s.planned_time).length}
-                </div>
-                <div className="text-sm text-gray-600">Scheduled</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-violet-600">
-                  {new Set(filteredShots.map(s => s.project_id)).size}
-                </div>
-                <div className="text-sm text-gray-600">Projects</div>
-              </div>
-            </div>
-          </Card>
-        </div>
-
-        {/* Upcoming Shoots */}
-        <div>
-          <Card>
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Upcoming Shoots</h3>
-
-            {upcomingShots.length === 0 ? (
-              <div className="text-center py-12">
-                <p className="text-gray-500">No upcoming shoots scheduled</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {upcomingShots.map(shot => {
-                  const shotDate = new Date(shot.planned_time || new Date());
-                  const today = new Date();
-                  const isToday =
-                    shotDate.toDateString() === today.toDateString();
-                  const isTomorrow =
-                    shotDate.toDateString() ===
-                    new Date(today.getTime() + 24 * 60 * 60 * 1000).toDateString();
-
-                  let dateLabel = shotDate.toLocaleDateString('en-US', {
-                    weekday: 'short',
-                    month: 'short',
-                    day: 'numeric',
-                  });
-
-                  if (isToday) dateLabel = 'Today';
-                  if (isTomorrow) dateLabel = 'Tomorrow';
-
-                  return (
+                <div className="space-y-1">
+                  {calDay.shots.slice(0, 3).map(shot => (
                     <div
                       key={shot.id}
-                      className="border border-gray-200 rounded-lg p-3 hover:bg-gray-50 transition-colors"
+                      className={`truncate rounded px-2 py-1 font-medium ${getStatusClass(shot.status)}`}
+                      title={shot.title}
                     >
-                      <div className="flex items-start gap-2">
-                        <div className={`mt-1 h-3 w-3 rounded-full flex-shrink-0 ${
-                          shot.status === 'taken'
-                            ? 'bg-green-500'
-                            : shot.status === 'approved'
-                              ? 'bg-blue-500'
-                              : shot.status === 'rejected'
-                                ? 'bg-red-500'
-                                : 'bg-gray-400'
-                        }`} />
-                        <div className="flex-1 min-w-0">
-                          <h4 className="font-medium text-gray-900 truncate">{shot.title}</h4>
-                          <p className="text-xs text-gray-500 mt-0.5">{shot.project_title}</p>
-                          <p className="text-xs font-medium text-blue-600 mt-1">{dateLabel}</p>
-                          {shot.location && (
-                            <p className="text-xs text-gray-600 mt-1">📍 {shot.location}</p>
-                          )}
+                      {shot.title}
+                    </div>
+                  ))}
+                  {calDay.shots.length > 3 && (
+                    <div className="rounded bg-[#faf9f6] px-2 py-1 font-medium text-[#5f6b76]">
+                      +{calDay.shots.length - 3} more
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-6 grid gap-3 border-t border-[#ece7df] pt-6 sm:grid-cols-3">
+            {[
+              ['Visible shots', stats.total.toString()],
+              ['Scheduled', stats.scheduled.toString()],
+              ['Active projects', stats.projects.toString()],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-lg border border-[#ece7df] bg-[#faf9f6] p-4 text-center">
+                <p className="text-2xl font-semibold text-[#1f2933]">{value}</p>
+                <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#7c6f64]">{label}</p>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <Card className="border border-[#d8d2c8] bg-white shadow-sm">
+          <div className="mb-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#7c6f64]">Production queue</p>
+            <h2 className="mt-2 text-xl font-semibold text-[#1f2933]">Upcoming shoots</h2>
+          </div>
+
+          {upcomingShots.length === 0 ? (
+            <div className="flex min-h-80 items-center justify-center rounded-lg border border-dashed border-[#d8d2c8] bg-[#faf9f6] p-8 text-center">
+              <div>
+                <p className="font-semibold text-[#1f2933]">No upcoming shoots scheduled.</p>
+                <p className="mt-2 text-sm text-[#5f6b76]">Planned times will appear here once shots are scheduled.</p>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {upcomingShots.map(shot => {
+                const shotDate = new Date(shot.planned_time || new Date());
+
+                return (
+                  <div key={shot.id} className="rounded-lg border border-[#d8d2c8] bg-[#faf9f6] p-4">
+                    <div className="flex items-start gap-3">
+                      <div className={`mt-1.5 h-3 w-3 shrink-0 rounded-full ${getStatusDotClass(shot.status)}`} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <h3 className="min-w-0 flex-1 truncate font-semibold text-[#1f2933]">{shot.title}</h3>
+                          <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${getStatusClass(shot.status)}`}>
+                            {formatStatus(shot.status)}
+                          </span>
                         </div>
-                      </div>
-                      <div className="mt-2 text-xs">
-                        <span className={`inline-block px-2 py-0.5 rounded-full ${
-                          shot.status === 'taken'
-                            ? 'bg-green-100 text-green-700'
-                            : shot.status === 'approved'
-                              ? 'bg-blue-100 text-blue-700'
-                              : shot.status === 'rejected'
-                                ? 'bg-red-100 text-red-700'
-                                : 'bg-gray-100 text-gray-700'
-                        }`}>
-                          {shot.status.charAt(0).toUpperCase() + shot.status.slice(1)}
-                        </span>
+                        <p className="mt-1 text-xs text-[#7c6f64]">{shot.project_title || 'Unassigned project'}</p>
+                        <p className="mt-3 text-sm font-semibold text-[#1f2933]">
+                          {formatDateLabel(shotDate)} at {formatTimeLabel(shotDate)}
+                        </p>
+                        {shot.location && <p className="mt-2 text-sm leading-5 text-[#5f6b76]">{shot.location}</p>}
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </Card>
-        </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Card>
       </div>
     </div>
   );

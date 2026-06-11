@@ -9,8 +9,8 @@ import { tokenUtils } from '@/lib/auth';
 const MapWithNoSSR = dynamic(() => import('@/components/map/LocationMap'), {
   ssr: false,
   loading: () => (
-    <div className="flex items-center justify-center h-96 bg-gray-100 rounded-lg">
-      <p className="text-gray-600">Loading map...</p>
+    <div className="flex h-96 items-center justify-center rounded-lg border border-[#d8d2c8] bg-[#f4f1ec]">
+      <p className="text-sm font-medium text-[#5f6b76]">Loading location atlas...</p>
     </div>
   ),
 });
@@ -57,6 +57,17 @@ function isMappableCoordinate(lat: number, lng: number) {
   return isWithinBounds && !isLikelyNullIsland;
 }
 
+function getStatusClass(status: ShotItem['status']) {
+  if (status === 'taken') return 'bg-[#d9eee6] text-[#0f766e]';
+  if (status === 'approved') return 'bg-[#dbeafe] text-[#1d4ed8]';
+  if (status === 'rejected') return 'bg-[#fee2e2] text-[#b91c1c]';
+  return 'bg-[#ece7df] text-[#5f6b76]';
+}
+
+function formatStatus(status: ShotItem['status']) {
+  return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
 export default function LocationsPage() {
   const [projects, setProjects] = useState<ProjectOption[]>([]);
   const [shots, setShots] = useState<ShotItem[]>([]);
@@ -88,10 +99,9 @@ export default function LocationsPage() {
   };
 
   useEffect(() => {
-    const fetchData = async () => {
-      await loadData();
-    };
-    void fetchData();
+    queueMicrotask(() => {
+      void loadData();
+    });
   }, []);
 
   const filteredShots = useMemo(() => {
@@ -115,25 +125,31 @@ export default function LocationsPage() {
   }, [shots, projectFilter]);
 
   const stats = useMemo(() => {
-    const allProjectShots = projectFilter === 'all' 
-      ? shots 
-      : shots.filter(s => s.project_id === projectFilter);
-    
+    const scopedShots = projectFilter === 'all' ? shots : shots.filter(shot => shot.project_id === projectFilter);
+    const mappedPercent = scopedShots.length === 0 ? 0 : Math.round((filteredShots.length / scopedShots.length) * 100);
+
     return {
-      total: allProjectShots.length,
+      total: scopedShots.length,
       mapped: filteredShots.length,
       unmapped: shotsWithoutLocation.length,
+      projects: new Set(scopedShots.map(shot => shot.project_id)).size,
+      mappedPercent,
     };
   }, [shots, projectFilter, filteredShots, shotsWithoutLocation]);
+
+  const selectedCoordinates =
+    selectedShot?.latitude != null && selectedShot.longitude != null
+      ? `${Number(selectedShot.latitude).toFixed(6)}, ${Number(selectedShot.longitude).toFixed(6)}`
+      : null;
 
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <Card>
-          <div className="flex items-center justify-center h-96">
+        <Card className="border border-[#d8d2c8] bg-[#faf9f6] shadow-sm">
+          <div className="flex h-96 items-center justify-center">
             <div className="text-center">
-              <div className="mx-auto h-12 w-12 animate-spin rounded-full border-b-2 border-blue-600"></div>
-              <p className="mt-4 text-gray-600">Loading locations...</p>
+              <div className="mx-auto h-12 w-12 animate-spin rounded-full border-2 border-[#d8d2c8] border-b-[#1f2933]" />
+              <p className="mt-4 text-sm font-medium text-[#5f6b76]">Building the location atlas...</p>
             </div>
           </div>
         </Card>
@@ -143,18 +159,55 @@ export default function LocationsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Filters & Stats */}
-      <Card>
-        <div className="grid gap-4 md:grid-cols-2">
+      <section className="overflow-hidden rounded-lg bg-[#1f2933] text-white shadow-sm">
+        <div className="grid gap-6 p-6 lg:grid-cols-[1.4fr_1fr] lg:p-8">
+          <div className="max-w-3xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#d8d2c8]">Micro-logistics atlas</p>
+            <h1 className="mt-3 text-3xl font-semibold tracking-normal md:text-4xl">Plan exact arrival points, not vague addresses.</h1>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-[#d8d2c8]">
+              Audit shoot pins, parking notes, walking distances, backgrounds, and client-change logistics from one focused map workspace.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              ['Mapped', stats.mapped.toString()],
+              ['Coverage', `${stats.mappedPercent}%`],
+              ['Needs pins', stats.unmapped.toString()],
+              ['Projects', stats.projects.toString()],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-lg border border-white/10 bg-white/10 p-4">
+                <p className="text-xs font-medium uppercase tracking-[0.12em] text-[#d8d2c8]">{label}</p>
+                <p className="mt-2 text-2xl font-semibold text-white">{value}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <Card className="border border-[#d8d2c8] bg-[#faf9f6] shadow-sm">
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.7fr)] lg:items-end">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Project</label>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#7c6f64]">Atlas filter</p>
+            <h2 className="mt-2 text-xl font-semibold text-[#1f2933]">Location readiness by project</h2>
+            <p className="mt-1 text-sm text-[#5f6b76]">
+              Surface only the route stops that matter for the current production plan.
+            </p>
+          </div>
+          <div>
+            <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-[#7c6f64]" htmlFor="project-filter">
+              Project
+            </label>
             <select
+              id="project-filter"
               aria-label="Filter by project"
-              className="w-full rounded-lg border border-gray-300 px-4 py-2"
+              className="w-full rounded-lg border border-[#d8d2c8] bg-white px-4 py-3 text-sm font-medium text-[#1f2933] shadow-sm outline-none transition focus:border-[#1f2933] focus:ring-2 focus:ring-[#1f2933]/10"
               value={projectFilter}
-              onChange={e => setProjectFilter(e.target.value)}
+              onChange={e => {
+                setProjectFilter(e.target.value);
+                setSelectedShot(null);
+              }}
             >
-              <option value="all">All Projects</option>
+              <option value="all">All projects</option>
               {projects.map(project => (
                 <option key={project.id} value={project.id}>
                   {project.title}
@@ -162,142 +215,139 @@ export default function LocationsPage() {
               ))}
             </select>
           </div>
-          <div className="grid grid-cols-3 gap-3">
-            <div className="text-center p-3 bg-blue-50 rounded-lg">
-              <div className="text-lg font-bold text-blue-600">{stats.total}</div>
-              <div className="text-xs text-gray-600">Total Shots</div>
-            </div>
-            <div className="text-center p-3 bg-green-50 rounded-lg">
-              <div className="text-lg font-bold text-green-600">{stats.mapped}</div>
-              <div className="text-xs text-gray-600">Mapped</div>
-            </div>
-            <div className="text-center p-3 bg-amber-50 rounded-lg">
-              <div className="text-lg font-bold text-amber-600">{stats.unmapped}</div>
-              <div className="text-xs text-gray-600">Unmapped</div>
-            </div>
-          </div>
         </div>
       </Card>
 
-      {/* Map Section */}
-      <Card>
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Location Map</h3>
+      <Card className="border border-[#d8d2c8] bg-white shadow-sm">
+        <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#7c6f64]">Field map</p>
+            <h2 className="mt-2 text-xl font-semibold text-[#1f2933]">Micro-spot map</h2>
+          </div>
+          <div className="flex flex-wrap gap-2 text-xs font-medium text-[#5f6b76]">
+            <span className="rounded-full bg-[#ece7df] px-3 py-1">Planned</span>
+            <span className="rounded-full bg-[#d9eee6] px-3 py-1 text-[#0f766e]">Taken</span>
+            <span className="rounded-full bg-[#dbeafe] px-3 py-1 text-[#1d4ed8]">Approved</span>
+          </div>
+        </div>
+
         {filteredShots.length === 0 ? (
-          <div className="flex items-center justify-center h-96 bg-gray-50 rounded-lg">
-            <div className="text-center">
-              <p className="text-gray-600 font-medium mb-2">No mapped locations yet</p>
-              <p className="text-sm text-gray-500">
-                Add coordinates to your shots in the Shots dashboard to see them on the map
+          <div className="flex h-96 items-center justify-center rounded-lg border border-dashed border-[#d8d2c8] bg-[#faf9f6]">
+            <div className="max-w-md text-center">
+              <p className="font-semibold text-[#1f2933]">No mapped locations yet</p>
+              <p className="mt-2 text-sm text-[#5f6b76]">
+                Add precise coordinates in the Shots workspace to turn this project into a navigable route plan.
               </p>
             </div>
           </div>
         ) : (
-            <div className="map-container">
+          <div className="h-[32rem] overflow-hidden rounded-lg border border-[#d8d2c8]">
             <MapWithNoSSR shots={filteredShots} onSelectShot={setSelectedShot} />
           </div>
         )}
       </Card>
 
-      {/* Details Section */}
-      <div className="grid gap-6 md:grid-cols-2">
-        {/* Shot Details */}
-        <Card>
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Shot Details</h3>
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)]">
+        <Card className="border border-[#d8d2c8] bg-white shadow-sm">
+          <div className="mb-5 flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#7c6f64]">Selected stop</p>
+              <h2 className="mt-2 text-xl font-semibold text-[#1f2933]">Micro-logistics card</h2>
+            </div>
+            {selectedShot && (
+              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${getStatusClass(selectedShot.status)}`}>
+                {formatStatus(selectedShot.status)}
+              </span>
+            )}
+          </div>
 
           {selectedShot ? (
-            <div className="space-y-4">
+            <div className="space-y-5">
               <div>
-                <h4 className="font-semibold text-gray-900">{selectedShot.title}</h4>
-                <p className="text-sm text-gray-600 mt-1">{selectedShot.project_title}</p>
+                <h3 className="text-lg font-semibold text-[#1f2933]">{selectedShot.title}</h3>
+                <p className="mt-1 text-sm text-[#5f6b76]">{selectedShot.project_title || 'Unassigned project'}</p>
               </div>
 
-              <div>
-                <p className="text-xs font-medium text-gray-700 mb-1">Main Location</p>
-                <p className="text-sm text-gray-900">{selectedShot.location || 'Not specified'}</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {[
+                  ['Main location', selectedShot.location || 'Not specified'],
+                  ['Micro-spot', selectedShot.micro_spot_name || 'Not specified'],
+                  ['Background', selectedShot.background_description || 'Not specified'],
+                  ['Parking', selectedShot.parking_notes || 'Not specified'],
+                  ['Walking distance', selectedShot.walking_distance || 'Not specified'],
+                  ['Restroom or changing point', selectedShot.restroom_location || 'Not specified'],
+                ].map(([label, value]) => (
+                  <div key={label} className="rounded-lg border border-[#ece7df] bg-[#faf9f6] p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#7c6f64]">{label}</p>
+                    <p className="mt-2 text-sm leading-5 text-[#1f2933]">{value}</p>
+                  </div>
+                ))}
               </div>
 
-              {selectedShot.micro_spot_name && (
-                <div>
-                  <p className="text-xs font-medium text-gray-700 mb-1">🎯 Micro-Spot</p>
-                  <p className="text-sm text-gray-900">{selectedShot.micro_spot_name}</p>
-                </div>
-              )}
-
-              {selectedShot.background_description && (
-                <div>
-                  <p className="text-xs font-medium text-gray-700 mb-1">📸 Background</p>
-                  <p className="text-sm text-gray-900">{selectedShot.background_description}</p>
-                </div>
-              )}
-
-              {selectedShot.parking_notes && (
-                <div>
-                  <p className="text-xs font-medium text-gray-700 mb-1">🚗 Parking</p>
-                  <p className="text-sm text-gray-900">{selectedShot.parking_notes}</p>
-                </div>
-              )}
-
-              {selectedShot.walking_distance && (
-                <div>
-                  <p className="text-xs font-medium text-gray-700 mb-1">🚶 Walking Distance</p>
-                  <p className="text-sm text-gray-900">{selectedShot.walking_distance}</p>
-                </div>
-              )}
-
-              {selectedShot.restroom_location && (
-                <div>
-                  <p className="text-xs font-medium text-gray-700 mb-1">🚻 Restroom</p>
-                  <p className="text-sm text-gray-900">{selectedShot.restroom_location}</p>
-                </div>
-              )}
-
-              {selectedShot.latitude != null && selectedShot.longitude != null && (
-                <div className="pt-3 border-t">
-                  <p className="text-xs font-medium text-gray-700 mb-1">Coordinates</p>
-                  <p className="text-xs text-gray-600">
-                    {Number(selectedShot.latitude).toFixed(6)}, {Number(selectedShot.longitude).toFixed(6)}
-                  </p>
+              {selectedCoordinates && (
+                <div className="rounded-lg border border-[#d8d2c8] bg-white p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#7c6f64]">Coordinates</p>
+                  <p className="mt-2 font-mono text-sm text-[#1f2933]">{selectedCoordinates}</p>
                 </div>
               )}
 
               <Button
                 type="button"
-                className="w-full"
-                onClick={() => window.open(
-                  `https://maps.google.com/?q=${selectedShot.latitude},${selectedShot.longitude}`,
-                  '_blank'
-                )}
+                className="w-full bg-[#1f2933] hover:bg-[#111827]"
+                onClick={() =>
+                  window.open(`https://maps.google.com/?q=${selectedShot.latitude},${selectedShot.longitude}`, '_blank')
+                }
               >
                 Open in Google Maps
               </Button>
             </div>
           ) : (
-            <div className="text-center py-8">
-              <p className="text-gray-500">Click a pin on the map to view details</p>
+            <div className="flex min-h-80 items-center justify-center rounded-lg border border-dashed border-[#d8d2c8] bg-[#faf9f6] p-8 text-center">
+              <div>
+                <p className="font-semibold text-[#1f2933]">Select a pin to inspect the stop.</p>
+                <p className="mt-2 text-sm text-[#5f6b76]">
+                  The card will show arrival instructions, client logistics, and exact coordinate handoff details.
+                </p>
+              </div>
             </div>
           )}
         </Card>
 
-        {/* Unmapped Shots */}
-        {shotsWithoutLocation.length > 0 && (
-          <Card>
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Unmapped Shots ({shotsWithoutLocation.length})</h3>
-            <div className="space-y-2">
+        <Card className="border border-[#d8d2c8] bg-white shadow-sm">
+          <div className="mb-5 flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#7c6f64]">Pin queue</p>
+              <h2 className="mt-2 text-xl font-semibold text-[#1f2933]">Needs coordinates</h2>
+            </div>
+            <span className="rounded-full bg-[#fff7ed] px-3 py-1 text-xs font-semibold text-[#9a3412]">
+              {shotsWithoutLocation.length} open
+            </span>
+          </div>
+
+          {shotsWithoutLocation.length === 0 ? (
+            <div className="rounded-lg border border-[#d8d2c8] bg-[#f4f8f6] p-5">
+              <p className="font-semibold text-[#1f2933]">Every visible shot has a usable pin.</p>
+              <p className="mt-2 text-sm text-[#5f6b76]">This project is ready for route-level client guidance.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
               {shotsWithoutLocation.map(shot => (
-                <div
-                  key={shot.id}
-                  className="text-sm p-3 bg-amber-50 border border-amber-200 rounded text-amber-900 hover:bg-amber-100 cursor-pointer transition-colors"
-                >
-                  <p className="font-medium">{shot.title}</p>
-                  <p className="text-xs text-amber-700 mt-1">{shot.project_title}</p>
+                <div key={shot.id} className="rounded-lg border border-[#f3d2a7] bg-[#fffaf3] p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold text-[#1f2933]">{shot.title}</p>
+                      <p className="mt-1 text-xs text-[#7c6f64]">{shot.project_title || 'Unassigned project'}</p>
+                    </div>
+                    <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${getStatusClass(shot.status)}`}>
+                      {formatStatus(shot.status)}
+                    </span>
+                  </div>
+                  {shot.location && <p className="mt-3 text-sm text-[#5f6b76]">{shot.location}</p>}
                 </div>
               ))}
             </div>
-            <p className="text-xs text-gray-500 mt-4 pt-4 border-t">
-              💡 Add coordinates in Shots dashboard to map these locations
-            </p>
-          </Card>
-        )}
+          )}
+        </Card>
       </div>
     </div>
   );

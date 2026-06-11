@@ -22,10 +22,17 @@ interface LocationMapProps {
 }
 
 const getMarkerColor = (status: ShotItem['status']) => {
-  if (status === 'taken') return '#10B981';
-  if (status === 'approved') return '#3B82F6';
-  if (status === 'rejected') return '#EF4444';
-  return '#6B7280';
+  if (status === 'taken') return '#0f766e';
+  if (status === 'approved') return '#2563eb';
+  if (status === 'rejected') return '#dc2626';
+  return '#5f6b76';
+};
+
+const getStatusClass = (status: ShotItem['status']) => {
+  if (status === 'taken') return 'bg-[#d9eee6] text-[#0f766e]';
+  if (status === 'approved') return 'bg-[#dbeafe] text-[#1d4ed8]';
+  if (status === 'rejected') return 'bg-[#fee2e2] text-[#b91c1c]';
+  return 'bg-[#ece7df] text-[#5f6b76]';
 };
 
 function isMappableCoordinate(lat: number, lng: number) {
@@ -119,8 +126,8 @@ export default function LocationMap({ shots, onSelectShot }: LocationMapProps) {
           center={[item.lat, item.lng] as L.LatLngExpression}
           radius={8}
           pathOptions={{
-            color: '#ffffff',
-            weight: 2,
+            color: '#faf9f6',
+            weight: 3,
             fillColor: getMarkerColor(item.shot.status),
             fillOpacity: 1,
           }}
@@ -129,21 +136,17 @@ export default function LocationMap({ shots, onSelectShot }: LocationMapProps) {
           }}
         >
           <Popup>
-            <div className="space-y-2 text-sm">
-              <h4 className="font-semibold text-gray-900">{item.shot.title}</h4>
-              <p className="text-xs text-gray-600">{item.shot.project_title}</p>
-              {item.shot.location && <p className="text-xs text-gray-700">{item.shot.location}</p>}
-              {item.shot.micro_spot_name && <p className="text-xs font-medium text-blue-600">🎯 {item.shot.micro_spot_name}</p>}
+            <div className="w-56 space-y-2 text-sm">
+              <h4 className="font-semibold text-[#1f2933]">{item.shot.title}</h4>
+              <p className="text-xs text-[#5f6b76]">{item.shot.project_title}</p>
+              {item.shot.location && <p className="text-xs leading-5 text-[#1f2933]">{item.shot.location}</p>}
+              {item.shot.micro_spot_name && (
+                <p className="rounded-md bg-[#faf9f6] px-2 py-1 text-xs font-medium text-[#1f2933]">
+                  {item.shot.micro_spot_name}
+                </p>
+              )}
               <span
-                className={`inline-block px-2 py-1 rounded text-xs font-medium ${
-                  item.shot.status === 'taken'
-                    ? 'bg-green-100 text-green-700'
-                    : item.shot.status === 'approved'
-                      ? 'bg-blue-100 text-blue-700'
-                      : item.shot.status === 'rejected'
-                        ? 'bg-red-100 text-red-700'
-                        : 'bg-gray-100 text-gray-700'
-                }`}
+                className={`inline-block rounded-full px-2.5 py-1 text-xs font-semibold ${getStatusClass(item.shot.status)}`}
               >
                 {item.shot.status.charAt(0).toUpperCase() + item.shot.status.slice(1)}
               </span>
