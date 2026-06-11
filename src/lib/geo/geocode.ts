@@ -214,6 +214,27 @@ function normalizeText(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+function getCityHotspotOverrides(city: string): string[] {
+  const normalized = normalizeText(city);
+
+  // Local hotspot pack: Magnolia, Texas
+  if (/\bmagnolia\b/.test(normalized) && /\b(tx|texas)\b/.test(normalized)) {
+    return [
+      'Unity Park',
+      'The Stroll at Magnolia',
+      'Magnolia Depot',
+      'Magnolia Acres',
+      'Life in Rose Farm',
+      'Dry Creek Gatherings',
+      'Magnolia Bells',
+      'Amber Springs',
+      'Lake Windcrest',
+    ];
+  }
+
+  return [];
+}
+
 function getSearchQueries(
   sessionCategory: SearchCandidateInput['sessionCategory'],
   preferredTerms: string[] = []
@@ -294,9 +315,11 @@ function getSearchQueries(
 }
 
 export async function searchLocationCandidates(input: SearchCandidateInput): Promise<LocationCandidate[]> {
-  const queries = getSearchQueries(input.sessionCategory, input.preferredTerms ?? []);
-  const blocked = (input.bannedTerms ?? []).map(t => t.toLowerCase()).filter(Boolean);
   const city = input.city.trim();
+  const localOverrides = getCityHotspotOverrides(city);
+  const mergedPreferred = [...(input.preferredTerms ?? []), ...localOverrides];
+  const queries = getSearchQueries(input.sessionCategory, mergedPreferred);
+  const blocked = (input.bannedTerms ?? []).map(t => t.toLowerCase()).filter(Boolean);
   const limit = input.limit ?? 8;
 
   // Resolve city center: prefer provided coordinates, otherwise geocode the city name
@@ -336,6 +359,125 @@ export async function searchLocationCandidates(input: SearchCandidateInput): Pro
   };
   const collected: RawCandidate[] = [];
   const seenKeys = new Set<string>();
+
+  const addResults = (
+    results: Array<{
+      lat?: string;
+      lon?: string;
+      display_name?: string;
+      class?: string;
+      type?: string;
+      importance?: number;
+    }>,
+    entry: { query: string; relevanceScore: number },
+    radiusKm: number
+  ) => {
+    let added = 0;
+
+    for (const result of results) {
+      const lat = Number(result.lat);
+      const lon = Number(result.lon);
+      const displayName = result.display_name ?? '';
+      const className = result.class ?? '';
+      const placeType = result.type ?? '';
+      const importance = Number(result.importance ?? 0);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+
+      const lower = normalizeText(displayName);
+      if (blocked.some(t => lower.includes(t))) continue;
+
+      const isAdministrativeOnly =
+        className === 'boundary' ||
+        (className === 'place' && /(city|town|village|hamlet|county|state|region|country)/i.test(placeType));
+      if (isAdministrativeOnly) continue;
+
+      const key = normalizeText(displayName || `${lat.toFixed(4)},${lon.toFixed(4)}`);
+      if (seenKeys.has(key)) continue;
+      seenKeys.add(key);
+
+      let distanceKm: number | null = null;
+      if (hasCenter) {
+        distanceKm = haversineKm(cLat, cLon, lat, lon);
+        if (distanceKm > radiusKm) continue;
+      }
+
+      const poiBoost = /(park|garden|trail|promenade|plaza|square|waterfront|arboretum|district|overlook|farm|depot|lake|creek)/i.test(lower)
+        ? 6
+        : 0;
+      const distancePenalty = distanceKm == null ? 0 : distanceKm * 0.12;
+      const score = entry.relevanceScore * 10 + importance * 8 + poiBoost - distancePenalty;
+
+      collected.push({
+        name: displayName.split(',')[0]?.trim() || displayName,
+        latitude: lat,
+        longitude: lon,
+        displayName,
+        sourceQuery: entry.query,
+        relevanceScore: entry.relevanceScore,
+        distanceKm,
+        className,
+        placeType,
+        importance: Number.isFinite(importance) ? importance : 0,
+        score,
+      });
+      added++;
+    }
+
+    return added;
+  };
+
+  // Pass 1: exact-name searches for local hotspots + preferred terms.
+  // This catches "known good" places that generic category queries can miss.
+  const exactNameSeeds = Array.from(
+    new Set(
+      mergedPreferred
+        .map(term => term.trim())
+        .filter(Boolean)
+        .filter(term => term.split(/\s+/).length >= 2)
+    )
+  ).slice(0, 12);
+
+  if (exactNameSeeds.length > 0) {
+    const maxExactDistanceKm = Math.max(input.near?.maxDistanceKm ?? 80, 95);
+
+    for (const seed of exactNameSeeds) {
+      const params = new URLSearchParams({
+        format: 'jsonv2',
+        limit: '4',
+        q: `${seed}, ${city}`,
+      });
+
+      if (isLikelyUsLocation(city) || isLikelyUsZip(city)) {
+        params.set('countrycodes', 'us');
+      }
+
+      const url = `https://nominatim.openstreetmap.org/search?${params.toString()}`;
+
+      try {
+        const response = await fetch(url, {
+          headers: { Accept: 'application/json', 'User-Agent': 'ShutterPlanAI/1.0' },
+          cache: 'no-store',
+        });
+
+        if (!response.ok) continue;
+        const results = (await response.json()) as Array<{
+          lat?: string;
+          lon?: string;
+          display_name?: string;
+          class?: string;
+          type?: string;
+          importance?: number;
+        }>;
+
+        addResults(results, { query: seed, relevanceScore: 14 }, maxExactDistanceKm);
+      } catch {
+        // ignore and continue
+      }
+
+      await sleep(200);
+      if (collected.length >= limit * 2) break;
+    }
+  }
   // Track which query types have already found at least one result so we don't
   // re-run them at a wider radius — only expand the ones that came up empty.
   const satisfiedQueries = new Set<string>();
@@ -377,56 +519,7 @@ export async function searchLocationCandidates(input: SearchCandidateInput): Pro
             type?: string;
             importance?: number;
           }>;
-          let foundThisQuery = 0;
-
-          for (const result of results) {
-            const lat = Number(result.lat);
-            const lon = Number(result.lon);
-            const displayName = result.display_name ?? '';
-            const className = result.class ?? '';
-            const placeType = result.type ?? '';
-            const importance = Number(result.importance ?? 0);
-            if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
-
-            const lower = normalizeText(displayName);
-            if (blocked.some(t => lower.includes(t))) continue;
-
-            const isAdministrativeOnly =
-              className === 'boundary' ||
-              (className === 'place' && /(city|town|village|hamlet|county|state|region|country)/i.test(placeType));
-            if (isAdministrativeOnly) continue;
-
-            const key = normalizeText(displayName || `${lat.toFixed(4)},${lon.toFixed(4)}`);
-            if (seenKeys.has(key)) continue;
-            seenKeys.add(key);
-
-            let distanceKm: number | null = null;
-            if (hasCenter) {
-              distanceKm = haversineKm(cLat, cLon, lat, lon);
-              if (distanceKm > radiusKm) continue;
-            }
-
-            const poiBoost = /(park|garden|trail|promenade|plaza|square|waterfront|arboretum|district|overlook)/i.test(lower)
-              ? 6
-              : 0;
-            const distancePenalty = distanceKm == null ? 0 : distanceKm * 0.12;
-            const score = entry.relevanceScore * 10 + importance * 8 + poiBoost - distancePenalty;
-
-            collected.push({
-              name: displayName.split(',')[0]?.trim() || displayName,
-              latitude: lat,
-              longitude: lon,
-              displayName,
-              sourceQuery: entry.query,
-              relevanceScore: entry.relevanceScore,
-              distanceKm,
-              className,
-              placeType,
-              importance: Number.isFinite(importance) ? importance : 0,
-              score,
-            });
-            foundThisQuery++;
-          }
+          const foundThisQuery = addResults(results, entry, radiusKm);
 
           if (foundThisQuery > 0) satisfiedQueries.add(entry.query);
         }
