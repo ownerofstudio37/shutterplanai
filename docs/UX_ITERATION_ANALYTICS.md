@@ -393,7 +393,7 @@ return variantId === 0 ? <ControlVersion /> :
 
 ## Analytics Dashboard Setup
 
-### Create Dashboards in Vercel/Datadog/GA4
+### Create Dashboards in Netlify/Datadog/GA4
 
 **Dashboard 1: Funnel Overview** (Real-time)
 - Unique users per step (generate, refine, apply, share)

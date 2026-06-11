@@ -30,8 +30,8 @@
 
 1. **Verify Cron Trigger Status**
    ```bash
-   # Check if cron job is scheduled (Vercel/your cron provider)
-   # Vercel: vercel env ls | grep PLANNER_EXPORT_CLEANUP_SECRET
+   # Check if cron job is scheduled (Netlify/external cron provider)
+   # Netlify: verify env var in Site configuration > Environment variables
    # Status should show "active" or "enabled"
    ```
    
@@ -43,7 +43,7 @@
    ```
    
 3. **Check Recent Cron Execution Logs**
-   - Go to: Vercel Cron Logs / CloudWatch / Datadog (depending on your monitoring)
+   - Go to: Netlify Function Logs / cron provider logs / CloudWatch / Datadog
    - Filter: `/api/cron/planner-exports-cleanup` endpoint
    - Look for: Recent successful executions (200 status) within last 24 hours
    - If no logs: **Escalate to Tier 2**
@@ -53,7 +53,7 @@
 4. **Manually Trigger Cleanup Job**
    ```bash
    # From a secure/authenticated context (never expose secret in logs/chat)
-   curl -X GET https://shutterplanai.vercel.app/api/cron/planner-exports-cleanup \
+   curl -X GET https://<your-netlify-site>.netlify.app/api/cron/planner-exports-cleanup \
      -H "x-cron-secret: $PLANNER_EXPORT_CLEANUP_SECRET" \
      -H "Accept: application/json"
    
@@ -68,8 +68,8 @@
 5. **Validate API Route is Deployed**
    ```bash
    # Confirm route exists in production build
-   # Check: https://shutterplanai.vercel.app/.next/static/ should load
-   # Or: vercel ls deployments | grep current
+   # Check: https://<your-netlify-site>.netlify.app should load
+   # Or: verify latest published deploy in Netlify dashboard
    ```
 
 ### **Tier 3: Supabase RPC Verification (15 min)**
@@ -123,14 +123,12 @@
    ```
 
 2. Update production environment:
-   - **Vercel**: Project Settings → Environment Variables → Update `PLANNER_EXPORT_CLEANUP_SECRET`
+   - **Netlify**: Site configuration → Environment variables → Update `PLANNER_EXPORT_CLEANUP_SECRET`
    - **Other platforms**: Update your secret manager / `.env.production`
    
 3. Redeploy production:
    ```bash
-   git push origin main  # Triggers deployment (if auto-deploy enabled)
-   # or
-   vercel --prod  # Manual deployment
+   git push origin main  # Triggers deployment on Netlify (if auto-deploy enabled)
    ```
 
 4. Verify with manual trigger (step 4 above)
@@ -145,33 +143,18 @@
 
 **Resolution**:
 
-**A. If using Vercel Cron (built-in):**
-1. Verify cron route exists and is exported:
-   ```typescript
-   // src/app/api/cron/planner-exports-cleanup/route.ts
-   export async function GET(request: NextRequest) { ... }
-   export const runtime = 'nodejs';  // Add this if missing
-   ```
-
-2. Redeploy:
-   ```bash
-   git push origin main
-   ```
-
-3. Verify in Vercel dashboard → Function → Crons tab
-
-**B. If using external cron service (e.g., EasyCron, Cron-job.org):**
+**A. If using external cron service (e.g., EasyCron, Cron-job.org):**
 1. Login to service dashboard
 2. Find "planner-exports-cleanup" job
 3. Verify URL is correct:
    ```
-   https://shutterplanai.vercel.app/api/cron/planner-exports-cleanup
+   https://<your-netlify-site>.netlify.app/api/cron/planner-exports-cleanup
    ```
 4. Verify cron schedule (e.g., "0 2 * * *" = daily at 2 AM UTC)
 5. Click "Test" → should see 200 response with `{"success": true}`
 6. If test fails: Check logs in service dashboard
 
-**C. Add monitoring alert:**
+**B. Add monitoring alert:**
 ```typescript
 // Create monitoring check (pseudocode)
 // If cleanup has not run in 24 hours, trigger alert
@@ -232,8 +215,8 @@ if (Date.now() - lastRun > 24 * 60 * 60 * 1000) {
 - Include: SQL error logs, migration deployment order
 
 **Level 3 (Platform Provider)**:
-- If cron trigger unavailable (Vercel Cron down, EasyCron API errors)
-- Check status page: Vercel Status / EasyCron Status
+- If cron trigger unavailable (cron provider outage, Netlify outage)
+- Check status page: Netlify Status / EasyCron Status
 - Switch to alternative provider (e.g., AWS EventBridge) if primary is down
 
 ---
@@ -298,9 +281,10 @@ WHERE expires_at < NOW()
 SELECT COUNT(*) FROM planner_exports WHERE expires_at < NOW();
 ```
 
-### **Check Cron Execution History** (Vercel)
+### **Check Cron Execution History** (Netlify)
 ```bash
-vercel logs --scope=ownerofstudio37 | grep "planner-exports-cleanup"
+# Use Netlify site logs or your cron provider execution history
+# netlify logs:function planner-exports-cleanup --site <site-id>
 ```
 
 ---

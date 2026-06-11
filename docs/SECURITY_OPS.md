@@ -27,10 +27,10 @@ function isAuthorized(request: NextRequest) {
 ```
 
 **Why not JWT/OAuth?**
-- Cron jobs are scheduled from external services (EasyCron, Vercel, etc.)
+- Cron jobs are scheduled from external services (EasyCron, Netlify scheduled jobs, etc.)
 - JWT adds complexity without additional security benefit
 - Shared secret rotated quarterly is sufficient for this use case
-- Always use HTTPS (required for both EasyCron and Vercel)
+- Always use HTTPS (required for both EasyCron and Netlify)
 
 ---
 
@@ -216,9 +216,9 @@ await admin
 
 | Secret | Rotation | Storage | Used By |
 |--------|----------|---------|---------|
-| `PLANNER_EXPORT_CLEANUP_SECRET` | Quarterly | Vercel Secrets / GitHub Secrets | Cron job + Vercel |
+| `PLANNER_EXPORT_CLEANUP_SECRET` | Quarterly | Netlify Secrets / GitHub Secrets | Cron job + cleanup endpoint |
 | Supabase API Key (public) | As-needed | Next.js .env (public) | Client + server auth |
-| Supabase Service Role Key | Annually | GitHub Secrets / Vercel Secrets | Admin operations |
+| Supabase Service Role Key | Annually | GitHub Secrets / Netlify Secrets | Admin operations |
 | Database Passwords | Annually | Supabase console | Connection strings |
 
 ### **Rotation Procedure**
@@ -231,7 +231,7 @@ await admin
    ```
 
 2. Update all instances:
-   - [ ] Vercel environment variables
+  - [ ] Netlify environment variables
    - [ ] GitHub Actions secrets
    - [ ] EasyCron/cron provider configuration
    - [ ] Any monitoring/alerting systems that call endpoint
@@ -239,7 +239,7 @@ await admin
 3. Verify with manual test:
    ```bash
    curl -H "x-cron-secret: $NEW_SECRET" \
-     https://shutterplanai.vercel.app/api/cron/planner-exports-cleanup
+    https://<your-netlify-site>.netlify.app/api/cron/planner-exports-cleanup
    ```
 
 4. Document rotation:

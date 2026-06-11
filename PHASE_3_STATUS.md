@@ -50,9 +50,9 @@ All deliverables are production-ready. Shutter Plan AI is prepared for deploymen
 
 **Contents**:
 - Step 1: Generate 32-char secure secret
-- Step 2: Set environment variable (Vercel/GitHub/Docker)
+- Step 2: Set environment variable (Netlify/GitHub/Docker)
 - Step 3: Configure trigger (4 options):
-  - Vercel Cron (built-in, recommended)
+  - External cron (EasyCron/Netlify scheduled invocation)
   - EasyCron (external service)
   - AWS EventBridge + Lambda
   - GitHub Actions workflow
@@ -87,7 +87,7 @@ All deliverables are production-ready. Shutter Plan AI is prepared for deploymen
 
 **Contents**:
 - Pre-deployment: Code quality (tests, build, TypeScript), environment, documentation
-- Deployment steps: Vercel or manual, env vars, success verification
+- Deployment steps: Netlify or manual, env vars, success verification
 - Smoke tests (20-30 min):
   - Auth flow (signup → login → dashboard)
   - Planner core (generate → refine → apply → share → revoke)
@@ -95,7 +95,7 @@ All deliverables are production-ready. Shutter Plan AI is prepared for deploymen
   - Error handling (missing auth, invalid input, 404s, cron without secret)
 - Monitoring: Error rates, latency, cron execution, database health
 - User testing: Internal + beta
-- Rollback plan: 3 options (Vercel, git, database)
+- Rollback plan: 3 options (Netlify, git, database)
 - Sign-off: Deploy lead, QA, operations, product manager
 
 **Status**: Complete, ready to execute immediately

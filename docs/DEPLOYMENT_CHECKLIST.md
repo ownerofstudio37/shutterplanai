@@ -30,13 +30,10 @@
 
 ### 1. Deploy to Production (5-10 minutes)
 
-**Option A: Vercel (Recommended)**
+**Option A: Netlify (Current Production Platform)**
 ```bash
 # Automatic deployment on main push
 git push origin main
-
-# Or manual trigger
-vercel --prod
 ```
 
 **Option B: Manual Docker/Kubernetes**
@@ -50,9 +47,9 @@ kubectl rollout restart deployment/shutter-plan-ai
 ```
 
 **Verify deployment succeeded**:
-- [ ] Vercel dashboard shows "Ready" status
+- [ ] Netlify dashboard shows "Published" status
 - [ ] No error notifications in deployment logs
-- [ ] API responds: `curl https://shutterplanai.vercel.app/api/health` → 200 (if health check exists)
+- [ ] API responds: `curl https://<your-netlify-site>.netlify.app/api/health` → 200 (if health check exists)
 
 ### 2. Environment Variable Verification (2 minutes)
 
@@ -75,25 +72,25 @@ kubectl rollout restart deployment/shutter-plan-ai
 **Test Authentication Flow**:
 ```bash
 # 1. Signup page loads
-curl -I https://shutterplanai.vercel.app/auth/signup
+curl -I https://<your-netlify-site>.netlify.app/auth/signup
 # Expected: 200
 
 # 2. Create test account
-# Navigate to: https://shutterplanai.vercel.app/auth/signup
+# Navigate to: https://<your-netlify-site>.netlify.app/auth/signup
 # Fill form: email (test@example.com), password
 # Submit and verify success message
 
 # 3. Login page loads
-curl -I https://shutterplanai.vercel.app/auth/login
+curl -I https://<your-netlify-site>.netlify.app/auth/login
 # Expected: 200
 
 # 4. Login with test account
-# Navigate to: https://shutterplanai.vercel.app/auth/login
+# Navigate to: https://<your-netlify-site>.netlify.app/auth/login
 # Use test@example.com credentials
 # Should redirect to dashboard
 
 # 5. Dashboard loads
-curl -I https://shutterplanai.vercel.app/dashboard
+curl -I https://<your-netlify-site>.netlify.app/dashboard
 # Expected: 200 (when authenticated)
 ```
 
@@ -137,28 +134,28 @@ curl -I https://shutterplanai.vercel.app/dashboard
 # Test each instrumented endpoint with observability headers
 
 # 1. Analytics endpoint
-curl -X POST https://shutterplanai.vercel.app/api/planner/analytics \
+curl -X POST https://<your-netlify-site>.netlify.app/api/planner/analytics \
   -H "Authorization: Bearer $AUTH_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"eventName":"generate","success":true}'
 # Expected response includes: x-request-id, x-response-time-ms headers
 
 # 2. Export (create share)
-curl -X POST https://shutterplanai.vercel.app/api/planner/export \
+curl -X POST https://<your-netlify-site>.netlify.app/api/planner/export \
   -H "Authorization: Bearer $AUTH_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"planId":"test","password":"testpass123"}'
 # Expected: 200 with shareUrl, headers include timing
 
 # 3. Export (revoke share)
-curl -X POST https://shutterplanai.vercel.app/api/planner/export/revoke \
+curl -X POST https://<your-netlify-site>.netlify.app/api/planner/export/revoke \
   -H "Authorization: Bearer $AUTH_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"shareToken":"token_here"}'
 # Expected: 200, header x-response-time-ms should be < 1000ms
 
 # 4. Intelligence (route optimization)
-curl -X POST https://shutterplanai.vercel.app/api/planner/intelligence \
+curl -X POST https://<your-netlify-site>.netlify.app/api/planner/intelligence \
   -H "Authorization: Bearer $AUTH_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"latitude":40.7128,"longitude":-74.0060,"date":"2026-06-15","durationMinutes":120,"locations":[...]}'
@@ -176,7 +173,7 @@ curl -X POST https://shutterplanai.vercel.app/api/planner/intelligence \
 # ✓ Content-Type: application/json
 # ✓ Cache-Control: private, no-store (for auth endpoints)
 
-curl -I https://shutterplanai.vercel.app/api/planner/analytics \
+curl -I https://<your-netlify-site>.netlify.app/api/planner/analytics \
   -H "Authorization: Bearer $TOKEN"
 
 # Look for headers in response
@@ -188,23 +185,23 @@ curl -I https://shutterplanai.vercel.app/api/planner/analytics \
 
 ```bash
 # 1. Missing authentication
-curl https://shutterplanai.vercel.app/api/planner/analytics
+curl https://<your-netlify-site>.netlify.app/api/planner/analytics
 # Expected: 401 Unauthorized
 
 # 2. Invalid request body
-curl -X POST https://shutterplanai.vercel.app/api/planner/export \
+curl -X POST https://<your-netlify-site>.netlify.app/api/planner/export \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"invalid":"data"}'
 # Expected: 400 Bad Request
 
 # 3. Non-existent resource
-curl https://shutterplanai.vercel.app/api/planner/export?token=invalid \
+curl https://<your-netlify-site>.netlify.app/api/planner/export?token=invalid \
   -H "Authorization: Bearer $TOKEN"
 # Expected: 404 Not Found
 
 # 4. Cron without secret (should fail)
-curl https://shutterplanai.vercel.app/api/cron/planner-exports-cleanup
+curl https://<your-netlify-site>.netlify.app/api/cron/planner-exports-cleanup
 # Expected: 401 Unauthorized
 ```
 
@@ -216,7 +213,7 @@ curl https://shutterplanai.vercel.app/api/cron/planner-exports-cleanup
 
 **Enable Monitoring Dashboard**:
 
-1. **Configure alerts** (Vercel, Datadog, New Relic, CloudWatch):
+1. **Configure alerts** (Netlify, Datadog, New Relic, CloudWatch):
    - [ ] Error rate > 5% alert
    - [ ] Response time p99 > 500ms alert
    - [ ] 404 rate > 10% alert
@@ -292,9 +289,9 @@ LIMIT 10;
 
 **If critical issues detected** (error rate > 20%, major features broken):
 
-### Option A: Revert to Previous Version (Vercel)
+### Option A: Revert to Previous Version (Netlify)
 ```bash
-# Go to Vercel dashboard → Deployments
+# Go to Netlify dashboard → Deploys
 # Find most recent stable deployment
 # Click "Rollback" button
 # Verify deployment reverted

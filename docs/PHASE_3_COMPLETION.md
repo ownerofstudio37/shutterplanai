@@ -59,9 +59,9 @@ Phase 3 post-release operations completed successfully. All critical infrastruct
 
 #### B. [docs/CRON_SETUP.md](docs/CRON_SETUP.md) (410 lines)
 - **Step 1**: Generate secure 32-char secret (`openssl rand -hex 16`)
-- **Step 2**: Set environment variable in production (Vercel/GitHub/Docker)
+- **Step 2**: Set environment variable in production (Netlify/GitHub/Docker)
 - **Step 3**: Configure cron trigger (4 options):
-  - Option A: Vercel Cron (built-in, recommended)
+  - Option A: External cron (EasyCron/Netlify scheduled invocation)
   - Option B: External service (EasyCron)
   - Option C: AWS EventBridge + Lambda
   - Option D: GitHub Actions workflow
@@ -93,7 +93,7 @@ Phase 3 post-release operations completed successfully. All critical infrastruct
 - Documentation: Runbooks accessible, team briefed
 
 #### Deployment Steps
-- Option A: Vercel (automatic on git push)
+- Option A: Netlify (automatic on git push)
 - Option B: Manual Docker/Kubernetes
 - Environment variable verification
 - Deployment success confirmation
@@ -125,7 +125,7 @@ Phase 3 post-release operations completed successfully. All critical infrastruct
 - Review error logs (no anomalies)
 
 #### Rollback Plan
-- Option A: Revert to previous Vercel deployment
+- Option A: Revert to previous Netlify deploy
 - Option B: Git revert + push
 - Option C: Supabase backup restore
 - Communication steps

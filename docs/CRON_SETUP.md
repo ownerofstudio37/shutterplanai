@@ -33,14 +33,13 @@ openssl rand -hex 16
 
 ### Step 2: Set Environment Variable in Production
 
-Choose your deployment platform below:
+Choose your deployment platform below (Netlify first):
 
-#### **Vercel (Recommended)**
-1. Go to Project Settings → Environment Variables
+#### **Netlify (Current Production Platform)**
+1. Go to Site configuration → Environment variables
 2. Create new variable:
    - **Name**: `PLANNER_EXPORT_CLEANUP_SECRET`
    - **Value**: [Paste from Step 1]
-   - **Environments**: Production
 3. Save and trigger redeploy:
    ```bash
    git push origin main
@@ -70,45 +69,32 @@ Choose your deployment platform below:
 
 Choose one approach:
 
-#### **Option A: Vercel Cron (Built-in, Recommended)**
+#### **Option A: External Cron Service (EasyCron / Cron-job.org) - Recommended for Netlify**
 
-Vercel automatically detects and schedules any route with a cron config. Edit the route file:
+Use an external scheduler to call your deployed endpoint daily.
 
-```typescript
-// src/app/api/cron/planner-exports-cleanup/route.ts
-import { NextRequest, NextResponse } from 'next/server';
+1. Go to [easycron.com](https://www.easycron.com/) (or your preferred scheduler)
+2. Create a new cron job:
+   - **URL**: `https://<your-netlify-site>.netlify.app/api/cron/planner-exports-cleanup`
+   - **Cron Expression**: `0 2 * * *` (Daily at 2 AM UTC)
+   - **Method**: `GET`
+   - **Headers**:
+     - `x-cron-secret: <PLANNER_EXPORT_CLEANUP_SECRET>`
+     - `Accept: application/json`
+3. Save and run a test job
+4. Confirm response is `200` with `{ "success": true }`
 
-export const config = {
-  provider: 'vercel',
-  crons: [
-    {
-      path: '/api/cron/planner-exports-cleanup',
-      schedule: '0 2 * * *', // Daily at 2 AM UTC
-    },
-  ],
-};
+#### **Option B: Netlify Scheduled Function (Optional)**
 
-export async function GET(request: NextRequest) {
-  // ... existing handler code ...
-}
-```
+If you choose Netlify Scheduled Functions, create a scheduled function that internally calls `cleanup_expired_exports` (or calls this API route). This keeps scheduling inside Netlify but requires additional function setup.
 
-Then redeploy:
-```bash
-git push origin main
-```
-
-Verify in Vercel dashboard:
-1. Go to Project → Deployments → Functions → Crons tab
-2. Should see "planner-exports-cleanup" listed with status "Active"
-
-#### **Option B: External Cron Service (EasyCron)**
+#### **Option C: AWS EventBridge + Lambda**
 
 1. Go to [easycron.com](https://www.easycron.com/)
 2. Login or create account
 3. Click "Add a Cron Job"
 4. Configure:
-   - **URL**: `https://shutterplanai.vercel.app/api/cron/planner-exports-cleanup`
+  - **URL**: `https://<your-netlify-site>.netlify.app/api/cron/planner-exports-cleanup`
    - **Cron Expression**: `0 2 * * *` (Daily at 2 AM UTC)
    - **Request Method**: GET
    - **Custom Headers**:
@@ -119,7 +105,7 @@ Verify in Vercel dashboard:
 5. Click "Create"
 6. Click "Test" to verify (should get 200 response)
 
-#### **Option C: AWS EventBridge + Lambda**
+#### **Option D: AWS EventBridge + Lambda**
 
 1. Create Lambda function that calls the endpoint:
    ```python
@@ -127,7 +113,7 @@ Verify in Vercel dashboard:
    import os
    
    def lambda_handler(event, context):
-       url = "https://shutterplanai.vercel.app/api/cron/planner-exports-cleanup"
+      url = "https://<your-netlify-site>.netlify.app/api/cron/planner-exports-cleanup"
        headers = {
            "x-cron-secret": os.environ['PLANNER_EXPORT_CLEANUP_SECRET'],
            "Accept": "application/json"
@@ -142,7 +128,7 @@ Verify in Vercel dashboard:
 
 3. Test trigger manually in AWS console
 
-#### **Option D: GitHub Actions Workflow**
+#### **Option E: GitHub Actions Workflow**
 
 Create `.github/workflows/cleanup-exports.yml`:
 
@@ -159,7 +145,7 @@ jobs:
     steps:
       - name: Trigger cleanup endpoint
         run: |
-          curl -X GET https://shutterplanai.vercel.app/api/cron/planner-exports-cleanup \
+          curl -X GET https://<your-netlify-site>.netlify.app/api/cron/planner-exports-cleanup \
             -H "x-cron-secret: ${{ secrets.PLANNER_EXPORT_CLEANUP_SECRET }}" \
             -H "Accept: application/json" \
             -w "\nStatus: %{http_code}\n"
@@ -181,7 +167,7 @@ git push origin main
 #### **Manual Test**
 ```bash
 # Trigger cleanup manually with correct secret
-curl -X GET https://shutterplanai.vercel.app/api/cron/planner-exports-cleanup \
+curl -X GET https://<your-netlify-site>.netlify.app/api/cron/planner-exports-cleanup \
   -H "x-cron-secret: a7f2c9e1b4d6f8a3c5e7b9d1f3a5c7e9" \
   -H "Accept: application/json"
 
@@ -194,7 +180,7 @@ curl -X GET https://shutterplanai.vercel.app/api/cron/planner-exports-cleanup \
 ```
 
 #### **Check Cron Execution Logs**
-- **Vercel**: Project → Deployments → Functions → Crons tab → View logs
+- **Netlify**: Site → Functions / Logs → filter for planner-exports-cleanup
 - **EasyCron**: Cron Jobs list → Click job → View execution history
 - **GitHub Actions**: Workflows → cleanup-exports → Recent runs
 
