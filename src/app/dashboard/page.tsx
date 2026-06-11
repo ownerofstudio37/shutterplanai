@@ -24,6 +24,17 @@ interface ShotItem {
   status: 'planned' | 'taken' | 'approved' | 'rejected';
 }
 
+interface BusinessProfile {
+  businessName?: string;
+  businessType?: string;
+  baseLocation?: string;
+  websiteUrl?: string;
+  brandTone?: string;
+  preferredLocationTypes?: string;
+  poseDirectionStyle?: string;
+  prepGuideNotes?: string;
+}
+
 function getAuthHeader() {
   const token = tokenUtils.getToken();
   const headers: Record<string, string> = {};
@@ -76,6 +87,12 @@ function getShotStatusClass(status: ShotItem['status']) {
   }
 }
 
+function getStepStateClass(isComplete: boolean, isActive: boolean) {
+  if (isComplete) return 'border-[#b7dfcf] bg-[#f4f8f6] text-[#0f766e]';
+  if (isActive) return 'border-[#d8d2c8] bg-white text-[#1f2933]';
+  return 'border-[#ece7df] bg-[#faf9f6] text-[#7c6f64]';
+}
+
 function getProgressWidthClass(count: number, total: number) {
   const ratio = total === 0 ? 0 : count / total;
 
@@ -94,6 +111,7 @@ export default function Dashboard() {
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [shots, setShots] = useState<ShotItem[]>([]);
   const [plannerStats, setPlannerStats] = useState<PlannerAnalyticsSummary | null>(null);
+  const [businessProfile, setBusinessProfile] = useState<BusinessProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -103,16 +121,18 @@ export default function Dashboard() {
       setError(null);
 
       try {
-        const [projectsResponse, shotsResponse, analyticsResponse] = await Promise.all([
+        const [projectsResponse, shotsResponse, analyticsResponse, profileResponse] = await Promise.all([
           fetch('/api/projects', { headers: getAuthHeader() }),
           fetch('/api/shots', { headers: getAuthHeader() }),
           fetch('/api/planner/analytics', { headers: getAuthHeader() }),
+          fetch('/api/account/business-profile', { headers: getAuthHeader() }),
         ]);
 
-        const [projectsResult, shotsResult, analyticsResult] = await Promise.all([
+        const [projectsResult, shotsResult, analyticsResult, profileResult] = await Promise.all([
           projectsResponse.json(),
           shotsResponse.json(),
           analyticsResponse.json(),
+          profileResponse.json(),
         ]);
 
         if (!projectsResult.success) {
@@ -128,6 +148,9 @@ export default function Dashboard() {
         if (analyticsResult.success) {
           setPlannerStats(analyticsResult.data as PlannerAnalyticsSummary);
         }
+        if (profileResult.success) {
+          setBusinessProfile(profileResult.data ?? {});
+        }
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : 'Failed to load dashboard');
       } finally {
@@ -135,7 +158,9 @@ export default function Dashboard() {
       }
     };
 
-    void loadDashboard();
+    queueMicrotask(() => {
+      void loadDashboard();
+    });
   }, []);
 
   const activeProjects = useMemo(
@@ -165,6 +190,76 @@ export default function Dashboard() {
       rejected: shots.filter(shot => shot.status === 'rejected').length,
     };
   }, [shots]);
+
+  const profileReadiness = useMemo(() => {
+    const readinessFields: Array<keyof BusinessProfile> = [
+      'businessName',
+      'businessType',
+      'baseLocation',
+      'websiteUrl',
+      'brandTone',
+      'preferredLocationTypes',
+      'poseDirectionStyle',
+      'prepGuideNotes',
+    ];
+    const completed = readinessFields.filter(field => businessProfile?.[field]?.trim()).length;
+    return Math.round((completed / readinessFields.length) * 100);
+  }, [businessProfile]);
+
+  const hasGeneratedPlan = Boolean((plannerStats?.generate.total ?? 0) > 0);
+  const hasClientGuide = Boolean((plannerStats?.shareLinksCreated ?? 0) > 0);
+  const isEmptyAccount = !isLoading && projects.length === 0 && shots.length === 0 && !hasGeneratedPlan;
+
+  const readinessSteps = [
+    {
+      label: 'Profile',
+      title: 'Complete your studio profile',
+      detail: `${profileReadiness}% ready for tailored AI output`,
+      href: '/dashboard/settings',
+      complete: profileReadiness >= 75,
+    },
+    {
+      label: 'Project',
+      title: 'Create your first production',
+      detail: projects.length > 0 ? `${projects.length} project${projects.length === 1 ? '' : 's'} created` : 'No projects yet',
+      href: '/dashboard/projects',
+      complete: projects.length > 0,
+    },
+    {
+      label: 'AI plan',
+      title: 'Generate a session plan',
+      detail: hasGeneratedPlan ? `${plannerStats?.generate.total ?? 0} plan${plannerStats?.generate.total === 1 ? '' : 's'} generated` : 'Ready for your first brief',
+      href: '/dashboard/planner',
+      complete: hasGeneratedPlan,
+    },
+    {
+      label: 'Client guide',
+      title: 'Package the handoff',
+      detail: hasClientGuide ? `${plannerStats?.shareLinksCreated ?? 0} guide link${plannerStats?.shareLinksCreated === 1 ? '' : 's'} created` : 'No guide links yet',
+      href: '/dashboard/shot-board',
+      complete: hasClientGuide,
+    },
+  ];
+
+  const firstOpenStep = readinessSteps.find(step => !step.complete);
+
+  const starterPrompts = [
+    {
+      title: 'Family mini session',
+      detail: 'Fast pacing, kid-friendly breaks, simple client prep.',
+      href: '/dashboard/planner',
+    },
+    {
+      title: 'Engagement golden hour',
+      detail: 'Romantic timeline, walking route, hero frame priorities.',
+      href: '/dashboard/planner',
+    },
+    {
+      title: 'Senior portrait downtown',
+      detail: 'Outfit changes, micro-spots, parking and background variety.',
+      href: '/dashboard/planner',
+    },
+  ];
 
   const planningSignals = [
     {
@@ -226,6 +321,99 @@ export default function Dashboard() {
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
         </div>
+      )}
+
+      {!isLoading && (isEmptyAccount || readinessSteps.some(step => !step.complete)) && (
+        <section className="grid gap-5 xl:grid-cols-[1.25fr_0.75fr]">
+          <Card className="border border-[#d8d2c8] bg-[#faf9f6] shadow-sm">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+              <div className="max-w-2xl">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7c6f64]">
+                  First shoot plan
+                </p>
+                <h2 className="mt-2 text-2xl font-semibold text-[#1f2933]">
+                  Set up the path from studio profile to client-ready guide.
+                </h2>
+                <p className="mt-3 text-sm leading-6 text-[#5f6b76]">
+                  ShutterPlan gets sharper when it knows your brand, your first project, and the session variables that shape the shoot day.
+                </p>
+              </div>
+              {firstOpenStep && (
+                <Link href={firstOpenStep.href}>
+                  <Button className="w-full bg-[#1f2933] hover:bg-[#111827] lg:w-auto">
+                    Continue setup
+                  </Button>
+                </Link>
+              )}
+            </div>
+
+            <div className="mt-6 grid gap-3 md:grid-cols-4">
+              {readinessSteps.map((step, index) => {
+                const isActive = firstOpenStep?.label === step.label;
+
+                return (
+                  <Link
+                    key={step.label}
+                    href={step.href}
+                    className={`rounded-lg border p-4 transition hover:-translate-y-0.5 hover:shadow-sm ${getStepStateClass(step.complete, isActive)}`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-xs font-semibold uppercase tracking-[0.14em]">{step.label}</span>
+                      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-xs font-semibold text-[#1f2933]">
+                        {step.complete ? 'OK' : index + 1}
+                      </span>
+                    </div>
+                    <p className="mt-3 text-sm font-semibold">{step.title}</p>
+                    <p className="mt-2 text-xs leading-5 opacity-80">{step.detail}</p>
+                  </Link>
+                );
+              })}
+            </div>
+
+            {isEmptyAccount && (
+              <div className="mt-6 rounded-lg border border-[#d8d2c8] bg-white p-4">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#7c6f64]">Sample first plan</p>
+                    <h3 className="mt-2 text-lg font-semibold text-[#1f2933]">Family mini session at golden hour</h3>
+                    <p className="mt-2 text-sm leading-6 text-[#5f6b76]">
+                      A polished plan would include a 45-minute timeline, three nearby micro-spots, kid-friendly pacing, parking notes, and a mobile guide for the client.
+                    </p>
+                  </div>
+                  <div className="grid shrink-0 grid-cols-3 gap-2 text-center text-xs font-semibold text-[#5f6b76]">
+                    {['Timeline', 'Pins', 'Guide'].map(item => (
+                      <span key={item} className="rounded-md bg-[#ece7df] px-3 py-2">
+                        {item}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </Card>
+
+          <Card className="border border-[#d8d2c8] bg-white shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7c6f64]">Starter prompts</p>
+            <h2 className="mt-2 text-xl font-semibold text-[#1f2933]">Start with a proven session shape</h2>
+            <div className="mt-5 space-y-3">
+              {starterPrompts.map(prompt => (
+                <Link
+                  key={prompt.title}
+                  href={prompt.href}
+                  className="block rounded-lg border border-[#e4ded5] bg-[#faf9f6] p-4 transition hover:border-[#d8d2c8] hover:bg-white"
+                >
+                  <p className="font-semibold text-[#1f2933]">{prompt.title}</p>
+                  <p className="mt-2 text-sm leading-5 text-[#5f6b76]">{prompt.detail}</p>
+                </Link>
+              ))}
+            </div>
+            <Link href="/dashboard/planner">
+              <Button variant="secondary" className="mt-5 w-full bg-[#ebe5db] hover:bg-[#ded8ce]">
+                Open planner templates
+              </Button>
+            </Link>
+          </Card>
+        </section>
       )}
 
       <section className="grid gap-5 xl:grid-cols-[1.5fr_0.9fr]">
