@@ -240,6 +240,20 @@ export type PlannerIntelligence = {
     accessibility: number;
     overallRisk: number;
     warnings: string[];
+    venueHoursSummary?: string;
+    parkingCost?: string;
+    restroomConfidence?: 'low' | 'medium' | 'high';
+    permit?: {
+      likelihood: 'low' | 'medium' | 'high';
+      sourceNote: string;
+      leadTimeDays: number;
+      noPermitAlternatives: string[];
+    };
+    crowd?: {
+      eventRisk: 'low' | 'medium' | 'high';
+      sourceNote: string;
+    };
+    needsVerification?: boolean;
   }>;
   optimizedRoute: number[];
 };

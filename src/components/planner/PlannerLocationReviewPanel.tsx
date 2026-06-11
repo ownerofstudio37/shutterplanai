@@ -27,6 +27,20 @@ type LogisticsInfo = {
   crowdRisk: number;
   overallRisk: number;
   warnings: string[];
+  venueHoursSummary?: string;
+  parkingCost?: string;
+  restroomConfidence?: 'low' | 'medium' | 'high';
+  permit?: {
+    likelihood: 'low' | 'medium' | 'high';
+    sourceNote: string;
+    leadTimeDays: number;
+    noPermitAlternatives: string[];
+  };
+  crowd?: {
+    eventRisk: 'low' | 'medium' | 'high';
+    sourceNote: string;
+  };
+  needsVerification?: boolean;
 };
 
 type LocationRefinement = {
@@ -261,19 +275,56 @@ export const PlannerLocationReviewPanel = memo(function PlannerLocationReviewPan
                   </div>
 
                   {intelligenceLogistics && (
-                    <div className="grid grid-cols-3 gap-2 text-center text-[11px] text-[#5f6b76]">
-                      <div className="rounded-md bg-[#f6f3ee] px-2 py-2">
-                        <p className="font-semibold text-[#1f2933]">{intelligenceLogistics.permitLikelihood}/10</p>
-                        <p>Permit</p>
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-3 gap-2 text-center text-[11px] text-[#5f6b76]">
+                        <div className="rounded-md bg-[#f6f3ee] px-2 py-2">
+                          <p className="font-semibold text-[#1f2933]">{intelligenceLogistics.permitLikelihood}/10</p>
+                          <p>Permit</p>
+                        </div>
+                        <div className="rounded-md bg-[#f6f3ee] px-2 py-2">
+                          <p className="font-semibold text-[#1f2933]">{intelligenceLogistics.crowdRisk}/10</p>
+                          <p>Crowd</p>
+                        </div>
+                        <div className="rounded-md bg-[#f6f3ee] px-2 py-2">
+                          <p className="font-semibold text-[#1f2933]">{intelligenceLogistics.parkingDifficulty}/10</p>
+                          <p>Parking</p>
+                        </div>
                       </div>
-                      <div className="rounded-md bg-[#f6f3ee] px-2 py-2">
-                        <p className="font-semibold text-[#1f2933]">{intelligenceLogistics.crowdRisk}/10</p>
-                        <p>Crowd</p>
+
+                      <div className="rounded-lg border border-[#e4ded5] bg-white px-3 py-3 text-xs text-[#5f6b76]">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-semibold text-[#1f2933]">Venue intelligence</p>
+                          {intelligenceLogistics.needsVerification && (
+                            <span className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 font-semibold text-amber-900">
+                              Needs verification
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-2"><span className="font-semibold text-[#1f2933]">Hours:</span> {intelligenceLogistics.venueHoursSummary}</p>
+                        <p className="mt-1"><span className="font-semibold text-[#1f2933]">Parking cost:</span> {intelligenceLogistics.parkingCost}</p>
+                        <p className="mt-1"><span className="font-semibold text-[#1f2933]">Restroom confidence:</span> {intelligenceLogistics.restroomConfidence}</p>
                       </div>
-                      <div className="rounded-md bg-[#f6f3ee] px-2 py-2">
-                        <p className="font-semibold text-[#1f2933]">{intelligenceLogistics.parkingDifficulty}/10</p>
-                        <p>Parking</p>
-                      </div>
+
+                      {intelligenceLogistics.permit && (
+                        <div className="rounded-lg border border-[#e4ded5] bg-white px-3 py-3 text-xs text-[#5f6b76]">
+                          <p className="font-semibold text-[#1f2933]">Permit likelihood: {intelligenceLogistics.permit.likelihood}</p>
+                          <p className="mt-1">{intelligenceLogistics.permit.sourceNote}</p>
+                          <p className="mt-2 font-medium text-[#7c6f64]">Recommended lead time: {intelligenceLogistics.permit.leadTimeDays} days</p>
+                          <p className="mt-2 font-semibold text-[#1f2933]">No-permit alternatives</p>
+                          <ul className="mt-1 list-disc space-y-1 pl-4">
+                            {intelligenceLogistics.permit.noPermitAlternatives.map(alternative => (
+                              <li key={`${location.name}-${alternative}`}>{alternative}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {intelligenceLogistics.crowd && (
+                        <div className="rounded-lg border border-[#e4ded5] bg-white px-3 py-3 text-xs text-[#5f6b76]">
+                          <p className="font-semibold text-[#1f2933]">Event/crowd risk: {intelligenceLogistics.crowd.eventRisk}</p>
+                          <p className="mt-1">{intelligenceLogistics.crowd.sourceNote}</p>
+                        </div>
+                      )}
                     </div>
                   )}
 

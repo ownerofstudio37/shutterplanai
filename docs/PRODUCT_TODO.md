@@ -83,11 +83,11 @@
 
 ## Next: Venue and Permit Intelligence
 
-- [ ] Add venue/park hours, parking cost, and restroom confidence where available.
-- [ ] Add permit likelihood details with source notes and lead-time guidance.
-- [ ] Add event/crowd risk signals for public locations.
-- [ ] Add no-permit alternative suggestions when a location looks risky.
-- [ ] Add a "needs verification" badge when telemetry or venue data is incomplete.
+- [x] Add venue/park hours, parking cost, and restroom confidence where available.
+- [x] Add permit likelihood details with source notes and lead-time guidance.
+- [x] Add event/crowd risk signals for public locations.
+- [x] Add no-permit alternative suggestions when a location looks risky.
+- [x] Add a "needs verification" badge when telemetry or venue data is incomplete.
 
 ## Next: Collaboration and Client Approval
 

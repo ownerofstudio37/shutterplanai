@@ -54,6 +54,20 @@ export interface LogisticsScore {
   accessibility: number; // 1-10
   overallRisk: number; // 1-10
   warnings: string[];
+  venueHoursSummary: string;
+  parkingCost: string;
+  restroomConfidence: 'low' | 'medium' | 'high';
+  permit: {
+    likelihood: 'low' | 'medium' | 'high';
+    sourceNote: string;
+    leadTimeDays: number;
+    noPermitAlternatives: string[];
+  };
+  crowd: {
+    eventRisk: 'low' | 'medium' | 'high';
+    sourceNote: string;
+  };
+  needsVerification: boolean;
 }
 
 export interface OptimizedRoute {
@@ -610,31 +624,70 @@ export function scoreLocationLogistics(
   };
 
   const warnings: string[] = [];
+  const locationName = location.name.toLowerCase();
+  const parkingText = location.logistics?.parking?.toLowerCase() ?? '';
+  const restroomText = location.logistics?.restroom?.toLowerCase() ?? '';
+  let venueHoursSummary = 'Hours not verified. Check official venue or park listing before confirming arrival time.';
+  let parkingCost = 'Unknown';
+  let restroomConfidence: LogisticsScore['restroomConfidence'] = 'medium';
+  let permitLeadTimeDays = 3;
+  let permitSourceNote = 'Permit rules not verified. Confirm with the location owner or city parks office.';
+  let crowdSourceNote = 'Crowd risk is heuristic based on venue type and public access.';
+  let noPermitAlternatives = ['Use public sidewalks or a privately owned location with written permission.'];
 
   // Parking scoring
-  if (location.logistics?.parking?.toLowerCase().includes('difficult')) {
+  if (parkingText.includes('difficult')) {
     scores.parkingDifficulty = 8;
     warnings.push('Parking is difficult - plan extra time');
-  } else if (location.logistics?.parking?.toLowerCase().includes('easy')) {
+  } else if (parkingText.includes('easy')) {
     scores.parkingDifficulty = 2;
+  }
+  if (/paid|meter|garage|fee|cost/.test(parkingText)) {
+    parkingCost = 'Likely paid or metered';
+  } else if (/free|street|lot/.test(parkingText)) {
+    parkingCost = 'Likely free or included';
   }
 
   // Restroom scoring
-  if (!location.logistics?.restroom || location.logistics.restroom.toLowerCase().includes('no')) {
+  if (!restroomText || restroomText.includes('no')) {
     scores.restroomAccessibility = 2;
+    restroomConfidence = 'low';
     warnings.push('No restroom access - plan accordingly');
+  } else if (/public|nearby|available|yes|onsite|on-site/.test(restroomText)) {
+    restroomConfidence = 'high';
   }
 
   // Venue bucket-based scoring
   if (location.venueBucket === 'urban-historic') {
     scores.permitLikelihood = 6;
     scores.crowdRisk = 7;
+    permitLeadTimeDays = 7;
+    permitSourceNote = 'Historic and downtown districts often have rules for tripods, lighting stands, commercial use, or sidewalk obstruction.';
+    crowdSourceNote = 'Downtown and historic districts have higher weekend and event spillover risk.';
+    noPermitAlternatives = ['Use a nearby textured wall on public right-of-way', 'Move to a quieter side street', 'Use a private studio lobby with permission'];
   } else if (location.venueBucket === 'nature-park') {
     scores.crowdRisk = 6;
     scores.accessibility = 5;
+    scores.permitLikelihood = 5;
+    permitLeadTimeDays = 10;
+    venueHoursSummary = 'Park hours vary by season. Verify opening, closing, and photography rules on the official park page.';
+    permitSourceNote = 'Parks may require permits for paid sessions, props, groups, or reserved garden areas.';
+    crowdSourceNote = 'Parks are busiest on weekends, school breaks, and the first hour before sunset.';
+    noPermitAlternatives = ['Use a neighborhood greenbelt', 'Choose a non-reservable trailhead', 'Switch to a client home or private yard'];
   } else if (location.venueBucket === 'private-venue') {
     scores.permitLikelihood = 2;
     scores.crowdRisk = 2;
+    venueHoursSummary = 'Private venue access depends on booking or written permission. Confirm access window with the owner.';
+    permitSourceNote = 'Written owner permission usually matters more than a municipal permit.';
+    crowdSourceNote = 'Crowd risk is lower when access is controlled by the venue.';
+    noPermitAlternatives = ['Use the client home', 'Use a rented studio', 'Use another private venue with explicit permission'];
+  } else if (/museum|garden|arboretum|zoo|campus|school|library/.test(locationName)) {
+    scores.permitLikelihood = Math.max(scores.permitLikelihood, 7);
+    scores.crowdRisk = Math.max(scores.crowdRisk, 6);
+    permitLeadTimeDays = 14;
+    permitSourceNote = 'Managed venues and campuses commonly require advance permission for professional sessions.';
+    crowdSourceNote = 'Managed attractions can have ticketed events, school groups, or restricted areas.';
+    noPermitAlternatives = ['Use the exterior public approach only where allowed', 'Choose a nearby public plaza', 'Book a private indoor location'];
   }
 
   // Session-specific adjustments
@@ -648,6 +701,17 @@ export function scoreLocationLogistics(
   const overallRisk = Math.round(
     (scores.parkingDifficulty + scores.permitLikelihood + scores.crowdRisk) / 3
   );
+  const permitLikelihood = scores.permitLikelihood >= 7 ? 'high' : scores.permitLikelihood >= 5 ? 'medium' : 'low';
+  const eventRisk = scores.crowdRisk >= 7 ? 'high' : scores.crowdRisk >= 5 ? 'medium' : 'low';
+  const needsVerification =
+    permitLikelihood !== 'low' ||
+    restroomConfidence === 'low' ||
+    parkingCost === 'Unknown' ||
+    venueHoursSummary.startsWith('Hours not verified');
+
+  if (needsVerification) {
+    warnings.push('Needs verification before client guide delivery');
+  }
 
   return {
     parkingDifficulty: scores.parkingDifficulty,
@@ -657,6 +721,20 @@ export function scoreLocationLogistics(
     accessibility: scores.accessibility,
     overallRisk,
     warnings,
+    venueHoursSummary,
+    parkingCost,
+    restroomConfidence,
+    permit: {
+      likelihood: permitLikelihood,
+      sourceNote: permitSourceNote,
+      leadTimeDays: permitLeadTimeDays,
+      noPermitAlternatives,
+    },
+    crowd: {
+      eventRisk,
+      sourceNote: crowdSourceNote,
+    },
+    needsVerification,
   };
 }
 

@@ -18,9 +18,25 @@ type ReviewLocation = {
 };
 
 type LogisticsInfo = {
+  parkingDifficulty?: number;
   permitLikelihood: number;
   crowdRisk: number;
   overallRisk: number;
+  warnings?: string[];
+  venueHoursSummary?: string;
+  parkingCost?: string;
+  restroomConfidence?: 'low' | 'medium' | 'high';
+  permit?: {
+    likelihood: 'low' | 'medium' | 'high';
+    sourceNote: string;
+    leadTimeDays: number;
+    noPermitAlternatives: string[];
+  };
+  crowd?: {
+    eventRisk: 'low' | 'medium' | 'high';
+    sourceNote: string;
+  };
+  needsVerification?: boolean;
 };
 
 type ReviewShot = {
@@ -221,10 +237,35 @@ export const PlannerMobileReviewContent = memo(function PlannerMobileReviewConte
                 <p><span className="font-semibold text-[#1f2933]">Walking:</span> {location.logistics.walkingDistance}</p>
               </div>
               {intelligenceLogistics && (
-                <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-[#5f6b76]">
-                  <span className="rounded-md bg-[#f6f3ee] px-2 py-1">Risk: {intelligenceLogistics.overallRisk}/10</span>
-                  <span className="rounded-md bg-[#f6f3ee] px-2 py-1">Permit: {intelligenceLogistics.permitLikelihood}/10</span>
-                  <span className="rounded-md bg-[#f6f3ee] px-2 py-1">Crowd: {intelligenceLogistics.crowdRisk}/10</span>
+                <div className="mt-3 space-y-2 text-[11px] text-[#5f6b76]">
+                  <div className="flex flex-wrap gap-2">
+                    <span className="rounded-md bg-[#f6f3ee] px-2 py-1">Risk: {intelligenceLogistics.overallRisk}/10</span>
+                    <span className="rounded-md bg-[#f6f3ee] px-2 py-1">Permit: {intelligenceLogistics.permitLikelihood}/10</span>
+                    <span className="rounded-md bg-[#f6f3ee] px-2 py-1">Crowd: {intelligenceLogistics.crowdRisk}/10</span>
+                    {intelligenceLogistics.needsVerification && (
+                      <span className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 font-semibold text-amber-900">
+                        Needs verification
+                      </span>
+                    )}
+                  </div>
+                  <div className="rounded-md bg-[#faf9f6] px-3 py-2">
+                    <p><span className="font-semibold text-[#1f2933]">Hours:</span> {intelligenceLogistics.venueHoursSummary}</p>
+                    <p className="mt-1"><span className="font-semibold text-[#1f2933]">Parking cost:</span> {intelligenceLogistics.parkingCost}</p>
+                    <p className="mt-1"><span className="font-semibold text-[#1f2933]">Restroom confidence:</span> {intelligenceLogistics.restroomConfidence}</p>
+                  </div>
+                  {intelligenceLogistics.permit && (
+                    <div className="rounded-md bg-[#faf9f6] px-3 py-2">
+                      <p className="font-semibold text-[#1f2933]">Permit likelihood: {intelligenceLogistics.permit.likelihood}</p>
+                      <p className="mt-1">{intelligenceLogistics.permit.sourceNote}</p>
+                      <p className="mt-1 text-[#7c6f64]">Lead time: {intelligenceLogistics.permit.leadTimeDays} days</p>
+                    </div>
+                  )}
+                  {intelligenceLogistics.crowd && (
+                    <div className="rounded-md bg-[#faf9f6] px-3 py-2">
+                      <p className="font-semibold text-[#1f2933]">Event/crowd risk: {intelligenceLogistics.crowd.eventRisk}</p>
+                      <p className="mt-1">{intelligenceLogistics.crowd.sourceNote}</p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

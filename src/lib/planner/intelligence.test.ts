@@ -56,6 +56,30 @@ describe('planner intelligence utilities', () => {
 
     expect(scored.overallRisk).toBeGreaterThanOrEqual(6);
     expect(scored.warnings.length).toBeGreaterThan(0);
+    expect(scored.needsVerification).toBe(true);
+    expect(scored.permit.likelihood).toBe('medium');
+    expect(scored.crowd.eventRisk).toBe('high');
+    expect(scored.permit.noPermitAlternatives.length).toBeGreaterThan(0);
+  });
+
+  it('adds managed venue permit lead time and source notes', () => {
+    const scored = scoreLocationLogistics(
+      {
+        name: 'City Botanical Garden',
+        venueBucket: 'nature-park',
+        logistics: {
+          parking: 'paid garage nearby',
+          restroom: 'public restroom available',
+        },
+      },
+      'engagement'
+    );
+
+    expect(scored.parkingCost).toBe('Likely paid or metered');
+    expect(scored.restroomConfidence).toBe('high');
+    expect(scored.permit.leadTimeDays).toBeGreaterThanOrEqual(10);
+    expect(scored.permit.sourceNote).toMatch(/permit|permission/i);
+    expect(scored.venueHoursSummary).toMatch(/verify/i);
   });
 
   it('uses provider forecast and returns shoot-window confidence', async () => {
