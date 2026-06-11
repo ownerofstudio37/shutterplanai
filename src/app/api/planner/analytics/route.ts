@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/serverAuth';
 import { createSupabaseAdminClient } from '@/lib/supabase/server';
+import { apiFailure, apiSuccess, jsonWithApiMeta, startApiRequest } from '@/lib/utils/apiObservability';
 
 export interface PlannerAnalyticsSummary {
   generate: { total: number; success: number; failed: number; successRate: number };
@@ -12,9 +13,11 @@ export interface PlannerAnalyticsSummary {
 }
 
 export async function GET(request: NextRequest) {
+  const requestContext = startApiRequest('/api/planner/analytics', 'GET');
   const authResult = await requireAuth(request);
   if (!authResult.success) {
-    return NextResponse.json({ success: false, error: authResult.error }, { status: authResult.status });
+    apiFailure(requestContext, authResult.status, authResult.error, { stage: 'auth' });
+    return jsonWithApiMeta(requestContext, { success: false, error: authResult.error }, { status: authResult.status });
   }
 
   try {
@@ -25,7 +28,8 @@ export async function GET(request: NextRequest) {
       .eq('user_id', authResult.userId);
 
     if (error) {
-      return NextResponse.json({ success: false, error: 'Failed to load analytics' }, { status: 500 });
+      apiFailure(requestContext, 500, error, { stage: 'query_analytics' });
+      return jsonWithApiMeta(requestContext, { success: false, error: 'Failed to load analytics' }, { status: 500 });
     }
 
     const counts: Record<string, number> = {};
@@ -65,16 +69,20 @@ export async function GET(request: NextRequest) {
       routesOptimized: counts['planner_route_optimized'] ?? 0,
     };
 
-    return NextResponse.json({ success: true, data: summary });
-  } catch {
-    return NextResponse.json({ success: false, error: 'Failed to load analytics' }, { status: 500 });
+    apiSuccess(requestContext, 200, { eventCount: data?.length ?? 0 });
+    return jsonWithApiMeta(requestContext, { success: true, data: summary });
+  } catch (error) {
+    apiFailure(requestContext, 500, error, { stage: 'unhandled' });
+    return jsonWithApiMeta(requestContext, { success: false, error: 'Failed to load analytics' }, { status: 500 });
   }
 }
 
 export async function POST(request: NextRequest) {
+  const requestContext = startApiRequest('/api/planner/analytics', 'POST');
   const authResult = await requireAuth(request);
   if (!authResult.success) {
-    return NextResponse.json({ success: false, error: authResult.error }, { status: authResult.status });
+    apiFailure(requestContext, authResult.status, authResult.error, { stage: 'auth' });
+    return jsonWithApiMeta(requestContext, { success: false, error: authResult.error }, { status: authResult.status });
   }
 
   try {
@@ -84,7 +92,8 @@ export async function POST(request: NextRequest) {
     };
 
     if (!body.eventName) {
-      return NextResponse.json({ success: false, error: 'eventName is required' }, { status: 400 });
+      apiFailure(requestContext, 400, 'eventName is required', { stage: 'validation' });
+      return jsonWithApiMeta(requestContext, { success: false, error: 'eventName is required' }, { status: 400 });
     }
 
     const admin = createSupabaseAdminClient();
@@ -95,11 +104,14 @@ export async function POST(request: NextRequest) {
     });
 
     if (error) {
-      return NextResponse.json({ success: false, error: 'Failed to store analytics event' }, { status: 500 });
+      apiFailure(requestContext, 500, error, { stage: 'insert_analytics', eventName: body.eventName });
+      return jsonWithApiMeta(requestContext, { success: false, error: 'Failed to store analytics event' }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true });
-  } catch {
-    return NextResponse.json({ success: false, error: 'Failed to store analytics event' }, { status: 500 });
+    apiSuccess(requestContext, 200, { eventName: body.eventName });
+    return jsonWithApiMeta(requestContext, { success: true });
+  } catch (error) {
+    apiFailure(requestContext, 500, error, { stage: 'unhandled' });
+    return jsonWithApiMeta(requestContext, { success: false, error: 'Failed to store analytics event' }, { status: 500 });
   }
 }

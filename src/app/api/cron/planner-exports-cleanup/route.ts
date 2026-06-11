@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdminClient } from '@/lib/supabase/server';
+import { apiFailure, apiSuccess, jsonWithApiMeta, startApiRequest } from '@/lib/utils/apiObservability';
 
 function isAuthorized(request: NextRequest) {
   const secret = process.env.PLANNER_EXPORT_CLEANUP_SECRET;
@@ -11,8 +12,10 @@ function isAuthorized(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
+  const requestContext = startApiRequest('/api/cron/planner-exports-cleanup', 'GET');
   if (!isAuthorized(request)) {
-    return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    apiFailure(requestContext, 401, 'Unauthorized', { stage: 'auth' });
+    return jsonWithApiMeta(requestContext, { success: false, error: 'Unauthorized' }, { status: 401 });
   }
 
   try {
@@ -20,11 +23,14 @@ export async function GET(request: NextRequest) {
     const { error } = await admin.rpc('cleanup_expired_exports');
 
     if (error) {
-      return NextResponse.json({ success: false, error: 'Cleanup failed' }, { status: 500 });
+      apiFailure(requestContext, 500, error, { stage: 'cleanup_rpc' });
+      return jsonWithApiMeta(requestContext, { success: false, error: 'Cleanup failed' }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true });
-  } catch {
-    return NextResponse.json({ success: false, error: 'Cleanup failed' }, { status: 500 });
+    apiSuccess(requestContext, 200);
+    return jsonWithApiMeta(requestContext, { success: true });
+  } catch (error) {
+    apiFailure(requestContext, 500, error, { stage: 'unhandled' });
+    return jsonWithApiMeta(requestContext, { success: false, error: 'Cleanup failed' }, { status: 500 });
   }
 }

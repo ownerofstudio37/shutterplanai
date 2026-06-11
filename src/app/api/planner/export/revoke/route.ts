@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/serverAuth';
 import { createSupabaseAdminClient } from '@/lib/supabase/server';
+import { apiFailure, apiSuccess, jsonWithApiMeta, startApiRequest } from '@/lib/utils/apiObservability';
 
 export async function POST(request: NextRequest) {
+  const requestContext = startApiRequest('/api/planner/export/revoke', 'POST');
   const authResult = await requireAuth(request);
   if (!authResult.success) {
-    return NextResponse.json({ success: false, error: authResult.error }, { status: authResult.status });
+    apiFailure(requestContext, authResult.status, authResult.error, { stage: 'auth' });
+    return jsonWithApiMeta(requestContext, { success: false, error: authResult.error }, { status: authResult.status });
   }
 
   try {
@@ -13,7 +16,8 @@ export async function POST(request: NextRequest) {
     const shareToken = body.shareToken?.trim();
 
     if (!shareToken) {
-      return NextResponse.json({ success: false, error: 'shareToken is required' }, { status: 400 });
+      apiFailure(requestContext, 400, 'shareToken is required', { stage: 'validation' });
+      return jsonWithApiMeta(requestContext, { success: false, error: 'shareToken is required' }, { status: 400 });
     }
 
     const admin = createSupabaseAdminClient();
@@ -30,15 +34,19 @@ export async function POST(request: NextRequest) {
       .select('id');
 
     if (error) {
-      return NextResponse.json({ success: false, error: 'Failed to revoke share link' }, { status: 500 });
+      apiFailure(requestContext, 500, error, { stage: 'revoke_update' });
+      return jsonWithApiMeta(requestContext, { success: false, error: 'Failed to revoke share link' }, { status: 500 });
     }
 
     if (!data || data.length === 0) {
-      return NextResponse.json({ success: false, error: 'Share link not found' }, { status: 404 });
+      apiFailure(requestContext, 404, 'Share link not found', { stage: 'revoke_lookup' });
+      return jsonWithApiMeta(requestContext, { success: false, error: 'Share link not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ success: true });
-  } catch {
-    return NextResponse.json({ success: false, error: 'Failed to revoke share link' }, { status: 500 });
+    apiSuccess(requestContext, 200);
+    return jsonWithApiMeta(requestContext, { success: true });
+  } catch (error) {
+    apiFailure(requestContext, 500, error, { stage: 'unhandled' });
+    return jsonWithApiMeta(requestContext, { success: false, error: 'Failed to revoke share link' }, { status: 500 });
   }
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { requireAuth } from '@/lib/auth/serverAuth';
 import { createSupabaseAdminClient } from '@/lib/supabase/server';
+import { apiFailure, apiSuccess, jsonWithApiMeta, startApiRequest } from '@/lib/utils/apiObservability';
 
 const supabase = createSupabaseAdminClient();
 
@@ -22,9 +23,11 @@ function verifySharePassword(password: string, salt: string, expectedHash: strin
 }
 
 export async function POST(request: NextRequest) {
+  const requestContext = startApiRequest('/api/planner/export', 'POST');
   const authResult = await requireAuth(request);
   if (!authResult.success) {
-    return NextResponse.json({ success: false, error: authResult.error }, { status: authResult.status });
+    apiFailure(requestContext, authResult.status, authResult.error, { stage: 'auth' });
+    return jsonWithApiMeta(requestContext, { success: false, error: authResult.error }, { status: authResult.status });
   }
 
   try {
@@ -37,7 +40,8 @@ export async function POST(request: NextRequest) {
     };
 
     if (!plan || typeof plan !== 'object') {
-      return NextResponse.json({ success: false, error: 'plan is required' }, { status: 400 });
+      apiFailure(requestContext, 400, 'plan is required', { stage: 'validation' });
+      return jsonWithApiMeta(requestContext, { success: false, error: 'plan is required' }, { status: 400 });
     }
 
     const normalizedDays = Number.isFinite(expiresInDays)
@@ -46,7 +50,9 @@ export async function POST(request: NextRequest) {
 
     const normalizedPassword = typeof sharePassword === 'string' ? sharePassword.trim() : '';
     if (normalizedPassword && normalizedPassword.length < 6) {
-      return NextResponse.json(
+      apiFailure(requestContext, 400, 'Share password must be at least 6 characters', { stage: 'validation' });
+      return jsonWithApiMeta(
+        requestContext,
         { success: false, error: 'Share password must be at least 6 characters' },
         { status: 400 }
       );
@@ -71,8 +77,9 @@ export async function POST(request: NextRequest) {
     if (error) throw error;
 
     const shareUrl = `${process.env.NEXT_PUBLIC_APP_URL}/plans/${shareToken}`;
+    apiSuccess(requestContext, 200, { expiresInDays: normalizedDays, passwordProtected: !!normalizedPassword });
 
-    return NextResponse.json({
+    return jsonWithApiMeta(requestContext, {
       success: true,
       shareUrl,
       shareToken,
@@ -80,19 +87,21 @@ export async function POST(request: NextRequest) {
       passwordProtected: !!normalizedPassword,
     });
   } catch (error) {
-    console.error('Export error:', error);
-    return NextResponse.json({ success: false, error: 'Failed to create share link' }, { status: 500 });
+    apiFailure(requestContext, 500, error, { stage: 'create_export' });
+    return jsonWithApiMeta(requestContext, { success: false, error: 'Failed to create share link' }, { status: 500 });
   }
 }
 
 export async function GET(request: NextRequest) {
+  const requestContext = startApiRequest('/api/planner/export', 'GET');
   try {
     const { searchParams } = new URL(request.url);
     const token = searchParams.get('token');
     const password = searchParams.get('password')?.trim() || '';
 
     if (!token) {
-      return NextResponse.json({ error: 'Missing token' }, { status: 400 });
+      apiFailure(requestContext, 400, 'Missing token', { stage: 'validation' });
+      return jsonWithApiMeta(requestContext, { error: 'Missing token' }, { status: 400 });
     }
 
     const { data, error } = await supabase
@@ -102,33 +111,39 @@ export async function GET(request: NextRequest) {
       .single();
 
     if (error || !data || !data.expires_at) {
-      return NextResponse.json({ error: 'Plan not found or expired' }, { status: 404 });
+      apiFailure(requestContext, 404, error || 'Plan not found or expired', { stage: 'fetch_export' });
+      return jsonWithApiMeta(requestContext, { error: 'Plan not found or expired' }, { status: 404 });
     }
 
     if (data.revoked_at) {
-      return NextResponse.json({ error: 'Share link has been revoked' }, { status: 410 });
+      apiFailure(requestContext, 410, 'Share link has been revoked', { stage: 'revoked' });
+      return jsonWithApiMeta(requestContext, { error: 'Share link has been revoked' }, { status: 410 });
     }
 
     if (new Date(data.expires_at).getTime() <= Date.now()) {
-      return NextResponse.json({ error: 'Plan not found or expired' }, { status: 404 });
+      apiFailure(requestContext, 404, 'Plan not found or expired', { stage: 'expired' });
+      return jsonWithApiMeta(requestContext, { error: 'Plan not found or expired' }, { status: 404 });
     }
 
     if (data.password_hash) {
       if (!password) {
-        return NextResponse.json({ error: 'Password required', requiresPassword: true }, { status: 401 });
+        apiFailure(requestContext, 401, 'Password required', { stage: 'password_required' });
+        return jsonWithApiMeta(requestContext, { error: 'Password required', requiresPassword: true }, { status: 401 });
       }
 
       if (!data.password_salt || !verifySharePassword(password, data.password_salt, data.password_hash)) {
-        return NextResponse.json({ error: 'Invalid password', requiresPassword: true }, { status: 401 });
+        apiFailure(requestContext, 401, 'Invalid password', { stage: 'password_invalid' });
+        return jsonWithApiMeta(requestContext, { error: 'Invalid password', requiresPassword: true }, { status: 401 });
       }
     }
 
-    return NextResponse.json({
+    apiSuccess(requestContext, 200, { passwordProtected: !!data.password_hash });
+    return jsonWithApiMeta(requestContext, {
       plan_data: data.plan_data,
       metadata: data.metadata,
     });
   } catch (error) {
-    console.error('Share fetch error:', error);
-    return NextResponse.json({ error: 'Failed to fetch plan' }, { status: 500 });
+    apiFailure(requestContext, 500, error, { stage: 'fetch_shared_plan' });
+    return jsonWithApiMeta(requestContext, { error: 'Failed to fetch plan' }, { status: 500 });
   }
 }

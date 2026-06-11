@@ -1,9 +1,33 @@
 import { NextResponse } from 'next/server';
 import { getForecastIntelligence, scoreLocationLogistics, optimizeRouteOrder } from '@/lib/planner/intelligence';
+import { apiFailure, apiSuccess, jsonWithApiMeta, startApiRequest } from '@/lib/utils/apiObservability';
+
+type IntelligenceLocation = {
+  name: string;
+  latitude: number | null;
+  longitude: number | null;
+  venueBucket?: string;
+  preferredTimeWindow?: string | null;
+  logistics?: {
+    parking?: string;
+    restroom?: string;
+  };
+};
+
+type IntelligenceRequestBody = {
+  latitude?: number;
+  longitude?: number;
+  date: string;
+  durationMinutes?: number;
+  locations: IntelligenceLocation[];
+  sessionCategory?: string;
+};
 
 export async function POST(request: Request) {
+  const requestContext = startApiRequest('/api/planner/intelligence', 'POST');
   try {
-    const { latitude, longitude, date, durationMinutes, locations, sessionCategory } = await request.json();
+    const { latitude, longitude, date, durationMinutes, locations, sessionCategory } =
+      (await request.json()) as IntelligenceRequestBody;
 
     // Weather + golden hours from provider-backed forecast
     const forecast = await getForecastIntelligence({
@@ -14,7 +38,7 @@ export async function POST(request: Request) {
     });
 
     // Logistics scoring for all locations
-    const logisticsScores = locations.map((loc: any) =>
+    const logisticsScores = locations.map(loc =>
       scoreLocationLogistics(loc, sessionCategory)
     );
 
@@ -30,7 +54,8 @@ export async function POST(request: Request) {
       }
     );
 
-    return NextResponse.json({
+    apiSuccess(requestContext, 200, { locationCount: locations.length });
+    return jsonWithApiMeta(requestContext, {
       goldenHours: {
         sunrise: forecast.weather.sunriseTime,
         sunset: forecast.weather.sunsetTime,
@@ -43,8 +68,9 @@ export async function POST(request: Request) {
       optimizedRoute: optimizedIndices,
     });
   } catch (error) {
-    console.error('Intelligence calculation error:', error);
-    return NextResponse.json(
+    apiFailure(requestContext, 500, error, { stage: 'calculate_intelligence' });
+    return jsonWithApiMeta(
+      requestContext,
       { error: 'Failed to calculate intelligence' },
       { status: 500 }
     );
