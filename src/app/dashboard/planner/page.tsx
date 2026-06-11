@@ -465,6 +465,7 @@ export default function PlannerPage() {
   const [excludedVenueBuckets, setExcludedVenueBuckets] = useState<string[]>([]);
   const [isAiTyping, setIsAiTyping] = useState(false);
   const [activePresetId, setActivePresetId] = useState<string | null>(null);
+  const [activeMobileReviewTab, setActiveMobileReviewTab] = useState<ReviewTab | null>('locations');
 
   const [plan, setPlan] = useState<SessionPlan | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -736,6 +737,7 @@ export default function PlannerPage() {
       }
 
       setActiveReviewTab('locations');
+      setActiveMobileReviewTab('locations');
       setLocationVotes({});
       setPreferredVenueBucket(null);
       setExcludedVenueBuckets([]);
@@ -1068,6 +1070,11 @@ export default function PlannerPage() {
     { id: 'apply', label: '3. Apply to Project', description: 'Create your project and shot list' },
   ];
 
+  const toggleMobileReviewTab = (tab: ReviewTab) => {
+    setActiveMobileReviewTab(prev => (prev === tab ? null : tab));
+    setActiveReviewTab(tab);
+  };
+
   return (
     <div className="space-y-6">
       <Card>
@@ -1129,7 +1136,7 @@ export default function PlannerPage() {
               )}
             </div>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="hidden flex-wrap gap-2 md:flex">
             {workflowStage !== 'intake' && (
               <Button variant="secondary" onClick={() => editAnswers()}>
                 Reopen intake
@@ -1373,6 +1380,25 @@ export default function PlannerPage() {
           </p>
         )}
 
+        <div className="sticky bottom-3 z-10 mt-4 md:hidden">
+          <div className="rounded-2xl border border-gray-200 bg-white/95 p-3 shadow-lg backdrop-blur">
+            <div className="flex flex-col gap-2">
+              {workflowStage !== 'intake' && (
+                <Button variant="secondary" onClick={() => editAnswers()}>
+                  Reopen intake
+                </Button>
+              )}
+              <Button
+                isLoading={isGenerating}
+                onClick={() => void generatePlan()}
+                disabled={!isChatComplete || !isReviewConfirmed || isGenerating}
+              >
+                {isGenerating ? 'Generating...' : plan ? 'Regenerate Plan' : 'Generate Full Plan'}
+              </Button>
+            </div>
+          </div>
+        </div>
+
         {error && <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
       </Card>
 
@@ -1409,7 +1435,7 @@ export default function PlannerPage() {
                   )}
                 </div>
               </div>
-              <div className="flex gap-2">
+              <div className="hidden gap-2 md:flex">
                 <Button variant="ghost" isLoading={isRefining} onClick={() => void refinePlan()}>
                   {isRefining ? 'Refining...' : 'Refine Plan'}
                 </Button>
@@ -1447,7 +1473,7 @@ export default function PlannerPage() {
           </Card>
 
           <Card>
-            <div className="mb-4 flex flex-wrap gap-2">
+            <div className="mb-4 hidden flex-wrap gap-2 md:flex">
               {[
                 { id: 'locations', label: `Locations (${displayedLocations.length})` },
                 { id: 'shot-list', label: `Shot List (${displayedShots.length})` },
@@ -1469,6 +1495,167 @@ export default function PlannerPage() {
               ))}
             </div>
 
+            <div className="mb-4 space-y-3 md:hidden">
+              {[
+                { id: 'locations', label: `Locations (${displayedLocations.length})` },
+                { id: 'shot-list', label: `Shot List (${displayedShots.length})` },
+                { id: 'timeline', label: `Timeline (${plan.timeline.length})` },
+                { id: 'prep', label: 'Prep + Backup' },
+              ].map(tab => {
+                const reviewTab = tab.id as ReviewTab;
+                const isOpen = activeMobileReviewTab === reviewTab;
+
+                return (
+                  <div key={`mobile-${tab.id}`} className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+                    <button
+                      type="button"
+                      onClick={() => toggleMobileReviewTab(reviewTab)}
+                      className="flex w-full items-center justify-between px-4 py-3 text-left"
+                    >
+                      <span className="text-sm font-semibold text-gray-900">{tab.label}</span>
+                      <span className="text-xs text-gray-500">{isOpen ? 'Hide' : 'Show'}</span>
+                    </button>
+
+                    {isOpen && (
+                      <div className="border-t border-gray-100 px-4 py-4">
+                        {reviewTab === 'locations' && (
+                          <div className="space-y-4">
+                            <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+                              Use the feedback controls to pressure-test location quality. Thumbs affect ordering locally, “Prefer this type” boosts similar spots in review, and “Exclude this type” removes that venue type from the current plan review.
+                            </div>
+
+                            {displayedLocations.map(location => {
+                              const locationKey = (location.displayName || location.name).toLowerCase();
+                              const currentVote = locationVotes[locationKey];
+                              const isPreferredType = !!location.venueBucket && preferredVenueBucket === location.venueBucket;
+                              const isExcludedType = !!location.venueBucket && excludedVenueBuckets.includes(location.venueBucket);
+
+                              return (
+                                <div key={`mobile-${location.name}`} className="rounded-lg border border-gray-200 p-3">
+                                  <div className="flex flex-wrap items-start justify-between gap-3">
+                                    <div>
+                                      <p className="font-semibold text-gray-900">{location.displayName || location.name}</p>
+                                      {location.displayName && location.displayName !== location.name && (
+                                        <p className="mt-1 text-xs text-gray-500">AI label: {location.name}</p>
+                                      )}
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => setLocationVote(location, 'up')}
+                                        className={`rounded-full border px-2 py-1 text-xs ${
+                                          currentVote === 'up'
+                                            ? 'border-emerald-600 bg-emerald-50 text-emerald-700'
+                                            : 'border-gray-300 bg-white text-gray-700'
+                                        }`}
+                                      >
+                                        👍 Relevant
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setLocationVote(location, 'down')}
+                                        className={`rounded-full border px-2 py-1 text-xs ${
+                                          currentVote === 'down'
+                                            ? 'border-red-600 bg-red-50 text-red-700'
+                                            : 'border-gray-300 bg-white text-gray-700'
+                                        }`}
+                                      >
+                                        👎 Not relevant
+                                      </button>
+                                      {location.venueBucket && (
+                                        <button
+                                          type="button"
+                                          onClick={() => togglePreferredVenueBucket(location.venueBucket)}
+                                          className={`rounded-full border px-2 py-1 text-xs ${
+                                            isPreferredType
+                                              ? 'border-blue-600 bg-blue-50 text-blue-700'
+                                              : 'border-gray-300 bg-white text-gray-700'
+                                          }`}
+                                        >
+                                          ⭐ Prefer this type
+                                        </button>
+                                      )}
+                                      {location.venueBucket && (
+                                        <button
+                                          type="button"
+                                          onClick={() => toggleExcludedVenueBucket(location.venueBucket)}
+                                          className={`rounded-full border px-2 py-1 text-xs ${
+                                            isExcludedType
+                                              ? 'border-amber-600 bg-amber-50 text-amber-700'
+                                              : 'border-gray-300 bg-white text-gray-700'
+                                          }`}
+                                        >
+                                          🚫 Exclude this type
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  <div className="mt-2 rounded-md bg-blue-50/60 px-3 py-2">
+                                    <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Why this location was picked</p>
+                                    <p className="mt-1 text-sm text-gray-700">{location.whyItWorks}</p>
+                                  </div>
+                                  <p className="mt-2 text-xs text-gray-500">Micro-spots: {location.microLocations.join(' • ')}</p>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {reviewTab === 'shot-list' && (
+                          <div className="space-y-3">
+                            {displayedShots.map(shot => (
+                              <div key={`mobile-${shot.title}-${shot.microSpot}`} className="rounded-lg border border-gray-200 p-3">
+                                <p className="font-semibold text-gray-900">{shot.title}</p>
+                                <p className="mt-1 text-sm text-gray-600">{shot.description}</p>
+                                <p className="mt-2 text-xs text-gray-500">Location: {shot.location}</p>
+                                <p className="text-xs text-gray-500">Micro-spot: {shot.microSpot}</p>
+                                <p className="text-xs text-gray-500">Pose: {shot.poseSuggestion}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {reviewTab === 'timeline' && (
+                          <div className="space-y-3">
+                            {plan.timeline.map(item => (
+                              <div key={`mobile-${item.timeBlock}-${item.focus}`} className="rounded-lg border border-gray-200 p-3">
+                                <p className="text-sm font-semibold text-gray-900">{item.timeBlock}</p>
+                                <p className="text-sm text-blue-700">{item.focus}</p>
+                                <p className="mt-1 text-sm text-gray-600">{item.notes}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {reviewTab === 'prep' && (
+                          <div className="space-y-4">
+                            <div>
+                              <h4 className="mb-2 text-base font-semibold text-gray-900">Client Prep Checklist</h4>
+                              <ul className="list-inside list-disc space-y-1 text-sm text-gray-700">
+                                {plan.clientPrepChecklist.map(item => (
+                                  <li key={`mobile-prep-${item}`}>{item}</li>
+                                ))}
+                              </ul>
+                            </div>
+                            <div>
+                              <h4 className="mb-2 text-base font-semibold text-gray-900">Contingency Plans</h4>
+                              <ul className="list-inside list-disc space-y-1 text-sm text-gray-700">
+                                {plan.contingencyPlans.map(item => (
+                                  <li key={`mobile-contingency-${item}`}>{item}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="hidden md:block">
             {activeReviewTab === 'locations' && (
               <div className="space-y-4">
                 <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
@@ -1683,7 +1870,21 @@ export default function PlannerPage() {
                 </div>
               </div>
             )}
+            </div>
           </Card>
+
+          <div className="sticky bottom-3 z-10 md:hidden">
+            <div className="rounded-2xl border border-gray-200 bg-white/95 p-3 shadow-lg backdrop-blur">
+              <div className="grid grid-cols-2 gap-2">
+                <Button variant="ghost" isLoading={isRefining} onClick={() => void refinePlan()}>
+                  {isRefining ? 'Refining...' : 'Refine'}
+                </Button>
+                <Button variant="secondary" isLoading={isApplying} onClick={() => void applyPlanToWorkspace()}>
+                  {isApplying ? 'Applying...' : 'Create Project'}
+                </Button>
+              </div>
+            </div>
+          </div>
         </>
       )}
     </div>
