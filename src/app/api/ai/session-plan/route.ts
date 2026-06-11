@@ -77,12 +77,31 @@ function isGenericLocationLabel(value: string) {
 }
 
 function buildLocationSuggestionFromCandidate(
-  candidate: { name: string; displayName?: string | null; latitude?: number | null; longitude?: number | null },
+  candidate: {
+    name: string;
+    displayName?: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
+    featureSignals?: string[];
+    confidenceScore?: number;
+    venueBucket?: string;
+  },
   sessionCategory: 'family' | 'engagement' | 'event' | 'portrait'
 ): SessionPlanLocation {
   const display = candidate.displayName?.split(',').slice(0, 2).join(',').trim() || candidate.name;
   const isFamily = sessionCategory === 'family';
   const isEngagement = sessionCategory === 'engagement';
+  const signals = Array.isArray(candidate.featureSignals) ? candidate.featureSignals : [];
+  const confidenceLabel =
+    typeof candidate.confidenceScore === 'number'
+      ? candidate.confidenceScore >= 8
+        ? 'high-confidence pick'
+        : candidate.confidenceScore >= 6
+          ? 'medium-confidence pick'
+          : 'experimental pick'
+      : 'grounded pick';
+
+  const signalLine = signals.length > 0 ? `${signals.slice(0, 3).join(', ')}.` : '';
 
   return {
     name: display,
@@ -95,10 +114,10 @@ function buildLocationSuggestionFromCandidate(
     latitude: candidate.latitude ?? null,
     longitude: candidate.longitude ?? null,
     whyItWorks: isFamily
-      ? 'Easy parking, low walking burden, and flexible background options for a family session.'
+      ? `Easy parking, low walking burden, and flexible background options for a family session (${confidenceLabel}). ${signalLine}`.trim()
       : isEngagement
-        ? 'Strong scenic variety and comfortable pacing for an engagement session.'
-        : 'Photogenic setting with good composition potential and minimal transition time.',
+        ? `Strong scenic variety and comfortable pacing for an engagement session (${confidenceLabel}). ${signalLine}`.trim()
+        : `Photogenic setting with good composition potential and minimal transition time (${confidenceLabel}). ${signalLine}`.trim(),
     microLocations: isFamily
       ? ['Open shade area', 'Tree-lined path', 'Quiet backdrop']
       : isEngagement

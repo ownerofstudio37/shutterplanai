@@ -9,6 +9,10 @@ export interface LocationCandidate extends GeocodeResult {
   sourceQuery: string;
   relevanceScore: number;
   distanceKm?: number | null;
+  venueBucket?: 'urban-historic' | 'waterfront' | 'private-venue' | 'nature-park' | 'other';
+  fitScore?: number;
+  confidenceScore?: number;
+  featureSignals?: string[];
 }
 
 interface GeocodeInput {
@@ -257,7 +261,7 @@ function getCityHotspotOverrides(city: string): string[] {
   return [];
 }
 
-function buildVenueSeedCandidates(rawText: string, city: string): string[] {
+function buildVenueSeedCandidates(rawText: string, city: string): Array<{ name: string; mentionCount: number }> {
   const text = rawText.replace(/\s+/g, ' ').trim();
   if (!text) return [];
 
@@ -298,13 +302,26 @@ function buildVenueSeedCandidates(rawText: string, city: string): string[] {
       return venueHint.test(phrase) || (cityToken && lower.includes(cityToken));
     });
 
-  return Array.from(new Set(cleaned)).slice(0, 18);
+  const mentionMap = new Map<string, { name: string; mentionCount: number }>();
+  for (const phrase of cleaned) {
+    const key = normalizeText(phrase);
+    const existing = mentionMap.get(key);
+    if (existing) {
+      existing.mentionCount += 1;
+      continue;
+    }
+    mentionMap.set(key, { name: phrase, mentionCount: 1 });
+  }
+
+  return Array.from(mentionMap.values())
+    .sort((a, b) => b.mentionCount - a.mentionCount)
+    .slice(0, 18);
 }
 
 async function discoverWebHotspotSeeds(
   city: string,
   sessionCategory: SearchCandidateInput['sessionCategory']
-): Promise<string[]> {
+): Promise<Array<{ name: string; mentionCount: number }>> {
   const serpApiKey = process.env.SERPAPI_API_KEY;
   const braveApiKey = process.env.BRAVE_SEARCH_API_KEY;
   const baseQuery = `${city} best photoshoot locations photographer`;
@@ -380,6 +397,86 @@ async function discoverWebHotspotSeeds(
   if (harvestedText.length === 0) return [];
 
   return buildVenueSeedCandidates(harvestedText.join(' '), city);
+}
+
+type SessionSuitabilityProfile = {
+  weights: {
+    scenic: number;
+    logistics: number;
+    walkingEase: number;
+    crowdEase: number;
+    privacy: number;
+    permitEase: number;
+    proximity: number;
+    webMention: number;
+  };
+  hardVetoPattern: RegExp;
+};
+
+function getSessionSuitabilityProfile(
+  sessionCategory: SearchCandidateInput['sessionCategory']
+): SessionSuitabilityProfile {
+  if (sessionCategory === 'family') {
+    return {
+      weights: {
+        scenic: 0.8,
+        logistics: 1.3,
+        walkingEase: 1.4,
+        crowdEase: 1.3,
+        privacy: 0.6,
+        permitEase: 1.0,
+        proximity: 1.2,
+        webMention: 0.9,
+      },
+      hardVetoPattern: /(tot park|tot lot|dog park|sports complex|ball field|nightclub|bar|shooting range|industrial|warehouse|jail|prison|cemetery|hospital)/i,
+    };
+  }
+
+  if (sessionCategory === 'engagement') {
+    return {
+      weights: {
+        scenic: 1.5,
+        logistics: 0.8,
+        walkingEase: 0.7,
+        crowdEase: 0.9,
+        privacy: 1.1,
+        permitEase: 0.8,
+        proximity: 0.7,
+        webMention: 1.1,
+      },
+      hardVetoPattern: /(tot park|tot lot|dog park|sports complex|ball field|jail|prison|cemetery|hospital|industrial|warehouse)/i,
+    };
+  }
+
+  if (sessionCategory === 'event') {
+    return {
+      weights: {
+        scenic: 0.8,
+        logistics: 1.5,
+        walkingEase: 1.0,
+        crowdEase: 1.1,
+        privacy: 0.5,
+        permitEase: 1.3,
+        proximity: 1.2,
+        webMention: 0.6,
+      },
+      hardVetoPattern: /(tot park|tot lot|dog park|remote trail|jail|prison|cemetery|hospital|industrial|warehouse)/i,
+    };
+  }
+
+  return {
+    weights: {
+      scenic: 1.3,
+      logistics: 0.9,
+      walkingEase: 0.9,
+      crowdEase: 0.8,
+      privacy: 0.8,
+      permitEase: 0.9,
+      proximity: 0.8,
+      webMention: 0.9,
+    },
+    hardVetoPattern: /(tot park|tot lot|dog park|sports complex|ball field|jail|prison|cemetery|hospital|industrial|warehouse)/i,
+  };
 }
 
 function getOverpassTagFilters(sessionCategory: SearchCandidateInput['sessionCategory']) {
@@ -504,9 +601,11 @@ export async function searchLocationCandidates(input: SearchCandidateInput): Pro
   const city = input.city.trim();
   const localOverrides = getCityHotspotOverrides(city);
   const webSeeds = await discoverWebHotspotSeeds(city, input.sessionCategory);
-  const mergedPreferred = [...(input.preferredTerms ?? []), ...localOverrides, ...webSeeds];
+  const webSeedMentionMap = new Map(webSeeds.map(seed => [normalizeText(seed.name), seed.mentionCount] as const));
+  const mergedPreferred = [...(input.preferredTerms ?? []), ...localOverrides, ...webSeeds.map(seed => seed.name)];
   const queries = getSearchQueries(input.sessionCategory, mergedPreferred);
   const blocked = (input.bannedTerms ?? []).map(t => t.toLowerCase()).filter(Boolean);
+  const profile = getSessionSuitabilityProfile(input.sessionCategory);
   const limit = input.limit ?? 8;
 
   // Resolve city center: prefer provided coordinates, otherwise geocode the city name
@@ -543,6 +642,10 @@ export async function searchLocationCandidates(input: SearchCandidateInput): Pro
     placeType?: string;
     importance: number;
     score: number;
+    fitScore: number;
+    confidenceScore: number;
+    featureSignals: string[];
+    venueBucket: 'urban-historic' | 'waterfront' | 'private-venue' | 'nature-park' | 'other';
   };
   const collected: RawCandidate[] = [];
   const seenKeys = new Set<string>();
@@ -572,6 +675,7 @@ export async function searchLocationCandidates(input: SearchCandidateInput): Pro
 
       const lower = normalizeText(displayName);
       if (blocked.some(t => lower.includes(t))) continue;
+      if (profile.hardVetoPattern.test(lower)) continue;
 
       const isAdministrativeOnly =
         className === 'boundary' ||
@@ -588,6 +692,32 @@ export async function searchLocationCandidates(input: SearchCandidateInput): Pro
         if (distanceKm > radiusKm) continue;
       }
 
+      const venueBucket = getVenueBucket({ displayName, className, placeType }) as RawCandidate['venueBucket'];
+
+      const scenicScore =
+        (/(waterfront|lake|river|creek|beach|overlook|garden|arboretum|forest|trail|historic|district|square|plaza|depot|farm)/i.test(lower)
+          ? 8
+          : 4) + (importance > 0.4 ? 1 : 0);
+
+      const logisticsScore = /(park|plaza|square|downtown|venue|estate|museum|depot)/i.test(lower) ? 8 : 5;
+      const walkingEaseScore = /(trail|forest|preserve|overlook|peak|hike)/i.test(lower) ? 4 : 8;
+      const crowdEaseScore = /(downtown|plaza|square|tourist|market)/i.test(lower) ? 4 : 8;
+      const privacyScore = /(farm|estate|venue|private|garden|lake)/i.test(lower) ? 8 : 5;
+      const permitEaseScore = /(private|estate|venue|museum|historic)/i.test(lower) ? 5 : 8;
+      const proximityScore = distanceKm == null ? 6 : Math.max(1, 10 - distanceKm / 8);
+      const webMentionScoreRaw = webSeedMentionMap.get(normalizeText(displayName.split(',')[0] || displayName)) ?? 0;
+      const webMentionScore = Math.min(10, webMentionScoreRaw * 2.2);
+
+      const fitScore =
+        scenicScore * profile.weights.scenic +
+        logisticsScore * profile.weights.logistics +
+        walkingEaseScore * profile.weights.walkingEase +
+        crowdEaseScore * profile.weights.crowdEase +
+        privacyScore * profile.weights.privacy +
+        permitEaseScore * profile.weights.permitEase +
+        proximityScore * profile.weights.proximity +
+        webMentionScore * profile.weights.webMention;
+
       const poiBoost = /(park|garden|trail|promenade|plaza|square|waterfront|arboretum|district|overlook|farm|depot|lake|creek)/i.test(lower)
         ? 6
         : 0;
@@ -595,7 +725,25 @@ export async function searchLocationCandidates(input: SearchCandidateInput): Pro
         ? 12
         : 0;
       const distancePenalty = distanceKm == null ? 0 : distanceKm * 0.12;
-      const score = entry.relevanceScore * 10 + importance * 8 + poiBoost - lowValuePenalty - distancePenalty;
+      const score = entry.relevanceScore * 10 + importance * 8 + poiBoost + fitScore * 2 - lowValuePenalty - distancePenalty;
+
+      const confidenceScore = Math.max(
+        1,
+        Math.min(
+          10,
+          4 + (importance > 0.4 ? 2 : 0) + (webMentionScoreRaw > 0 ? 2 : 0) + (venueBucket !== 'other' ? 1 : 0)
+        )
+      );
+
+      const featureSignals = [
+        scenicScore >= 8 ? 'scenic-variety' : '',
+        logisticsScore >= 8 ? 'easy-logistics' : '',
+        walkingEaseScore >= 7 ? 'low-walking' : '',
+        crowdEaseScore >= 7 ? 'lower-crowd-risk' : '',
+        privacyScore >= 7 ? 'privacy-friendly' : '',
+        permitEaseScore >= 7 ? 'lower-permit-risk' : 'permit-check-needed',
+        webMentionScoreRaw > 0 ? 'photographer-mentioned-online' : '',
+      ].filter(Boolean);
 
       collected.push({
         name: displayName.split(',')[0]?.trim() || displayName,
@@ -609,6 +757,10 @@ export async function searchLocationCandidates(input: SearchCandidateInput): Pro
         placeType,
         importance: Number.isFinite(importance) ? importance : 0,
         score,
+        fitScore,
+        confidenceScore,
+        featureSignals,
+        venueBucket,
       });
       added++;
     }
@@ -819,6 +971,7 @@ export async function searchLocationCandidates(input: SearchCandidateInput): Pro
 
   const ranked = collected.sort((a, b) => {
       if (a.score !== b.score) return b.score - a.score;
+      if (a.fitScore !== b.fitScore) return b.fitScore - a.fitScore;
       if (a.relevanceScore !== b.relevanceScore) return b.relevanceScore - a.relevanceScore;
       if (a.distanceKm == null && b.distanceKm == null) return 0;
       if (a.distanceKm == null) return 1;
@@ -832,11 +985,7 @@ export async function searchLocationCandidates(input: SearchCandidateInput): Pro
   const maxPerBucket = 2;
 
   for (const candidate of ranked) {
-    const bucket = getVenueBucket({
-      displayName: candidate.displayName || candidate.name,
-      className: candidate.className,
-      placeType: candidate.placeType,
-    });
+    const bucket = candidate.venueBucket;
     const current = bucketCounts.get(bucket) ?? 0;
     if (current >= maxPerBucket) continue;
     bucketCounts.set(bucket, current + 1);
@@ -856,5 +1005,9 @@ export async function searchLocationCandidates(input: SearchCandidateInput): Pro
     }
   }
 
-  return cappedByBucket.slice(0, limit);
+  return cappedByBucket.slice(0, limit).map(candidate => ({
+    ...candidate,
+    fitScore: Number(candidate.fitScore?.toFixed(2) || 0),
+    confidenceScore: Number(candidate.confidenceScore?.toFixed(2) || 0),
+  }));
 }
