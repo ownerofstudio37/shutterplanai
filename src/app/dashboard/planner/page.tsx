@@ -7,8 +7,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { InlineEditableField } from '@/components/planner/InlineEditableField';
 import { PlannerWorkflowStages } from '@/components/planner/PlannerWorkflowStages';
-import { DraftResumeBanner } from '@/components/planner/DraftResumeBanner';
-import { PlannerPresetGrid } from '@/components/planner/PlannerPresetGrid';
+import { PlannerIntakeCard } from '@/components/planner/PlannerIntakeCard';
 import { PlannerReviewHeaderCard } from '@/components/planner/PlannerReviewHeaderCard';
 import { PlannerReviewTabs } from '@/components/planner/PlannerReviewTabs';
 import { PlannerMapReviewPanel } from '@/components/planner/PlannerMapReviewPanel';
@@ -1833,269 +1832,47 @@ export default function PlannerPage() {
     <div className="space-y-6">
       <PlannerWorkflowStages stages={workflowStages} currentStage={workflowStage} hasPlan={!!plan} />
 
-      <Card>
-        <div className="mb-4 flex items-center justify-between">
-          <div>
-            <h3 className="text-xl font-semibold text-gray-900">
-              {workflowStage === 'intake' ? 'AI Planning Chat' : 'Intake Summary'}
-            </h3>
-            <p className="text-sm text-gray-600">
-              {workflowStage === 'intake'
-                ? 'Answer a quick chat questionnaire, then generate a full plan.'
-                : 'Your approved intake answers are summarized here for quick edits before regenerating.'}
-            </p>
-            <div className="mt-2 flex flex-wrap gap-2 text-xs">
-              <span className="rounded-full bg-indigo-50 px-2 py-1 font-medium text-indigo-700">
-                Session: {shootType}
-              </span>
-              <span className="rounded-full bg-emerald-50 px-2 py-1 font-medium text-emerald-700">
-                Mode: {locationMode === 'use-provided' ? 'Using provided locations' : 'Find locations'}
-              </span>
-              {locationMode === 'find-locations' && (city || businessProfile?.baseLocation || businessProfile?.zipCode) && (
-                <span className="rounded-full bg-gray-100 px-2 py-1 font-medium text-gray-700">
-                  Area: {city || businessProfile?.baseLocation || businessProfile?.zipCode}
-                </span>
-              )}
-            </div>
-          </div>
-          <div className="hidden flex-wrap gap-2 md:flex">
-            {workflowStage !== 'intake' && (
-              <Button variant="secondary" onClick={() => editAnswers()}>
-                Reopen intake
-              </Button>
-            )}
-            <Button
-              isLoading={isGenerating}
-              onClick={() => void generatePlan()}
-              disabled={!isChatComplete || !isReviewConfirmed || isGenerating}
-            >
-              {isGenerating ? 'Generating...' : plan ? 'Regenerate Plan' : 'Generate Full Plan'}
-            </Button>
-          </div>
-        </div>
-
-        <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-          {workflowStage === 'intake' ? (
-            <>
-              {resumableDraft && (
-                <DraftResumeBanner
-                  updatedAt={resumableDraft.updatedAt}
-                  shootType={resumableDraft.planState.shootType}
-                  onDiscard={() => void dismissDraft()}
-                  onResume={resumeDraft}
-                />
-              )}
-
-              <PlannerPresetGrid presets={PLANNER_PRESETS} activePresetId={activePresetId} onApplyPreset={applyPreset} />
-
-              <div className="mb-3 flex items-center justify-between text-xs text-gray-600">
-                <span>Step {Math.min(chatStepIndex + 1, visibleQuestions.length)} of {visibleQuestions.length}</span>
-                <span>{Math.round((Math.min(chatStepIndex, visibleQuestions.length) / Math.max(visibleQuestions.length, 1)) * 100)}% complete</span>
-              </div>
-
-              <progress
-                className="mb-4 h-2 w-full overflow-hidden rounded [&::-webkit-progress-bar]:rounded [&::-webkit-progress-bar]:bg-gray-200 [&::-webkit-progress-value]:rounded [&::-webkit-progress-value]:bg-blue-600"
-                value={Math.min(chatStepIndex, visibleQuestions.length)}
-                max={Math.max(visibleQuestions.length, 1)}
-              />
-
-              {visibleQuestions.slice(0, chatStepIndex).map(question => (
-                <div key={`answered-${question.id}`} className="mb-4 space-y-2">
-                  <div className="mr-12 rounded-2xl rounded-bl-md bg-white px-3 py-2 text-sm text-gray-800 shadow-sm">
-                    {getAdaptivePrompt(question, sessionCategory)}
-                  </div>
-                  <div className="ml-12 rounded-2xl rounded-br-md bg-blue-600 px-3 py-2 text-sm text-white shadow-sm">
-                    {getAnswerForQuestion(question.id) || '—'}
-                  </div>
-                </div>
-              ))}
-
-              {!isChatComplete && activeQuestion && (
-                <div className="space-y-2">
-                  {isAiTyping && (
-                    <div className="mr-12 inline-flex items-center gap-1 rounded-2xl rounded-bl-md bg-white px-3 py-2 text-xs text-gray-500 shadow-sm">
-                      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-gray-400" />
-                      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-gray-400 [animation-delay:120ms]" />
-                      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-gray-400 [animation-delay:240ms]" />
-                      Planner is preparing the next question...
-                    </div>
-                  )}
-
-                  {!isAiTyping && (
-                    <div className="mr-12 rounded-2xl rounded-bl-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm">
-                      {activePrompt}
-                    </div>
-                  )}
-
-                  {activeQuestion.options && activeQuestion.options.length > 0 ? (
-                    <div className="ml-12 mt-2 flex flex-wrap gap-2">
-                      {activeQuestion.options.map(option => (
-                        <button
-                          key={`${activeQuestion.id}-${option}`}
-                          type="button"
-                          onClick={() => submitAnswerValue(option)}
-                          className="rounded-full border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:border-blue-400 hover:text-blue-700"
-                        >
-                          {option}
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="ml-12">
-                      {activeProfileTemplates.length > 0 && (
-                        <div className="mb-2">
-                          <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-gray-500">From your business profile</p>
-                          <div className="flex flex-wrap gap-2">
-                            {activeProfileTemplates.map(option => (
-                              <button
-                                key={`${activeQuestion.id}-profile-${option}`}
-                                type="button"
-                                onClick={() => submitAnswerValue(option)}
-                                className="rounded-full border border-emerald-200 bg-white px-2.5 py-1 text-xs text-emerald-700 hover:border-emerald-300"
-                              >
-                                {option}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {activeQuickReplies.length > 0 && (
-                        <div className="mb-2 flex flex-wrap gap-2">
-                          {activeQuickReplies.map(option => (
-                            <button
-                              key={`${activeQuestion.id}-quick-${option}`}
-                              type="button"
-                              onClick={() => submitAnswerValue(option)}
-                              className="rounded-full border border-blue-200 bg-white px-2.5 py-1 text-xs text-blue-700 hover:border-blue-300"
-                            >
-                              {option}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                      <div className="sticky bottom-0 rounded-2xl bg-gray-50 pb-1 pt-1">
-                        <textarea
-                          className="mt-2 min-h-20 w-full rounded-2xl rounded-br-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm"
-                          value={draftAnswer}
-                          onChange={e => setDraftAnswer(e.target.value)}
-                          placeholder={activePlaceholder}
-                          onKeyDown={e => {
-                            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-                              e.preventDefault();
-                              submitCurrentAnswer();
-                            }
-                          }}
-                        />
-                        <p className="mt-1 text-[11px] text-gray-500">Tip: press Cmd/Ctrl + Enter to continue quickly.</p>
-                        <div className="mt-3 flex items-center gap-2">
-                          <Button variant="secondary" onClick={goBackQuestion} disabled={chatStepIndex === 0}>
-                            Back
-                          </Button>
-                          <Button onClick={submitCurrentAnswer}>
-                            {chatStepIndex === visibleQuestions.length - 1 ? 'Finish intake' : 'Continue'}
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {isChatComplete && (
-                <div className="space-y-3 rounded border border-green-200 bg-green-50 p-3 text-sm text-green-900">
-                  <p className="font-semibold">Intake complete. Review before generating.</p>
-                  <div className="space-y-2">
-                    {visibleQuestions.map(question => {
-                      const answer = getAnswerForQuestion(question.id);
-                      if (!answer && !question.required) return null;
-
-                      return (
-                        <div
-                          key={`summary-${question.id}`}
-                          className="flex flex-col gap-2 rounded-lg border border-green-200 bg-white/70 px-3 py-2 md:flex-row md:items-start md:justify-between"
-                        >
-                          <div>
-                            <p className="text-xs font-semibold uppercase tracking-wide text-green-700">
-                              {getAdaptivePrompt(question, sessionCategory)}
-                            </p>
-                            <p className="mt-1 text-sm text-gray-800">{answer || '—'}</p>
-                          </div>
-                          <Button variant="ghost" onClick={() => jumpToQuestion(question.id)}>
-                            Edit
-                          </Button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Button variant="secondary" onClick={editAnswers}>Edit answers</Button>
-                    <Button onClick={reviewAnswers} disabled={isReviewConfirmed}>
-                      {isReviewConfirmed ? 'Review confirmed' : 'Looks good — unlock generate'}
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="space-y-3 rounded border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
-              <p className="font-semibold">Intake is locked for review.</p>
-              <div className="grid gap-2 md:grid-cols-2">
-                {visibleQuestions.map(question => {
-                  const answer = getAnswerForQuestion(question.id);
-                  if (!answer && !question.required) return null;
-
-                  return (
-                    <div key={`locked-${question.id}`} className="rounded-lg bg-white/80 px-3 py-2">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-blue-700">
-                        {getAdaptivePrompt(question, sessionCategory)}
-                      </p>
-                      <p className="mt-1 text-sm text-gray-800">{answer || '—'}</p>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </div>
-
-        <p className="mt-2 text-xs text-gray-500">
-          Duration target: {durationMinutes} min • Expected shot range: {expectedShotRange.min}-{expectedShotRange.max}
-        </p>
-        <p className="mt-1 text-xs text-gray-500">
-          Draft status:{' '}
-          {draftSaveStatus === 'saving' && <span className="text-blue-600">Saving…</span>}
-          {draftSaveStatus === 'saved' && <span className="text-emerald-600">Saved</span>}
-          {draftSaveStatus === 'error' && <span className="text-red-600">Unable to sync</span>}
-          {draftSaveStatus === 'idle' && <span>Idle</span>}
-        </p>
-        {!city.trim() && (
-          <p className="mt-1 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-            City is blank. Planner will fall back to your account base location/ZIP if available.
-          </p>
-        )}
-
-        <div className="sticky bottom-3 z-10 mt-4 md:hidden">
-          <div className="rounded-2xl border border-gray-200 bg-white/95 p-3 shadow-lg backdrop-blur">
-            <div className="flex flex-col gap-2">
-              {workflowStage !== 'intake' && (
-                <Button variant="secondary" onClick={() => editAnswers()}>
-                  Reopen intake
-                </Button>
-              )}
-              <Button
-                isLoading={isGenerating}
-                onClick={() => void generatePlan()}
-                disabled={!isChatComplete || !isReviewConfirmed || isGenerating}
-              >
-                {isGenerating ? 'Generating...' : plan ? 'Regenerate Plan' : 'Generate Full Plan'}
-              </Button>
-            </div>
-          </div>
-        </div>
-
-        {error && <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
-      </Card>
+      <PlannerIntakeCard
+        workflowStage={workflowStage}
+        shootType={shootType}
+        locationMode={locationMode}
+        city={city}
+        businessProfile={businessProfile}
+        isGenerating={isGenerating}
+        hasPlan={!!plan}
+        isChatComplete={isChatComplete}
+        isReviewConfirmed={isReviewConfirmed}
+        onGeneratePlan={() => void generatePlan()}
+        onEditAnswers={editAnswers}
+        resumableDraft={resumableDraft}
+        onDismissDraft={() => void dismissDraft()}
+        onResumeDraft={resumeDraft}
+        presets={PLANNER_PRESETS}
+        activePresetId={activePresetId}
+        onApplyPreset={applyPreset}
+        chatStepIndex={chatStepIndex}
+        visibleQuestions={visibleQuestions}
+        sessionCategory={sessionCategory}
+        getAdaptivePrompt={(question, category) => getAdaptivePrompt(question as ChatQuestion, category)}
+        getAnswerForQuestion={questionId => getAnswerForQuestion(questionId as ChatQuestionId)}
+        activeQuestion={activeQuestion}
+        isAiTyping={isAiTyping}
+        activePrompt={activePrompt}
+        activeProfileTemplates={activeProfileTemplates}
+        activeQuickReplies={activeQuickReplies}
+        draftAnswer={draftAnswer}
+        onDraftAnswerChange={setDraftAnswer}
+        activePlaceholder={activePlaceholder}
+        onSubmitAnswerValue={submitAnswerValue}
+        onSubmitCurrentAnswer={submitCurrentAnswer}
+        onGoBackQuestion={goBackQuestion}
+        onJumpToQuestion={questionId => jumpToQuestion(questionId as ChatQuestionId)}
+        onReviewAnswers={reviewAnswers}
+        durationMinutes={durationMinutes}
+        expectedShotRange={expectedShotRange}
+        draftSaveStatus={draftSaveStatus}
+        error={error}
+      />
 
       {isGenerating && !plan && (
         <>
