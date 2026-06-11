@@ -85,6 +85,8 @@ type ChatQuestion = {
   showWhen?: (mode: LocationMode) => boolean;
 };
 
+type SessionCategory = 'family' | 'engagement' | 'portrait' | 'event';
+
 interface LocationRefinement {
   name: string;
   kidFriendlinessScore: number;
@@ -216,6 +218,46 @@ const CHAT_QUESTIONS: ChatQuestion[] = [
   },
 ];
 
+function getSessionCategory(shootTypeValue: string): SessionCategory {
+  const value = shootTypeValue.toLowerCase();
+  if (/family|newborn|maternity|kids|children/.test(value)) return 'family';
+  if (/engagement|proposal|couple|anniversary/.test(value)) return 'engagement';
+  if (/event|wedding|party|corporate/.test(value)) return 'event';
+  return 'portrait';
+}
+
+function getAdaptivePrompt(question: ChatQuestion, sessionCategory: SessionCategory) {
+  if (question.id === 'subjectDetails') {
+    if (sessionCategory === 'family') return 'Who is being photographed (ages, family members, any kids)?';
+    if (sessionCategory === 'engagement') return 'Tell me about the couple and any important story context.';
+    if (sessionCategory === 'event') return 'Who are the key people and moments to prioritize?';
+  }
+
+  if (question.id === 'mustHaveShots') {
+    if (sessionCategory === 'family') return 'What family moments are non-negotiable?';
+    if (sessionCategory === 'engagement') return 'Any specific couple moments or ring/detail shots required?';
+    if (sessionCategory === 'event') return 'List must-capture moments, VIPs, and detail shots.';
+  }
+
+  if (question.id === 'constraints') {
+    if (sessionCategory === 'family') return 'Any family constraints (mobility, naps, attention span, stroller)?';
+    if (sessionCategory === 'engagement') return 'Any constraints (outfit changes, permit risk, privacy concerns)?';
+    if (sessionCategory === 'event') return 'Any event constraints (run-of-show timing, venue rules, access limits)?';
+  }
+
+  return question.prompt;
+}
+
+function getAdaptivePlaceholder(question: ChatQuestion, sessionCategory: SessionCategory) {
+  if (question.id === 'subjectDetails') {
+    if (sessionCategory === 'family') return '2 parents, 3 kids (ages 2, 5, 8), stroller needed';
+    if (sessionCategory === 'engagement') return 'Recently engaged couple, natural chemistry, want candid + editorial mix';
+    if (sessionCategory === 'event') return '80-person event, keynote + networking + sponsor details';
+  }
+
+  return question.placeholder || 'Type your answer...';
+}
+
 export default function PlannerPage() {
   const router = useRouter();
 
@@ -231,6 +273,7 @@ export default function PlannerPage() {
   const [providedLocations, setProvidedLocations] = useState('');
   const [chatStepIndex, setChatStepIndex] = useState(0);
   const [draftAnswer, setDraftAnswer] = useState('');
+  const [isReviewConfirmed, setIsReviewConfirmed] = useState(false);
 
   const [plan, setPlan] = useState<SessionPlan | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -240,6 +283,7 @@ export default function PlannerPage() {
 
   const durationMinutes = useMemo(() => parseDurationMinutes(duration), [duration]);
   const expectedShotRange = useMemo(() => getExpectedShotRange(durationMinutes), [durationMinutes]);
+  const sessionCategory = useMemo(() => getSessionCategory(shootType), [shootType]);
 
   const visibleQuestions = useMemo(
     () => CHAT_QUESTIONS.filter(question => !question.showWhen || question.showWhen(locationMode)),
@@ -280,6 +324,8 @@ export default function PlannerPage() {
   };
 
   const setAnswerForQuestion = (id: ChatQuestionId, value: string) => {
+    setIsReviewConfirmed(false);
+
     switch (id) {
       case 'shootType':
         setShootType(value);
@@ -317,6 +363,8 @@ export default function PlannerPage() {
   };
 
   const activeQuestion = visibleQuestions[chatStepIndex] ?? null;
+  const activePrompt = activeQuestion ? getAdaptivePrompt(activeQuestion, sessionCategory) : '';
+  const activePlaceholder = activeQuestion ? getAdaptivePlaceholder(activeQuestion, sessionCategory) : '';
 
   useEffect(() => {
     if (!activeQuestion) {
@@ -609,7 +657,19 @@ export default function PlannerPage() {
 
   const goBackQuestion = () => {
     setError(null);
+    setIsReviewConfirmed(false);
     setChatStepIndex(prev => Math.max(0, prev - 1));
+  };
+
+  const reviewAnswers = () => {
+    setError(null);
+    setIsReviewConfirmed(true);
+  };
+
+  const editAnswers = () => {
+    setError(null);
+    setIsReviewConfirmed(false);
+    setChatStepIndex(Math.max(0, visibleQuestions.length - 1));
   };
 
   return (
@@ -620,7 +680,11 @@ export default function PlannerPage() {
             <h3 className="text-xl font-semibold text-gray-900">AI Planning Chat</h3>
             <p className="text-sm text-gray-600">Answer a quick chat questionnaire, then generate a full plan.</p>
           </div>
-          <Button isLoading={isGenerating} onClick={() => void generatePlan()} disabled={!isChatComplete || isGenerating}>
+          <Button
+            isLoading={isGenerating}
+            onClick={() => void generatePlan()}
+            disabled={!isChatComplete || !isReviewConfirmed || isGenerating}
+          >
             {isGenerating ? 'Generating...' : 'Generate Full Plan'}
           </Button>
         </div>
@@ -638,18 +702,24 @@ export default function PlannerPage() {
           />
 
           {visibleQuestions.slice(0, chatStepIndex).map(question => (
-            <div key={`answered-${question.id}`} className="mb-3">
-              <p className="text-sm font-medium text-gray-800">AI: {question.prompt}</p>
-              <p className="mt-1 rounded bg-white px-3 py-2 text-sm text-gray-700">You: {getAnswerForQuestion(question.id) || '—'}</p>
+            <div key={`answered-${question.id}`} className="mb-4 space-y-2">
+              <div className="mr-12 rounded-2xl rounded-bl-md bg-white px-3 py-2 text-sm text-gray-800 shadow-sm">
+                {getAdaptivePrompt(question, sessionCategory)}
+              </div>
+              <div className="ml-12 rounded-2xl rounded-br-md bg-blue-600 px-3 py-2 text-sm text-white shadow-sm">
+                {getAnswerForQuestion(question.id) || '—'}
+              </div>
             </div>
           ))}
 
           {!isChatComplete && activeQuestion && (
-            <div className="rounded bg-white p-3">
-              <p className="text-sm font-semibold text-gray-900">AI: {activeQuestion.prompt}</p>
+            <div className="space-y-2">
+              <div className="mr-12 rounded-2xl rounded-bl-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm">
+                {activePrompt}
+              </div>
 
               {activeQuestion.options && activeQuestion.options.length > 0 ? (
-                <div className="mt-2 flex flex-wrap gap-2">
+                <div className="ml-12 mt-2 flex flex-wrap gap-2">
                   {activeQuestion.options.map(option => (
                     <button
                       key={`${activeQuestion.id}-${option}`}
@@ -669,12 +739,14 @@ export default function PlannerPage() {
                   ))}
                 </div>
               ) : (
-                <textarea
-                  className="mt-2 min-h-20 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                  value={draftAnswer}
-                  onChange={e => setDraftAnswer(e.target.value)}
-                  placeholder={activeQuestion.placeholder || 'Type your answer...'}
-                />
+                <div className="ml-12">
+                  <textarea
+                    className="mt-2 min-h-20 w-full rounded-2xl rounded-br-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm"
+                    value={draftAnswer}
+                    onChange={e => setDraftAnswer(e.target.value)}
+                    placeholder={activePlaceholder}
+                  />
+                </div>
               )}
 
               <div className="mt-3 flex items-center gap-2">
@@ -689,8 +761,25 @@ export default function PlannerPage() {
           )}
 
           {isChatComplete && (
-            <div className="rounded bg-green-50 p-3 text-sm text-green-800">
-              Intake complete. Generate the plan whenever you are ready.
+            <div className="space-y-3 rounded border border-green-200 bg-green-50 p-3 text-sm text-green-900">
+              <p className="font-semibold">Intake complete. Review before generating.</p>
+              <div className="grid gap-2 md:grid-cols-2">
+                <p><span className="font-medium">Shoot type:</span> {shootType}</p>
+                <p><span className="font-medium">Location mode:</span> {locationMode === 'use-provided' ? 'Using provided locations' : 'Find locations for me'}</p>
+                {locationMode === 'find-locations' ? (
+                  <p><span className="font-medium">City:</span> {city || 'Account fallback'}</p>
+                ) : (
+                  <p className="md:col-span-2"><span className="font-medium">Provided locations:</span> {providedLocations || 'None provided'}</p>
+                )}
+                <p><span className="font-medium">Duration:</span> {duration}</p>
+                <p><span className="font-medium">Mood:</span> {mood}</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="secondary" onClick={editAnswers}>Edit answers</Button>
+                <Button onClick={reviewAnswers} disabled={isReviewConfirmed}>
+                  {isReviewConfirmed ? 'Review confirmed' : 'Looks good — unlock generate'}
+                </Button>
+              </div>
             </div>
           )}
         </div>
