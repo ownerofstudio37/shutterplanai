@@ -10,9 +10,9 @@
 
 ## Next: Monetization
 
-- [ ] Add planner usage limits.
-- [ ] Add subscription gates for premium planning/export workflows.
-- [ ] Add upgrade prompts that explain the value of paid tiers.
+- [x] Add planner usage limits.
+- [x] Add subscription gates for premium planning/export workflows.
+- [x] Add upgrade prompts that explain the value of paid tiers.
 
 ## Next: Client Guide Polish
 

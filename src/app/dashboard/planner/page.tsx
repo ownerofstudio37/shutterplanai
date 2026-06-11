@@ -18,6 +18,10 @@ import { MultiDaySessionConfig } from '@/components/planner/MultiDaySessionConfi
 import { RefinementIncentiveBanner } from '@/components/planner/RefinementIncentiveBanner';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import {
+  hasReachedLimit,
+  type BillingUsageSummary,
+} from '@/lib/billing/planLimits';
+import {
   type SessionPlan,
   type SessionPlanLocation,
   type SessionPlanTimelineItem,
@@ -86,6 +90,7 @@ export default function PlannerPage() {
   const [draftAnswer, setDraftAnswer] = useState('');
   const [isReviewConfirmed, setIsReviewConfirmed] = useState(false);
   const [businessProfile, setBusinessProfile] = useState<BusinessProfile | null>(null);
+  const [billingUsage, setBillingUsage] = useState<BillingUsageSummary | null>(null);
   const [activeReviewTab, setActiveReviewTab] = useState<ReviewTab>('map');
   const [locationVotes, setLocationVotes] = useState<Record<string, LocationVote>>({});
   const [preferredVenueBucket, setPreferredVenueBucket] = useState<string | null>(null);
@@ -128,6 +133,13 @@ export default function PlannerPage() {
   const durationMinutes = useMemo(() => parseDurationMinutes(duration), [duration]);
   const expectedShotRange = useMemo(() => getExpectedShotRange(durationMinutes), [durationMinutes]);
   const sessionCategory = useMemo(() => getSessionCategory(shootType), [shootType]);
+  const isFreeTier = billingUsage?.tier !== 'pro';
+  const hasReachedPlannerLimit = billingUsage
+    ? hasReachedLimit(billingUsage.usage.plannerGenerations, billingUsage.limits.plannerGenerations)
+    : false;
+  const hasReachedShareLimit = billingUsage
+    ? hasReachedLimit(billingUsage.usage.shareLinks, billingUsage.limits.shareLinks)
+    : false;
 
   const visibleQuestions = useMemo(
     () => CHAT_QUESTIONS.filter(question => !question.showWhen || question.showWhen(locationMode, sessionCategory)),
@@ -332,6 +344,22 @@ export default function PlannerPage() {
     }
   };
 
+  const loadBillingUsage = useCallback(async () => {
+    try {
+      const response = await fetch('/api/account/usage', {
+        headers: {
+          ...getAuthHeader(),
+        },
+      });
+      const result = (await response.json()) as { success?: boolean; data?: BillingUsageSummary };
+      if (response.ok && result.success && result.data) {
+        setBillingUsage(result.data);
+      }
+    } catch {
+      // Billing usage should not block planning UI.
+    }
+  }, []);
+
   useEffect(() => {
     if (!activeQuestion) {
       setDraftAnswer('');
@@ -368,8 +396,11 @@ export default function PlannerPage() {
       }
     };
 
-    void loadBusinessProfile();
-  }, []);
+    queueMicrotask(() => {
+      void loadBusinessProfile();
+      void loadBillingUsage();
+    });
+  }, [loadBillingUsage]);
 
   useEffect(() => {
     const readStoredDraft = () => {
@@ -683,6 +714,18 @@ export default function PlannerPage() {
     setIsGenerating(true);
     setError(null);
 
+    if (hasReachedPlannerLimit) {
+      setError('You have used all 3 free AI plans. Upgrade to Pro for unlimited shoot planning.');
+      setIsGenerating(false);
+      return;
+    }
+
+    if (multiDay && isFreeTier) {
+      setError('Multi-day planning is included with Pro.');
+      setIsGenerating(false);
+      return;
+    }
+
     const providedLocationList = providedLocations
       .split(/\n|,/)
       .map(item => item.trim())
@@ -763,6 +806,9 @@ export default function PlannerPage() {
 
       const result = await response.json();
       if (!result.success) {
+        if (result.usage) {
+          setBillingUsage(result.usage as BillingUsageSummary);
+        }
         setError(result.error ?? 'Failed to generate session plan');
         return;
       }
@@ -774,12 +820,15 @@ export default function PlannerPage() {
       setExcludedVenueBuckets([]);
       setSelectedReviewLocationName(null);
       setPlan(result.data ?? null);
-      void trackPlannerEvent('planner_generate_success', {
-        sessionCategory,
-        locationMode,
-        locationCount: result.data?.locationSuggestions?.length ?? 0,
-        shotCount: result.data?.shotList?.length ?? 0,
-      });
+      void (async () => {
+        await trackPlannerEvent('planner_generate_success', {
+          sessionCategory,
+          locationMode,
+          locationCount: result.data?.locationSuggestions?.length ?? 0,
+          shotCount: result.data?.shotList?.length ?? 0,
+        });
+        await loadBillingUsage();
+      })();
     } catch {
       setError('Failed to generate session plan');
       void trackPlannerEvent('planner_generate_failed', {
@@ -1448,8 +1497,15 @@ export default function PlannerPage() {
   const createShareLink = async () => {
     if (!plan) return;
 
+    if (hasReachedShareLimit) {
+      setShareLinkError('You have used your free client guide link. Upgrade to Pro for unlimited client exports.');
+      return;
+    }
+
     const sharePasswordInput = window.prompt(
-      'Optional: set a password for this share link (leave blank for no password).'
+      isFreeTier
+        ? 'Free client links expire after 7 days. Leave this blank to create your included link.'
+        : 'Optional: set a password for this share link (leave blank for no password).'
     );
 
     if (sharePasswordInput === null) {
@@ -1475,7 +1531,8 @@ export default function PlannerPage() {
             mood,
             shootDate,
           },
-          sharePassword: sharePasswordInput.trim() || undefined,
+          sharePassword: isFreeTier ? undefined : sharePasswordInput.trim() || undefined,
+          expiresInDays: isFreeTier ? 7 : 30,
         }),
       });
 
@@ -1485,8 +1542,12 @@ export default function PlannerPage() {
         shareToken?: string;
         passwordProtected?: boolean;
         error?: string;
+        usage?: BillingUsageSummary;
       };
       if (!response.ok || !result.success || !result.shareUrl) {
+        if (result.usage) {
+          setBillingUsage(result.usage);
+        }
         setShareLinkError(result.error || 'Failed to create share link.');
         return;
       }
@@ -1494,6 +1555,7 @@ export default function PlannerPage() {
       setShareUrl(result.shareUrl);
       setShareToken(result.shareToken || '');
       void trackPlannerEvent('planner_share_link_created');
+      void loadBillingUsage();
     } catch {
       setShareLinkError('Failed to create share link.');
     } finally {
@@ -1557,6 +1619,48 @@ export default function PlannerPage() {
   return (
     <div className="space-y-6">
       <PlannerWorkflowStages stages={workflowStages} currentStage={workflowStage} hasPlan={!!plan} />
+
+      {billingUsage && isFreeTier && (
+        <Card className="border border-[#d8d2c8] bg-[#faf9f6] shadow-sm">
+          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7c6f64]">Free plan usage</p>
+              <h2 className="mt-2 text-xl font-semibold text-[#1f2933]">Plan freely, upgrade when ShutterPlan becomes part of your workflow.</h2>
+              <p className="mt-2 text-sm leading-6 text-[#5f6b76]">
+                Free includes {billingUsage.limits.plannerGenerations} AI plans and {billingUsage.limits.shareLinks} client guide link.
+                Pro unlocks unlimited planning, protected guide links, longer expirations, and multi-day sessions.
+              </p>
+            </div>
+            <div className="grid min-w-72 gap-3 sm:grid-cols-2">
+              <div className="rounded-lg border border-[#d8d2c8] bg-white p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#7c6f64]">AI plans</p>
+                <p className="mt-2 text-2xl font-semibold text-[#1f2933]">
+                  {billingUsage.usage.plannerGenerations}/{billingUsage.limits.plannerGenerations}
+                </p>
+                <p className="mt-1 text-xs text-[#5f6b76]">
+                  {billingUsage.remaining.plannerGenerations} remaining
+                </p>
+              </div>
+              <div className="rounded-lg border border-[#d8d2c8] bg-white p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#7c6f64]">Client links</p>
+                <p className="mt-2 text-2xl font-semibold text-[#1f2933]">
+                  {billingUsage.usage.shareLinks}/{billingUsage.limits.shareLinks}
+                </p>
+                <p className="mt-1 text-xs text-[#5f6b76]">
+                  {billingUsage.remaining.shareLinks} remaining
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="mt-4 grid gap-2 md:grid-cols-3">
+            {billingUsage.upgradeValueProps.map(value => (
+              <div key={value} className="rounded-lg border border-[#e4ded5] bg-white px-4 py-3 text-sm font-medium text-[#1f2933]">
+                {value}
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {workflowStage === 'intake' && (
         <SessionTemplatePanel

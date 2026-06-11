@@ -3,6 +3,8 @@ import { requireAuth } from '@/lib/auth/serverAuth';
 import { createSupabaseAdminClient } from '@/lib/supabase/server';
 import { BusinessContext, generateSessionPlan, SessionPlan, SessionPlanLocation } from '@/lib/ai/gemini';
 import { geocodeLocations, geocodePlace, searchLocationCandidates } from '@/lib/geo/geocode';
+import { getBillingUsageForUser } from '@/lib/billing/serverUsage';
+import { hasReachedLimit } from '@/lib/billing/planLimits';
 
 function toTrimmedOrUndefined(value: unknown) {
   if (typeof value !== 'string') return undefined;
@@ -157,9 +159,33 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: auth.error }, { status: auth.status });
     }
 
+    const billingUsage = await getBillingUsageForUser(auth.userId);
+    if (hasReachedLimit(billingUsage.usage.plannerGenerations, billingUsage.limits.plannerGenerations)) {
+      return NextResponse.json(
+        {
+          success: false,
+          code: 'PLAN_LIMIT_REACHED',
+          error: 'You have used all 3 free AI plans. Upgrade to Pro for unlimited shoot planning.',
+          usage: billingUsage,
+        },
+        { status: 402 }
+      );
+    }
+
     const payload = await request.json();
+    if (payload?.multiDay && !billingUsage.limits.multiDayPlanning) {
+      return NextResponse.json(
+        {
+          success: false,
+          code: 'PREMIUM_FEATURE_REQUIRED',
+          error: 'Multi-day planning is included with Pro.',
+          usage: billingUsage,
+        },
+        { status: 402 }
+      );
+    }
+
     const shootType = typeof payload.shootType === 'string' ? payload.shootType : '';
-    const isFamilySession = /family|newborn|maternity|kids|children/i.test(shootType);
     const sessionCategory = getSessionCategory(shootType);
     const businessContext = await getBusinessContextForUser(auth.userId);
     const locationMode = payload?.locationMode === 'use-provided' ? 'use-provided' : 'find-locations';

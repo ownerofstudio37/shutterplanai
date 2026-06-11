@@ -1,8 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import crypto from 'crypto';
 import { requireAuth } from '@/lib/auth/serverAuth';
 import { createSupabaseAdminClient } from '@/lib/supabase/server';
 import { apiFailure, apiSuccess, jsonWithApiMeta, startApiRequest } from '@/lib/utils/apiObservability';
+import { getBillingUsageForUser } from '@/lib/billing/serverUsage';
+import { hasReachedLimit } from '@/lib/billing/planLimits';
 
 const supabase = createSupabaseAdminClient();
 
@@ -44,11 +46,41 @@ export async function POST(request: NextRequest) {
       return jsonWithApiMeta(requestContext, { success: false, error: 'plan is required' }, { status: 400 });
     }
 
+    const billingUsage = await getBillingUsageForUser(authResult.userId);
+    if (hasReachedLimit(billingUsage.usage.shareLinks, billingUsage.limits.shareLinks)) {
+      apiFailure(requestContext, 402, 'Share link limit reached', { stage: 'billing_gate' });
+      return jsonWithApiMeta(
+        requestContext,
+        {
+          success: false,
+          code: 'PLAN_LIMIT_REACHED',
+          error: 'You have used your free client guide link. Upgrade to Pro for unlimited client exports.',
+          usage: billingUsage,
+        },
+        { status: 402 }
+      );
+    }
+
+    const maxExpiryDays = billingUsage.limits.maxShareExpiryDays ?? 90;
     const normalizedDays = Number.isFinite(expiresInDays)
-      ? Math.min(90, Math.max(1, Math.round(expiresInDays as number)))
-      : 30;
+      ? Math.min(maxExpiryDays, Math.max(1, Math.round(expiresInDays as number)))
+      : Math.min(30, maxExpiryDays);
 
     const normalizedPassword = typeof sharePassword === 'string' ? sharePassword.trim() : '';
+    if (normalizedPassword && !billingUsage.limits.passwordProtectedLinks) {
+      apiFailure(requestContext, 402, 'Password-protected exports require Pro', { stage: 'billing_gate' });
+      return jsonWithApiMeta(
+        requestContext,
+        {
+          success: false,
+          code: 'PREMIUM_FEATURE_REQUIRED',
+          error: 'Password-protected client links are included with Pro.',
+          usage: billingUsage,
+        },
+        { status: 402 }
+      );
+    }
+
     if (normalizedPassword && normalizedPassword.length < 6) {
       apiFailure(requestContext, 400, 'Share password must be at least 6 characters', { stage: 'validation' });
       return jsonWithApiMeta(
