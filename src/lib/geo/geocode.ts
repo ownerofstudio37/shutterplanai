@@ -727,11 +727,28 @@ export async function searchLocationCandidates(input: SearchCandidateInput): Pro
       const distancePenalty = distanceKm == null ? 0 : distanceKm * 0.12;
       const score = entry.relevanceScore * 10 + importance * 8 + poiBoost + fitScore * 2 - lowValuePenalty - distancePenalty;
 
+      // Continuous confidence model (instead of coarse buckets) so results
+      // don't collapse to the same score for most locations.
+      const importanceConfidence = Math.max(1, Math.min(10, importance * 10));
+      const proximityConfidence = distanceKm == null ? 5 : Math.max(1, 10 - distanceKm / 12);
+      const fitConfidence = Math.max(1, Math.min(10, fitScore / 7.5));
+      const mentionConfidence = Math.min(10, webMentionScoreRaw * 3);
+      const sourceConfidenceBoost =
+        entry.query.startsWith('overpass:')
+          ? 1.0
+          : webMentionScoreRaw > 0
+            ? 0.8
+            : 0.4;
+
       const confidenceScore = Math.max(
         1,
         Math.min(
           10,
-          4 + (importance > 0.4 ? 2 : 0) + (webMentionScoreRaw > 0 ? 2 : 0) + (venueBucket !== 'other' ? 1 : 0)
+          importanceConfidence * 0.34 +
+            proximityConfidence * 0.24 +
+            fitConfidence * 0.28 +
+            mentionConfidence * 0.10 +
+            sourceConfidenceBoost
         )
       );
 
