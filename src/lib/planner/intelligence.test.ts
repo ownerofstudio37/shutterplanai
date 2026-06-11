@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getForecastIntelligence, optimizeRouteOrder, scoreLocationLogistics } from './intelligence';
+import { calculateGoldenHours, getForecastIntelligence, optimizeRouteOrder, scoreLocationLogistics } from './intelligence';
 
 describe('planner intelligence utilities', () => {
   it('optimizes route order and keeps all location indexes', () => {
@@ -71,7 +71,7 @@ describe('planner intelligence utilities', () => {
           JSON.stringify({
             daily: {
               sunrise: ['2026-06-11T11:30:00Z'],
-              sunset: ['2026-06-11T01:30:00Z'],
+              sunset: ['2026-06-11T23:30:00Z'],
             },
             hourly: {
               time: ['2026-06-11T18:00:00Z', '2026-06-11T19:00:00Z', '2026-06-11T20:00:00Z'],
@@ -103,5 +103,47 @@ describe('planner intelligence utilities', () => {
 
     expect(forecast.weather.provider).toBe('fallback');
     expect(forecast.confidence.windows.length).toBe(1);
+  });
+});
+
+describe('getForecastIntelligence coordinate guards', () => {
+  it('falls back when lat/lng are (0, 0)', async () => {
+    const fetchMock = async () => new Response('should not be called', { status: 200 });
+    const forecast = await getForecastIntelligence(
+      { latitude: 0, longitude: 0, date: new Date('2026-06-11T18:00:00.000Z') },
+      fetchMock
+    );
+    expect(forecast.weather.provider).toBe('fallback');
+  });
+
+  it('falls back when lat/lng are NaN', async () => {
+    const fetchMock = async () => new Response('should not be called', { status: 200 });
+    const forecast = await getForecastIntelligence(
+      { latitude: NaN, longitude: NaN, date: new Date('2026-06-11T18:00:00.000Z') },
+      fetchMock
+    );
+    expect(forecast.weather.provider).toBe('fallback');
+  });
+});
+
+describe('calculateGoldenHours', () => {
+  it('produces sunrise < goldenHourStart < sunset for a mid-latitude summer date (Dallas)', () => {
+    const result = calculateGoldenHours(32.78, -96.8, new Date('2026-06-11T00:00:00Z'));
+    expect(result.sunrise.getTime()).toBeLessThan(result.goldenHourStart.getTime());
+    expect(result.goldenHourStart.getTime()).toBeLessThan(result.goldenHourEnd.getTime());
+    expect(result.goldenHourEnd.getTime()).toEqual(result.sunset.getTime());
+    // Long summer day in Dallas: >12h daylight
+    const daylightHours = (result.sunset.getTime() - result.sunrise.getTime()) / 3_600_000;
+    expect(daylightHours).toBeGreaterThan(12);
+    expect(daylightHours).toBeLessThan(16);
+  });
+
+  it('produces shorter days for winter solstice (London)', () => {
+    const result = calculateGoldenHours(51.5, -0.1, new Date('2026-12-21T00:00:00Z'));
+    expect(result.sunrise.getTime()).toBeLessThan(result.sunset.getTime());
+    // Winter solstice in London: ~8h daylight
+    const daylightHours = (result.sunset.getTime() - result.sunrise.getTime()) / 3_600_000;
+    expect(daylightHours).toBeGreaterThan(6);
+    expect(daylightHours).toBeLessThan(10);
   });
 });

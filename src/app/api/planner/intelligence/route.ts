@@ -1,5 +1,5 @@
-import { NextResponse } from 'next/server';
 import { getForecastIntelligence, scoreLocationLogistics, optimizeRouteOrder } from '@/lib/planner/intelligence';
+import { sanitizeCoordinates } from '@/lib/planner/plannerUtils';
 import { apiFailure, apiSuccess, jsonWithApiMeta, startApiRequest } from '@/lib/utils/apiObservability';
 
 type IntelligenceLocation = {
@@ -15,8 +15,8 @@ type IntelligenceLocation = {
 };
 
 type IntelligenceRequestBody = {
-  latitude?: number;
-  longitude?: number;
+  latitude?: number | null;
+  longitude?: number | null;
   date: string;
   durationMinutes?: number;
   locations: IntelligenceLocation[];
@@ -28,11 +28,12 @@ export async function POST(request: Request) {
   try {
     const { latitude, longitude, date, durationMinutes, locations, sessionCategory } =
       (await request.json()) as IntelligenceRequestBody;
+    const coordinates = sanitizeCoordinates(latitude, longitude);
 
     // Weather + golden hours from provider-backed forecast
     const forecast = await getForecastIntelligence({
-      latitude: Number(latitude || 0),
-      longitude: Number(longitude || 0),
+      latitude: coordinates.latitude ?? 0,
+      longitude: coordinates.longitude ?? 0,
       date: new Date(date),
       durationMinutes: Number(durationMinutes || 90),
     });
@@ -44,7 +45,7 @@ export async function POST(request: Request) {
 
     // Route optimization
     const optimizedIndices = optimizeRouteOrder(
-      locations.map((loc: any, i: number) => ({
+      locations.map((loc, i) => ({
         ...loc,
         index: i,
       })),

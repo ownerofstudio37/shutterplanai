@@ -62,24 +62,45 @@ export function calculateGoldenHours(latitude: number, longitude: number, date: 
   goldenHourStart: Date;
   goldenHourEnd: Date;
 } {
-  // Simplified calculation - in production use suncalc or similar library
-  
-  
-  // Sunrise/sunset approximation (±6 hours from solar noon, simplified)
-  const sunriseOffset = 6 * 60 * 60 * 1000;
-  const sunsetOffset = 6 * 60 * 60 * 1000;
-  
-  const sunrise = new Date(date.getTime() - sunriseOffset);
-  const sunset = new Date(date.getTime() + sunsetOffset);
-  
-  // Golden hour is ~60 min before sunset and ~60 min after sunrise
-  const goldenHourStart = new Date(sunset.getTime() - 60 * 60 * 1000);
-  const goldenHourEnd = new Date(sunset.getTime());
-  
+  // Day of year (1–366)
+  const jan1 = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  const dayOfYear = Math.floor((date.getTime() - jan1.getTime()) / 86400000) + 1;
+
+  // Solar declination (degrees) — Earth's axial tilt effect on day length
+  const declination = -23.45 * Math.cos((2 * Math.PI * (dayOfYear + 10)) / 365);
+  const decRad = (declination * Math.PI) / 180;
+
+  // Clamp latitude to avoid tan(±90°) = ±Infinity
+  const latRad = (Math.max(-89, Math.min(89, latitude)) * Math.PI) / 180;
+
+  // Hour angle at horizon — half the daylight period in hours
+  const cosH = -Math.tan(latRad) * Math.tan(decRad);
+  const halfDay =
+    Number.isFinite(cosH) && cosH >= -1 && cosH <= 1
+      ? (Math.acos(cosH) * 180) / Math.PI / 15
+      : 12; // polar day/night fallback
+
+  // Solar noon in UTC ≈ 12:00 minus the longitude's time offset
+  const solarNoonUtcH = 12 - longitude / 15;
+
+  const baseMidnight = new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
+  );
+
+  const sunriseMs = baseMidnight.getTime() + Math.round((solarNoonUtcH - halfDay) * 3_600_000);
+  const sunsetMs = baseMidnight.getTime() + Math.round((solarNoonUtcH + halfDay) * 3_600_000);
+
+  const sunrise = new Date(sunriseMs);
+  const sunset = new Date(sunsetMs);
+  const goldenHourStart = new Date(sunsetMs - 3_600_000); // 60 min before sunset
+  const goldenHourEnd = new Date(sunsetMs);
+
   return { sunrise, sunset, goldenHourStart, goldenHourEnd };
 }
 
 type OpenMeteoResponse = {
+  /** Seconds offset from UTC at the requested location (e.g. -18000 for UTC-5). */
+  utc_offset_seconds?: number;
   daily?: {
     sunrise?: string[];
     sunset?: string[];
@@ -211,6 +232,12 @@ export async function getForecastIntelligence(
   }
 
   try {
+    // (0, 0) almost certainly means "no coordinates available", not a shoot in the
+    // Atlantic Ocean — skip the API call and fall back with the location-aware formula.
+    if (latitude === 0 && longitude === 0) {
+      return createFallbackForecast(date);
+    }
+
     const endpoint = new URL('https://api.open-meteo.com/v1/forecast');
     endpoint.searchParams.set('latitude', String(latitude));
     endpoint.searchParams.set('longitude', String(longitude));
@@ -233,8 +260,21 @@ export async function getForecastIntelligence(
     }
 
     const data = (await response.json()) as OpenMeteoResponse;
-    const sunrise = data.daily?.sunrise?.[0] ? new Date(data.daily.sunrise[0]) : null;
-    const sunset = data.daily?.sunset?.[0] ? new Date(data.daily.sunset[0]) : null;
+
+    // Open-Meteo returns sunrise/sunset as local-time strings without a timezone suffix
+    // (e.g. "2026-06-11T06:15") when timezone=auto. JavaScript treats these as UTC on
+    // the Node.js server. We correct to real UTC using utc_offset_seconds from the
+    // response: real UTC = (string parsed as UTC) - utcOffsetMs.
+    const utcOffsetMs = (data.utc_offset_seconds ?? 0) * 1000;
+    const parseLocalTime = (str: string): Date | null => {
+      if (!str) return null;
+      const d = new Date(str.endsWith('Z') ? str : str + 'Z');
+      if (Number.isNaN(d.getTime())) return null;
+      return new Date(d.getTime() - utcOffsetMs);
+    };
+
+    const sunrise = data.daily?.sunrise?.[0] ? parseLocalTime(data.daily.sunrise[0]) : null;
+    const sunset = data.daily?.sunset?.[0] ? parseLocalTime(data.daily.sunset[0]) : null;
 
     if (!sunrise || !sunset || Number.isNaN(sunrise.getTime()) || Number.isNaN(sunset.getTime())) {
       return createFallbackForecast(date);

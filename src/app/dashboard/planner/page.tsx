@@ -522,8 +522,11 @@ export default function PlannerPage() {
             ...getAuthHeader(),
           },
           body: JSON.stringify({
-            latitude: anchor?.latitude ?? 0,
-            longitude: anchor?.longitude ?? 0,
+            // Pass null when no geocoded location is available — the server guard
+            // will return a location-aware fallback instead of calling Open-Meteo
+            // with (0, 0) which maps to the Gulf of Guinea.
+            latitude: anchor?.latitude ?? null,
+            longitude: anchor?.longitude ?? null,
             date: shootDate || new Date().toISOString(),
             durationMinutes,
             sessionCategory,
