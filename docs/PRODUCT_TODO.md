@@ -75,11 +75,11 @@
 
 ## Next: Field Execution Mode
 
-- [ ] Build a mobile shoot-day checklist that lets photographers mark timeline items and shots complete.
-- [ ] Add variance tracking for planned vs actual time at each location.
-- [ ] Add "running late" catch-up suggestions from the planned timeline.
-- [ ] Add quick notes per location and per shot during execution.
-- [ ] Add offline-friendly local progress state with sync when the connection returns.
+- [x] Build a mobile shoot-day checklist that lets photographers mark timeline items and shots complete.
+- [x] Add variance tracking for planned vs actual time at each location.
+- [x] Add "running late" catch-up suggestions from the planned timeline.
+- [x] Add quick notes per location and per shot during execution.
+- [x] Add offline-friendly local progress state with sync when the connection returns.
 
 ## Next: Venue and Permit Intelligence
 

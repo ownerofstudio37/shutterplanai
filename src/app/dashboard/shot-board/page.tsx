@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { FieldExecutionPanel } from '@/components/field/FieldExecutionPanel';
 import { tokenUtils } from '@/lib/auth';
 
 interface ProjectItem {
@@ -25,7 +26,7 @@ interface ShotItem {
   project_title?: string;
   title: string;
   description: string;
-  location?: string;
+  location?: string | null;
   planned_time?: string | null;
   notes?: string;
   image_url?: string | null;
@@ -152,6 +153,12 @@ export default function ShotBoardPage() {
     }),
     [projectShots]
   );
+
+  const handleShotSynced = (updatedShot: Partial<ShotItem> & { id: string }) => {
+    setShots(current =>
+      current.map(shot => (shot.id === updatedShot.id ? { ...shot, ...updatedShot } : shot))
+    );
+  };
 
   return (
     <div className="shot-board-print space-y-6">
@@ -286,9 +293,17 @@ export default function ShotBoardPage() {
               <p className="text-[#5f6b76]">No shots in this project yet. Add planned shots to generate a board.</p>
             </Card>
           ) : (
-            <div className="grid gap-4 lg:grid-cols-2">
-              {projectShots.map((shot, index) => (
-                <Card key={shot.id} className="print-card border border-[#d8d2c8] bg-white shadow-sm">
+            <>
+              <FieldExecutionPanel
+                projectId={selectedProject.id}
+                projectTitle={selectedProject.title}
+                shots={projectShots}
+                onShotSynced={handleShotSynced}
+              />
+
+              <div className="grid gap-4 lg:grid-cols-2">
+                {projectShots.map((shot, index) => (
+                  <Card key={shot.id} className="print-card border border-[#d8d2c8] bg-white shadow-sm">
                   <div className="space-y-4">
                     {shot.image_url && (
                       <img
@@ -372,9 +387,10 @@ export default function ShotBoardPage() {
                       <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-[#5f6b76]">{shot.notes || 'No notes yet.'}</p>
                     </div>
                   </div>
-                </Card>
-              ))}
-            </div>
+                  </Card>
+                ))}
+              </div>
+            </>
           )}
         </div>
       )}
