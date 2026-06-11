@@ -386,15 +386,84 @@ export function scoreLocationLogistics(
 }
 
 /**
- * Optimize route order using greedy nearest-neighbor TSP approximation
+ * Optimize route order with time-window-aware nearest neighbor and sparse-coordinate fallback.
  */
 export function optimizeRouteOrder(
-  locations: Array<{ name: string; latitude: number | null; longitude: number | null; index: number }>
+  locations: Array<{
+    name: string;
+    latitude: number | null;
+    longitude: number | null;
+    index: number;
+    preferredTimeWindow?: string | null;
+  }>,
+  options?: {
+    shootStartIso?: string;
+    durationMinutes?: number;
+    averageSpeedMph?: number;
+    minCoordinateCoverage?: number;
+  }
 ): number[] {
+  const originalOrder = locations.map(location => location.index);
   const valid = locations.filter(loc => loc.latitude != null && loc.longitude != null);
-  if (valid.length <= 2) {
+  if (valid.length <= 1) {
+    return originalOrder;
+  }
+
+  const minCoordinateCoverage = options?.minCoordinateCoverage ?? 0.6;
+  if (valid.length / Math.max(locations.length, 1) < minCoordinateCoverage) {
+    return originalOrder;
+  }
+
+  const shootStart = options?.shootStartIso ? new Date(options.shootStartIso) : new Date();
+  if (Number.isNaN(shootStart.getTime())) {
     return locations.map(l => l.index);
   }
+
+  const durationMinutes = Math.max(20, Math.min(240, options?.durationMinutes ?? 90));
+  const dwellMinutes = Math.max(8, Math.round(durationMinutes / Math.max(valid.length, 1)));
+  const averageSpeedMph = Math.max(15, options?.averageSpeedMph ?? 25);
+
+  const toWindow = (windowLabel?: string | null) => {
+    if (!windowLabel) return null;
+
+    const text = windowLabel.toLowerCase();
+    const at = (hours: number, minutes = 0) => {
+      const value = new Date(shootStart);
+      value.setHours(hours, minutes, 0, 0);
+      return value;
+    };
+
+    const explicitRange = text.match(
+      /(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:-|to)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/
+    );
+
+    const to24 = (hourRaw: string, minuteRaw: string | undefined, amPmRaw: string | undefined, fallbackAmPm: 'am' | 'pm') => {
+      let hour = Number(hourRaw);
+      const minute = Number(minuteRaw ?? '0');
+      const amPm = (amPmRaw as 'am' | 'pm' | undefined) ?? fallbackAmPm;
+      if (amPm === 'pm' && hour < 12) hour += 12;
+      if (amPm === 'am' && hour === 12) hour = 0;
+      return { hour, minute };
+    };
+
+    if (explicitRange) {
+      const left = to24(explicitRange[1], explicitRange[2], explicitRange[3], 'am');
+      const right = to24(explicitRange[4], explicitRange[5], explicitRange[6], explicitRange[3] === 'pm' ? 'pm' : 'am');
+      return {
+        start: at(left.hour, left.minute),
+        end: at(right.hour, right.minute),
+      };
+    }
+
+    if (text.includes('morning') || text.includes('sunrise')) return { start: at(6), end: at(11) };
+    if (text.includes('midday') || text.includes('noon')) return { start: at(11), end: at(14) };
+    if (text.includes('afternoon')) return { start: at(14), end: at(17) };
+    if (text.includes('golden') || text.includes('sunset') || text.includes('dusk') || text.includes('evening')) {
+      return { start: at(17), end: at(20) };
+    }
+
+    return null;
+  };
 
   // Haversine distance
   const distance = (lat1: number, lng1: number, lat2: number, lng2: number) => {
@@ -405,31 +474,83 @@ export function optimizeRouteOrder(
     return 2 * R * Math.asin(Math.sqrt(a));
   };
 
-  // Greedy nearest neighbor starting from first
+  const travelMinutes = (
+    from: { latitude: number | null; longitude: number | null } | null,
+    to: { latitude: number | null; longitude: number | null }
+  ) => {
+    if (!from || from.latitude == null || from.longitude == null || to.latitude == null || to.longitude == null) {
+      return 0;
+    }
+
+    const miles = distance(from.latitude, from.longitude, to.latitude, to.longitude);
+    const drive = (miles / averageSpeedMph) * 60;
+    return drive + 6; // parking + transition buffer
+  };
+
+  const windowPenalty = (arrival: Date, windowLabel?: string | null) => {
+    const window = toWindow(windowLabel);
+    if (!window) return { penalty: 0, adjustedArrival: arrival };
+
+    if (arrival > window.end) {
+      const minutesLate = (arrival.getTime() - window.end.getTime()) / 60000;
+      return { penalty: 25 + minutesLate * 0.6, adjustedArrival: arrival };
+    }
+
+    if (arrival < window.start) {
+      const minutesEarly = (window.start.getTime() - arrival.getTime()) / 60000;
+      return { penalty: minutesEarly * 0.05, adjustedArrival: window.start };
+    }
+
+    return { penalty: 0, adjustedArrival: arrival };
+  };
+
   const visited = new Set<number>();
-  const route = [valid[0].index];
-  visited.add(0);
+  const routeValidIndices: number[] = [];
+  let currentTime = new Date(shootStart);
+  let current: (typeof valid)[number] | null = null;
 
   while (visited.size < valid.length) {
-    const current = valid[route[route.length - 1]];
-    let nearest = -1;
-    let minDist = Infinity;
+    let bestIndex = -1;
+    let bestScore = Infinity;
+    let bestArrival = new Date(currentTime);
 
     for (let i = 0; i < valid.length; i++) {
-      if (!visited.has(i)) {
-        const d = distance(current.latitude!, current.longitude!, valid[i].latitude!, valid[i].longitude!);
-        if (d < minDist) {
-          minDist = d;
-          nearest = i;
-        }
+      if (visited.has(i)) continue;
+
+      const candidate = valid[i];
+      const transitionMins = travelMinutes(current, candidate);
+      const arrival = new Date(currentTime.getTime() + transitionMins * 60 * 1000);
+      const { penalty, adjustedArrival } = windowPenalty(arrival, candidate.preferredTimeWindow);
+
+      const geometryDistance = current
+        ? distance(
+            current.latitude as number,
+            current.longitude as number,
+            candidate.latitude as number,
+            candidate.longitude as number
+          )
+        : 0;
+
+      const score = geometryDistance * 1.4 + penalty + i * 0.01;
+      if (score < bestScore) {
+        bestScore = score;
+        bestIndex = i;
+        bestArrival = adjustedArrival;
       }
     }
 
-    if (nearest !== -1) {
-      route.push(valid[nearest].index);
-      visited.add(nearest);
-    }
+    if (bestIndex === -1) break;
+
+    visited.add(bestIndex);
+    routeValidIndices.push(valid[bestIndex].index);
+    current = valid[bestIndex];
+    currentTime = new Date(bestArrival.getTime() + dwellMinutes * 60 * 1000);
   }
 
-  return route;
+  const routedSet = new Set(routeValidIndices);
+  const unresolved = locations
+    .filter(location => !routedSet.has(location.index))
+    .map(location => location.index);
+
+  return [...routeValidIndices, ...unresolved];
 }

@@ -13,6 +13,34 @@ describe('planner intelligence utilities', () => {
     expect(new Set(route)).toEqual(new Set([0, 1, 2]));
   });
 
+  it('falls back to original order when coordinates are sparse', () => {
+    const route = optimizeRouteOrder([
+      { name: 'A', latitude: 32.78, longitude: -96.8, index: 0 },
+      { name: 'B', latitude: null, longitude: null, index: 1 },
+      { name: 'C', latitude: null, longitude: null, index: 2 },
+      { name: 'D', latitude: null, longitude: null, index: 3 },
+    ]);
+
+    expect(route).toEqual([0, 1, 2, 3]);
+  });
+
+  it('favors locations matching the current shoot time window', () => {
+    const route = optimizeRouteOrder(
+      [
+        { name: 'Morning Spot', latitude: 32.80, longitude: -96.82, index: 0, preferredTimeWindow: 'morning' },
+        { name: 'Golden Spot', latitude: 32.79, longitude: -96.81, index: 1, preferredTimeWindow: 'golden hour' },
+        { name: 'Anytime Spot', latitude: 32.78, longitude: -96.8, index: 2 },
+      ],
+      {
+        shootStartIso: '2026-06-11T18:00:00.000Z',
+        durationMinutes: 90,
+      }
+    );
+
+    expect(route.indexOf(1)).toBeLessThan(route.indexOf(0));
+    expect(new Set(route)).toEqual(new Set([0, 1, 2]));
+  });
+
   it('returns elevated logistics risk for difficult parking/no restroom', () => {
     const scored = scoreLocationLogistics(
       {

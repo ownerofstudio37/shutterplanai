@@ -480,6 +480,9 @@ export default function PlannerPage() {
       const anchor =
         plan.locationSuggestions.find(location => location.latitude != null && location.longitude != null) ||
         plan.locationSuggestions[0];
+      const refinementLookup = new Map(
+        (plan.locationRefinements ?? []).map(refinement => [refinement.name.toLowerCase(), refinement.bestTimeWindow])
+      );
 
       setIsLoadingIntelligence(true);
       try {
@@ -501,6 +504,10 @@ export default function PlannerPage() {
               longitude: location.longitude ?? null,
               venueBucket: location.venueBucket,
               logistics: location.logistics,
+              preferredTimeWindow:
+                refinementLookup.get((location.displayName || location.name).toLowerCase()) ||
+                refinementLookup.get(location.name.toLowerCase()) ||
+                null,
             })),
           }),
         });

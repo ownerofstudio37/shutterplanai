@@ -23,7 +23,11 @@ export async function POST(request: Request) {
       locations.map((loc: any, i: number) => ({
         ...loc,
         index: i,
-      }))
+      })),
+      {
+        shootStartIso: date,
+        durationMinutes: Number(durationMinutes || 90),
+      }
     );
 
     return NextResponse.json({
