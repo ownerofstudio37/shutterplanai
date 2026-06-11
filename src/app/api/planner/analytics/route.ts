@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { requireAuth } from '@/lib/auth/serverAuth';
 import { createSupabaseAdminClient } from '@/lib/supabase/server';
 import { apiFailure, apiSuccess, jsonWithApiMeta, startApiRequest } from '@/lib/utils/apiObservability';
@@ -8,6 +8,8 @@ export interface PlannerAnalyticsSummary {
   refine: { total: number; success: number; failed: number };
   apply: { total: number; success: number; failed: number };
   shareLinksCreated: number;
+  guideViews: number;
+  guideEngagements: number;
   draftsResumed: number;
   routesOptimized: number;
 }
@@ -65,6 +67,10 @@ export async function GET(request: NextRequest) {
         failed: applyFailed,
       },
       shareLinksCreated: counts['planner_share_link_created'] ?? 0,
+      guideViews: counts['planner_guide_viewed'] ?? 0,
+      guideEngagements:
+        (counts['planner_guide_map_opened'] ?? 0) +
+        (counts['planner_guide_dashboard_clicked'] ?? 0),
       draftsResumed: counts['planner_draft_resumed'] ?? 0,
       routesOptimized: counts['planner_route_optimized'] ?? 0,
     };

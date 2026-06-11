@@ -16,9 +16,9 @@
 
 ## Next: Client Guide Polish
 
-- [ ] Add custom branding controls for guide links.
-- [ ] Add logo and color settings for client-facing guides.
-- [ ] Add share analytics for guide opens and engagement.
+- [x] Add custom branding controls for guide links.
+- [x] Add logo and color settings for client-facing guides.
+- [x] Add share analytics for guide opens and engagement.
 
 ## Next: Weather and Sun Telemetry
 

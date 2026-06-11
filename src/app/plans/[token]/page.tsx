@@ -1,5 +1,7 @@
 'use client';
 
+/* eslint-disable @next/next/no-img-element */
+
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
@@ -54,6 +56,13 @@ type SharedPlanResponse = {
     duration?: string;
     mood?: string;
     shootDate?: string;
+    guideBranding?: {
+      studioName?: string;
+      logoUrl?: string;
+      primaryColor?: string;
+      accentColor?: string;
+      websiteUrl?: string;
+    };
   };
   requiresPassword?: boolean;
   error?: string;
@@ -135,16 +144,46 @@ export default function SharedPlanPage() {
   const contingencies = plan?.contingencyPlans ?? [];
   const shootDate = formatDate(data?.metadata?.shootDate);
   const primaryLocation = locations[0];
+  const branding = data?.metadata?.guideBranding;
+  const primaryColor = branding?.primaryColor || '#1f2933';
+  const accentColor = branding?.accentColor || '#d8d2c8';
+  const studioName = branding?.studioName || 'ShutterPlan AI';
+
+  const trackGuideEngagement = async (eventName: string, payload: Record<string, unknown> = {}) => {
+    if (!token) return;
+    try {
+      await fetch('/api/planner/export/engagement', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          shareToken: token,
+          eventName,
+          payload,
+        }),
+      });
+    } catch {
+      // Public guide analytics are best-effort.
+    }
+  };
 
   return (
     <main className="min-h-screen bg-[#f6f3ee] text-[#1f2933]">
       <div className="mx-auto max-w-6xl px-4 py-5 md:px-6 md:py-8">
         <header className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#7c6f64]">ShutterPlan AI client guide</p>
-            <p className="mt-1 text-sm text-[#5f6b76]">Prepared by your photographer</p>
+          <div className="flex items-center gap-3">
+            {branding?.logoUrl ? (
+              <img src={branding.logoUrl} alt="" className="h-12 w-12 rounded-lg border border-[#d8d2c8] bg-white object-contain p-1" />
+            ) : (
+              <div className="flex h-12 w-12 items-center justify-center rounded-lg text-sm font-semibold text-white" style={{ backgroundColor: primaryColor }}>
+                {studioName.slice(0, 2).toUpperCase()}
+              </div>
+            )}
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#7c6f64]">{studioName} client guide</p>
+              <p className="mt-1 text-sm text-[#5f6b76]">Prepared by your photographer</p>
+            </div>
           </div>
-          <Link href="/auth/login">
+          <Link href="/auth/login" onClick={() => void trackGuideEngagement('planner_guide_dashboard_clicked')}>
             <Button variant="secondary" className="bg-white hover:bg-[#ebe5db]">Open photographer dashboard</Button>
           </Link>
         </header>
@@ -195,10 +234,10 @@ export default function SharedPlanPage() {
 
         {!isLoading && !error && plan && (
           <div className="space-y-5">
-            <section className="overflow-hidden rounded-lg border border-[#d8d2c8] bg-[#1f2933] shadow-sm">
+            <section className="overflow-hidden rounded-lg border border-[#d8d2c8] shadow-sm" style={{ backgroundColor: primaryColor }}>
               <div className="p-5 text-white md:p-7">
                 <div className="max-w-4xl">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#c6b9a5]">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em]" style={{ color: accentColor }}>
                     Session plan
                   </p>
                   <h1 className="mt-3 text-3xl font-semibold tracking-normal md:text-4xl">
@@ -211,19 +250,19 @@ export default function SharedPlanPage() {
 
                 <div className="mt-6 grid gap-3 md:grid-cols-4">
                   <div className="rounded-lg border border-white/10 bg-white/10 px-3 py-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#c6b9a5]">Session</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ color: accentColor }}>Session</p>
                     <p className="mt-1 text-sm font-semibold">{data.metadata?.shootType || 'Photo session'}</p>
                   </div>
                   <div className="rounded-lg border border-white/10 bg-white/10 px-3 py-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#c6b9a5]">Area</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ color: accentColor }}>Area</p>
                     <p className="mt-1 text-sm font-semibold">{data.metadata?.city || 'Location provided below'}</p>
                   </div>
                   <div className="rounded-lg border border-white/10 bg-white/10 px-3 py-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#c6b9a5]">Duration</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ color: accentColor }}>Duration</p>
                     <p className="mt-1 text-sm font-semibold">{data.metadata?.duration || 'See timeline'}</p>
                   </div>
                   <div className="rounded-lg border border-white/10 bg-white/10 px-3 py-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#c6b9a5]">Date</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ color: accentColor }}>Date</p>
                     <p className="mt-1 text-sm font-semibold">{shootDate || 'Confirm with photographer'}</p>
                   </div>
                 </div>
@@ -247,7 +286,9 @@ export default function SharedPlanPage() {
                       href={getMapsUrl(primaryLocation, 0)}
                       target="_blank"
                       rel="noreferrer noopener"
+                      onClick={() => void trackGuideEngagement('planner_guide_map_opened', { locationName: getLocationName(primaryLocation, 0), locationIndex: 0 })}
                       className="mt-4 inline-flex rounded-lg bg-[#1f2933] px-4 py-2 text-sm font-medium text-white hover:bg-[#111827]"
+                      style={{ backgroundColor: primaryColor }}
                     >
                       Open arrival map
                     </a>
@@ -328,6 +369,7 @@ export default function SharedPlanPage() {
                         href={getMapsUrl(location, index)}
                         target="_blank"
                         rel="noreferrer noopener"
+                        onClick={() => void trackGuideEngagement('planner_guide_map_opened', { locationName: getLocationName(location, index), locationIndex: index })}
                         className="mt-3 inline-flex text-sm font-medium text-[#1f2933] underline"
                       >
                         Open map

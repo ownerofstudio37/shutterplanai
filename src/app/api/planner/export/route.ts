@@ -8,8 +8,55 @@ import { hasReachedLimit } from '@/lib/billing/planLimits';
 
 const supabase = createSupabaseAdminClient();
 
+type GuideBranding = {
+  studioName?: string;
+  logoUrl?: string;
+  primaryColor?: string;
+  accentColor?: string;
+  websiteUrl?: string;
+};
+
 function hashSharePassword(password: string, salt: string) {
   return crypto.scryptSync(password, salt, 64).toString('hex');
+}
+
+function normalizeHexColor(value: unknown) {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return /^#[0-9a-f]{6}$/i.test(trimmed) ? trimmed : undefined;
+}
+
+function toTrimmedString(value: unknown, maxLength = 300) {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed ? trimmed.slice(0, maxLength) : undefined;
+}
+
+function normalizeUrl(value: unknown) {
+  const input = toTrimmedString(value, 300);
+  if (!input) return undefined;
+  const withProtocol = /^https?:\/\//i.test(input) ? input : `https://${input}`;
+
+  try {
+    const url = new URL(withProtocol);
+    if (!['http:', 'https:'].includes(url.protocol)) return undefined;
+    return url.toString();
+  } catch {
+    return undefined;
+  }
+}
+
+async function getGuideBrandingForUser(userId: string): Promise<GuideBranding> {
+  const { data } = await supabase.auth.admin.getUserById(userId);
+  const profile = (data?.user?.user_metadata?.businessProfile ?? {}) as Record<string, unknown>;
+
+  return {
+    studioName: toTrimmedString(profile.businessName, 120),
+    logoUrl: normalizeUrl(profile.guideLogoUrl),
+    primaryColor: normalizeHexColor(profile.guidePrimaryColor) || '#1f2933',
+    accentColor: normalizeHexColor(profile.guideAccentColor) || '#d8d2c8',
+    websiteUrl: normalizeUrl(profile.websiteUrl),
+  };
 }
 
 function verifySharePassword(password: string, salt: string, expectedHash: string) {
@@ -94,12 +141,16 @@ export async function POST(request: NextRequest) {
     const expiresAt = new Date(Date.now() + normalizedDays * 24 * 60 * 60 * 1000);
     const passwordSalt = normalizedPassword ? crypto.randomBytes(16).toString('hex') : null;
     const passwordHash = normalizedPassword && passwordSalt ? hashSharePassword(normalizedPassword, passwordSalt) : null;
+    const guideBranding = await getGuideBrandingForUser(authResult.userId);
 
     const { error } = await supabase.from('planner_exports').insert({
       user_id: authResult.userId,
       share_token: shareToken,
       plan_data: plan,
-      metadata: planMetadata,
+      metadata: {
+        ...planMetadata,
+        guideBranding,
+      },
       password_salt: passwordSalt,
       password_hash: passwordHash,
       expires_at: expiresAt.toISOString(),
@@ -138,7 +189,7 @@ export async function GET(request: NextRequest) {
 
     const { data, error } = await supabase
       .from('planner_exports')
-      .select('plan_data, metadata, expires_at, revoked_at, password_hash, password_salt')
+      .select('plan_data, metadata, expires_at, revoked_at, password_hash, password_salt, user_id, share_token')
       .eq('share_token', token)
       .single();
 
@@ -167,6 +218,17 @@ export async function GET(request: NextRequest) {
         apiFailure(requestContext, 401, 'Invalid password', { stage: 'password_invalid' });
         return jsonWithApiMeta(requestContext, { error: 'Invalid password', requiresPassword: true }, { status: 401 });
       }
+    }
+
+    if (data.user_id) {
+      await supabase.from('planner_analytics').insert({
+        user_id: data.user_id,
+        event_name: 'planner_guide_viewed',
+        event_payload: {
+          shareToken: data.share_token,
+          passwordProtected: !!data.password_hash,
+        },
+      });
     }
 
     apiSuccess(requestContext, 200, { passwordProtected: !!data.password_hash });

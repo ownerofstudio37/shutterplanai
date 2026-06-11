@@ -1,5 +1,7 @@
 'use client';
 
+/* eslint-disable @next/next/no-img-element */
+
 import { useEffect, useMemo, useState } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -14,6 +16,9 @@ type BusinessProfile = {
   websiteUrl: string;
   websiteSummary: string;
   brandTone: string;
+  guideLogoUrl: string;
+  guidePrimaryColor: string;
+  guideAccentColor: string;
   preferredLocationTypes: string;
   avoidLocationTypes: string;
   poseDirectionStyle: string;
@@ -29,6 +34,9 @@ const EMPTY_PROFILE: BusinessProfile = {
   websiteUrl: '',
   websiteSummary: '',
   brandTone: '',
+  guideLogoUrl: '',
+  guidePrimaryColor: '#1f2933',
+  guideAccentColor: '#d8d2c8',
   preferredLocationTypes: '',
   avoidLocationTypes: '',
   poseDirectionStyle: '',
@@ -41,6 +49,8 @@ const READINESS_FIELDS: Array<keyof BusinessProfile> = [
   'baseLocation',
   'websiteUrl',
   'brandTone',
+  'guidePrimaryColor',
+  'guideAccentColor',
   'preferredLocationTypes',
   'poseDirectionStyle',
   'prepGuideNotes',
@@ -73,13 +83,15 @@ interface TextFieldProps {
   placeholder: string;
   disabled: boolean;
   className?: string;
+  type?: string;
 }
 
-function TextField({ label, value, onChange, placeholder, disabled, className = '' }: TextFieldProps) {
+function TextField({ label, value, onChange, placeholder, disabled, className = '', type = 'text' }: TextFieldProps) {
   return (
     <label className={`block text-sm font-medium text-[#1f2933] ${className}`}>
       {label}
       <input
+        type={type}
         className={getInputClass()}
         value={value}
         onChange={event => onChange(event.target.value)}
@@ -388,6 +400,66 @@ export default function SettingsPage() {
                   {profile.websiteSummary}
                 </div>
               ) : null}
+            </div>
+          </Card>
+
+          <Card className="border border-[#d8d2c8] bg-white shadow-sm">
+            <div className="mb-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#7c6f64]">Client guide branding</p>
+              <h2 className="mt-2 text-xl font-semibold text-[#1f2933]">Logo and color settings</h2>
+              <p className="mt-2 text-sm leading-6 text-[#5f6b76]">
+                These settings are applied automatically to new client guide links.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <TextField
+                label="Guide logo URL"
+                value={profile.guideLogoUrl}
+                onChange={value => setProfile(prev => ({ ...prev, guideLogoUrl: value }))}
+                placeholder="https://yourstudio.com/logo.png"
+                disabled={isLoading}
+                className="md:col-span-2"
+              />
+              <TextField
+                label="Primary color"
+                type="color"
+                value={profile.guidePrimaryColor || '#1f2933'}
+                onChange={value => setProfile(prev => ({ ...prev, guidePrimaryColor: value }))}
+                placeholder="#1f2933"
+                disabled={isLoading}
+              />
+              <TextField
+                label="Accent color"
+                type="color"
+                value={profile.guideAccentColor || '#d8d2c8'}
+                onChange={value => setProfile(prev => ({ ...prev, guideAccentColor: value }))}
+                placeholder="#d8d2c8"
+                disabled={isLoading}
+              />
+            </div>
+
+            <div className="mt-5 overflow-hidden rounded-lg border border-[#d8d2c8] bg-[#faf9f6]">
+              <div className="p-4 text-white" style={{ backgroundColor: profile.guidePrimaryColor || '#1f2933' }}>
+                <div className="flex items-center gap-3">
+                  {profile.guideLogoUrl ? (
+                    <img src={profile.guideLogoUrl} alt="" className="h-10 w-10 rounded-md bg-white object-contain p-1" />
+                  ) : (
+                    <div className="flex h-10 w-10 items-center justify-center rounded-md bg-white text-sm font-semibold text-[#1f2933]">
+                      SP
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: profile.guideAccentColor || '#d8d2c8' }}>
+                      Client guide preview
+                    </p>
+                    <p className="text-lg font-semibold">{profile.businessName || 'Your Studio'}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="p-4">
+                <p className="text-sm font-semibold text-[#1f2933]">Family mini session at golden hour</p>
+                <p className="mt-1 text-sm text-[#5f6b76]">Arrival, prep, timeline, and micro-logistics in one branded link.</p>
+              </div>
             </div>
           </Card>
 

@@ -11,6 +11,9 @@ interface BusinessProfile {
   websiteUrl?: string;
   websiteSummary?: string;
   brandTone?: string;
+  guideLogoUrl?: string;
+  guidePrimaryColor?: string;
+  guideAccentColor?: string;
   preferredLocationTypes?: string;
   avoidLocationTypes?: string;
   poseDirectionStyle?: string;

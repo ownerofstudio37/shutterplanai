@@ -283,7 +283,11 @@ export default function Dashboard() {
     {
       label: 'Client guides',
       value: isLoading ? '-' : String(plannerStats?.shareLinksCreated ?? 0),
-      detail: plannerStats?.shareLinksCreated ? 'Delivered from planner exports' : 'No guide links yet',
+      detail: plannerStats?.guideViews
+        ? `${plannerStats.guideViews} view${plannerStats.guideViews === 1 ? '' : 's'}, ${plannerStats.guideEngagements ?? 0} click${plannerStats.guideEngagements === 1 ? '' : 's'}`
+        : plannerStats?.shareLinksCreated
+          ? 'Delivered from planner exports'
+          : 'No guide links yet',
       href: '/dashboard/shot-board',
     },
   ];

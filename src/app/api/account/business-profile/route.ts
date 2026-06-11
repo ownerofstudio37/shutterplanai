@@ -11,6 +11,9 @@ interface BusinessProfile {
   websiteUrl?: string;
   websiteSummary?: string;
   brandTone?: string;
+  guideLogoUrl?: string;
+  guidePrimaryColor?: string;
+  guideAccentColor?: string;
   preferredLocationTypes?: string;
   avoidLocationTypes?: string;
   poseDirectionStyle?: string;
@@ -39,6 +42,13 @@ function normalizeWebsiteUrl(value?: string): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+function normalizeHexColor(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  return /^#[0-9a-f]{6}$/i.test(trimmed) ? trimmed : undefined;
 }
 
 async function getWebsiteSummary(websiteUrl?: string): Promise<string | undefined> {
@@ -108,6 +118,9 @@ export async function POST(request: NextRequest) {
     websiteUrl,
     websiteSummary,
     brandTone: toOptionalTrimmed(payload?.brandTone, 220),
+    guideLogoUrl: normalizeWebsiteUrl(toOptionalTrimmed(payload?.guideLogoUrl, 300)),
+    guidePrimaryColor: normalizeHexColor(payload?.guidePrimaryColor),
+    guideAccentColor: normalizeHexColor(payload?.guideAccentColor),
     preferredLocationTypes: toOptionalTrimmed(payload?.preferredLocationTypes, 260),
     avoidLocationTypes: toOptionalTrimmed(payload?.avoidLocationTypes, 260),
     poseDirectionStyle: toOptionalTrimmed(payload?.poseDirectionStyle, 260),
