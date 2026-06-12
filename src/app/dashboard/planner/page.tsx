@@ -24,6 +24,7 @@ import {
 } from '@/lib/billing/planLimits';
 import {
   type SessionPlan,
+  type SessionPlanLocation,
   type SessionPlanTimelineItem,
   type SessionPlanShot,
   type LocationMode,
