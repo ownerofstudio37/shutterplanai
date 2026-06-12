@@ -66,6 +66,11 @@ type PlannerLocationReviewPanelProps = {
   locationRefinements?: LocationRefinement[];
   onToggleSelectedLocation: (location: ReviewLocation) => void;
   onClearSelectedLocations: () => void;
+  onAddMicroLocation: (location: ReviewLocation) => void;
+  onUpdateMicroLocation: (location: ReviewLocation, index: number, value: string) => void;
+  onRemoveMicroLocation: (location: ReviewLocation, index: number) => void;
+  onMoveMicroLocation: (location: ReviewLocation, index: number, direction: 'up' | 'down') => void;
+  onSuggestMicroLocations: (location: ReviewLocation) => void;
   onVoteLocation: (location: ReviewLocation, vote: LocationVote) => void;
   onTogglePreferredVenueBucket: (venueBucket?: string) => void;
   onToggleExcludedVenueBucket: (venueBucket?: string) => void;
@@ -106,6 +111,11 @@ export const PlannerLocationReviewPanel = memo(function PlannerLocationReviewPan
   locationRefinements,
   onToggleSelectedLocation,
   onClearSelectedLocations,
+  onAddMicroLocation,
+  onUpdateMicroLocation,
+  onRemoveMicroLocation,
+  onMoveMicroLocation,
+  onSuggestMicroLocations,
   onVoteLocation,
   onTogglePreferredVenueBucket,
   onToggleExcludedVenueBucket,
@@ -248,23 +258,69 @@ export const PlannerLocationReviewPanel = memo(function PlannerLocationReviewPan
                   <div>
                     <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                       <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7c6f64]">Micro-location map</p>
-                      {isSelectedStop && (
-                        <span className="rounded-md bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-800">
-                          Included in route
-                        </span>
-                      )}
+                      <div className="flex flex-wrap gap-2">
+                        {isSelectedStop && (
+                          <span className="rounded-md bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-800">
+                            Included in route
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => onSuggestMicroLocations(location)}
+                          className="min-h-9 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs font-semibold text-blue-800 hover:border-blue-300"
+                        >
+                          Suggest spots
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onAddMicroLocation(location)}
+                          className="min-h-9 rounded-md border border-[#d8d2c8] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#1f2933] hover:border-[#1f2933]"
+                        >
+                          Add spot
+                        </button>
+                      </div>
                     </div>
                     <div className="mt-2 grid gap-2 md:grid-cols-2">
                       {location.microLocations.length > 0 ? (
                         location.microLocations.map((spot, spotIndex) => (
-                          <div key={`${location.name}-${spot}`} className="grid grid-cols-[28px_1fr] gap-2 rounded-md border border-[#e4ded5] bg-[#faf9f6] px-2.5 py-2 text-xs text-[#1f2933]">
+                          <div key={`${location.name}-${spot}-${spotIndex}`} className="grid grid-cols-[28px_1fr] gap-2 rounded-md border border-[#e4ded5] bg-[#faf9f6] px-2.5 py-2 text-xs text-[#1f2933]">
                             <span className="flex h-7 w-7 items-center justify-center rounded-md bg-white font-semibold text-[#5f6b76]">
                               {spotIndex + 1}
                             </span>
                             <span>
-                              <span className="block font-semibold">{spot}</span>
+                              <input
+                                aria-label={`Micro-location ${spotIndex + 1} for ${locationName}`}
+                                value={spot}
+                                onChange={event => onUpdateMicroLocation(location, spotIndex, event.target.value)}
+                                className="w-full rounded-md border border-[#d8d2c8] bg-white px-2 py-1.5 text-xs font-semibold text-[#1f2933] outline-none focus:border-[#1f2933]"
+                              />
                               <span className="mt-1 block text-[#5f6b76]">
                                 {spotIndex === 0 ? 'Client arrival or first setup' : 'Optional portrait/background stop'}
+                              </span>
+                              <span className="mt-2 flex flex-wrap gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => onMoveMicroLocation(location, spotIndex, 'up')}
+                                  disabled={spotIndex === 0}
+                                  className="rounded-md border border-[#d8d2c8] bg-white px-2 py-1 font-semibold text-[#5f6b76] disabled:opacity-40"
+                                >
+                                  Up
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => onMoveMicroLocation(location, spotIndex, 'down')}
+                                  disabled={spotIndex === location.microLocations.length - 1}
+                                  className="rounded-md border border-[#d8d2c8] bg-white px-2 py-1 font-semibold text-[#5f6b76] disabled:opacity-40"
+                                >
+                                  Down
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => onRemoveMicroLocation(location, spotIndex)}
+                                  className="rounded-md border border-red-200 bg-red-50 px-2 py-1 font-semibold text-red-700"
+                                >
+                                  Remove
+                                </button>
                               </span>
                             </span>
                           </div>

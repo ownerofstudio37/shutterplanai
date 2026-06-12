@@ -112,10 +112,11 @@
 - [x] Let photographers select 1-3 final locations for most shoots, with clear selected/unselected states and a recommended count by session duration.
 - [x] Make selected locations drive the map review, route order, shot list context, client guide export, and project creation instead of blindly using every AI candidate.
 - [x] Add micro-location mapping inside a selected location: named exact spots, notes, parking/restroom anchors, walking order, and client-facing arrival guidance.
-- [ ] Add controls to add, rename, reorder, and remove micro-spots before applying a plan.
-- [ ] Add AI-assisted micro-spot suggestions for the selected location based on session type, light, logistics, and client constraints.
-- [ ] Make the planner review UI sleeker: stronger visual hierarchy, fewer dense panels, clearer next actions, and a more polished “planning cockpit” flow.
-- [ ] Add a final “session route” confirmation step before creating the project or client guide.
+- [x] Add controls to add, rename, reorder, and remove micro-spots before applying a plan.
+- [x] Add AI-assisted micro-spot suggestions for the selected location based on session type, light, logistics, and client constraints.
+- [x] Make the planner review UI sleeker: stronger visual hierarchy, fewer dense panels, clearer next actions, and a more polished “planning cockpit” flow.
+- [x] Add a final “session route” confirmation step before creating the project or client guide.
+- [x] Upgrade the landing page to explain candidate discovery, final route selection, micro-location mapping, and client guide handoff.
 
 ## Next: Launch Readiness
 

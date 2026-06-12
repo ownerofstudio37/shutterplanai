@@ -97,6 +97,11 @@ type PlannerDesktopReviewContentProps = {
   locationRefinements?: LocationRefinement[];
   onToggleSelectedLocation: (location: ReviewLocation) => void;
   onClearSelectedLocations: () => void;
+  onAddMicroLocation: (location: ReviewLocation) => void;
+  onUpdateMicroLocation: (location: ReviewLocation, index: number, value: string) => void;
+  onRemoveMicroLocation: (location: ReviewLocation, index: number) => void;
+  onMoveMicroLocation: (location: ReviewLocation, index: number, direction: 'up' | 'down') => void;
+  onSuggestMicroLocations: (location: ReviewLocation) => void;
   onVoteLocation: (location: ReviewLocation, vote: LocationVote) => void;
   onTogglePreferredVenueBucket: (venueBucket?: string) => void;
   onToggleExcludedVenueBucket: (venueBucket?: string) => void;
@@ -137,6 +142,11 @@ export const PlannerDesktopReviewContent = memo(function PlannerDesktopReviewCon
   locationRefinements,
   onToggleSelectedLocation,
   onClearSelectedLocations,
+  onAddMicroLocation,
+  onUpdateMicroLocation,
+  onRemoveMicroLocation,
+  onMoveMicroLocation,
+  onSuggestMicroLocations,
   onVoteLocation,
   onTogglePreferredVenueBucket,
   onToggleExcludedVenueBucket,
@@ -187,6 +197,11 @@ export const PlannerDesktopReviewContent = memo(function PlannerDesktopReviewCon
         locationRefinements={locationRefinements}
         onToggleSelectedLocation={onToggleSelectedLocation}
         onClearSelectedLocations={onClearSelectedLocations}
+        onAddMicroLocation={onAddMicroLocation}
+        onUpdateMicroLocation={onUpdateMicroLocation}
+        onRemoveMicroLocation={onRemoveMicroLocation}
+        onMoveMicroLocation={onMoveMicroLocation}
+        onSuggestMicroLocations={onSuggestMicroLocations}
         onVoteLocation={onVoteLocation}
         onTogglePreferredVenueBucket={onTogglePreferredVenueBucket}
         onToggleExcludedVenueBucket={onToggleExcludedVenueBucket}

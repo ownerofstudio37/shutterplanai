@@ -122,6 +122,8 @@ type PlannerReviewHeaderCardProps = {
   candidateLocationCount: number;
   selectedLocationCount: number;
   recommendedLocationCount: number;
+  isRouteConfirmed: boolean;
+  onConfirmRoute: () => void;
   shotCount: number;
   expectedShotRange: { min: number; max: number };
   durationMinutes: number;
@@ -188,6 +190,8 @@ export function PlannerReviewHeaderCard({
   candidateLocationCount,
   selectedLocationCount,
   recommendedLocationCount,
+  isRouteConfirmed,
+  onConfirmRoute,
   shotCount,
   expectedShotRange,
   durationMinutes,
@@ -458,6 +462,34 @@ export function PlannerReviewHeaderCard({
             ) : null}
           </div>
         )}
+
+        <div className={`rounded-lg border px-4 py-3 text-sm ${
+          isRouteConfirmed
+            ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+            : 'border-[#d8d2c8] bg-white text-[#1f2933]'
+        }`}>
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="font-semibold">
+                {isRouteConfirmed ? 'Final session route confirmed' : 'Confirm final session route'}
+              </p>
+              <p className="mt-1 text-xs leading-5 text-[#5f6b76]">
+                {selectedLocationCount > 0
+                  ? `${selectedLocationCount} selected stop${selectedLocationCount === 1 ? '' : 's'} will drive the guide, calendar, and project.`
+                  : `${candidateLocationCount || 0} AI candidate location${candidateLocationCount === 1 ? '' : 's'} are still unselected. Choose the stops you actually want to use.`}
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant={isRouteConfirmed ? 'secondary' : 'primary'}
+              disabled={selectedLocationCount === 0}
+              onClick={onConfirmRoute}
+              className={isRouteConfirmed ? 'bg-white hover:bg-[#ebe5db]' : 'bg-[#1f2933] hover:bg-[#111827]'}
+            >
+              {isRouteConfirmed ? 'Confirmed' : 'Confirm route'}
+            </Button>
+          </div>
+        </div>
 
         {shareUrl && (
           <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">

@@ -26,9 +26,17 @@ const workflowCards = [
 
 const features = [
   ['AI timelines', 'Turn a rough shoot brief into a paced plan with shot priorities, breaks, and client prep.'],
-  ['Location atlas', 'Save exact micro-spots, parking notes, walking distances, backgrounds, and restroom logistics.'],
+  ['Location shortlisting', 'Let AI surface 6-10 options, then choose the real 1-3 stops for the shoot.'],
+  ['Micro-location maps', 'Tune exact spots, parking anchors, walking order, backgrounds, and restroom logistics.'],
   ['Sun-aware planning', 'Keep shoot timing, calendar context, and field constraints visible before the day gets busy.'],
   ['Client handoff', 'Generate a polished mobile guide that gets clients to the right place with the right expectations.'],
+];
+
+const routeSteps = [
+  ['1', 'AI finds candidates', 'Compare parks, downtown blocks, venues, and backup options with logistics context.'],
+  ['2', 'Photographer chooses stops', 'Pick the final route count during intake, then shortlist the actual shoot locations.'],
+  ['3', 'Micro-spots get mapped', 'Edit exact locations, walking order, reset points, and client arrival guidance.'],
+  ['4', 'Guide goes out prepared', 'Send a mobile guide with arrival map, timeline, wardrobe notes, and route clarity.'],
 ];
 
 export default function Home() {
@@ -90,7 +98,7 @@ export default function Home() {
               Plan the shoot before the chaos starts.
             </h1>
             <p className="mt-5 max-w-2xl text-base leading-7 text-[#e8e1d7] md:text-lg">
-              ShutterPlan AI unifies session timelines, micro-location logistics, calendar context, and client-ready guides in one workspace built for working photographers.
+              ShutterPlan AI finds location candidates, helps you choose the real shoot route, maps the exact micro-spots, and turns the plan into a client-ready guide.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Link href="/auth/signup">
@@ -150,6 +158,24 @@ export default function Home() {
       </section>
 
       <section className="mx-auto max-w-7xl px-5 py-14 md:px-8">
+        <div className="mb-8 max-w-3xl">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7c6f64]">Planner upgrade</p>
+          <h2 className="mt-2 text-3xl font-semibold text-[#1f2933]">AI gives options. The photographer chooses the route.</h2>
+          <p className="mt-3 text-sm leading-6 text-[#5f6b76]">
+            Most sessions do not need six stops. ShutterPlan separates candidate discovery from final route selection so the guide reflects the locations clients will actually visit.
+          </p>
+        </div>
+        <div className="mb-12 grid gap-3 md:grid-cols-4">
+          {routeSteps.map(([step, title, description]) => (
+            <div key={title} className="rounded-lg border border-[#d8d2c8] bg-white p-5 shadow-sm">
+              <span className="flex h-8 w-8 items-center justify-center rounded-md bg-[#1f2933] text-sm font-semibold text-white">
+                {step}
+              </span>
+              <h3 className="mt-4 text-lg font-semibold text-[#1f2933]">{title}</h3>
+              <p className="mt-2 text-sm leading-6 text-[#5f6b76]">{description}</p>
+            </div>
+          ))}
+        </div>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           {features.map(([title, description]) => (
             <div key={title} className="rounded-lg border border-[#d8d2c8] bg-white p-5 shadow-sm">

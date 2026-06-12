@@ -155,6 +155,7 @@ export default function PlannerPage() {
   const [isEditMode, setIsEditMode] = useState(false);
   const [isCreatingShareLink, setIsCreatingShareLink] = useState(false);
   const [isRevokingShareLink, setIsRevokingShareLink] = useState(false);
+  const [isRouteConfirmed, setIsRouteConfirmed] = useState(false);
   const [shareUrl, setShareUrl] = useState<string>('');
   const [shareToken, setShareToken] = useState<string>('');
   const [shareLinkError, setShareLinkError] = useState<string>('');
@@ -816,6 +817,7 @@ export default function PlannerPage() {
       }
 
       resetReviewState();
+      setIsRouteConfirmed(false);
       setPlan(result.data ?? null);
       void (async () => {
         await trackPlannerEvent('planner_generate_success', {
@@ -968,6 +970,11 @@ export default function PlannerPage() {
     if (!plan) return;
     const workspacePlan = buildSelectedLocationPlan();
     if (!workspacePlan) return;
+
+    if (!isRouteConfirmed) {
+      setError('Confirm the final session route before creating the project.');
+      return;
+    }
 
     setIsApplying(true);
     setApplyProgress(null);
@@ -1187,6 +1194,7 @@ export default function PlannerPage() {
             }
           : prev
       );
+      setIsRouteConfirmed(false);
       void trackPlannerEvent('planner_refine_success', {
         refinementCount: locationRefinements.length,
       });
@@ -1423,6 +1431,7 @@ export default function PlannerPage() {
           }
         : prev
     );
+    setIsRouteConfirmed(false);
     setFeedbackSaveStatus('saved');
     setTimeout(() => setFeedbackSaveStatus('idle'), 1200);
     void trackPlannerEvent('planner_route_optimized', {
@@ -1470,6 +1479,72 @@ export default function PlannerPage() {
     });
   };
 
+  const updateLocationMicroLocations = (targetLocation: SessionPlanLocation, updater: (spots: string[]) => string[]) => {
+    setIsRouteConfirmed(false);
+    setPlan(prev => {
+      if (!prev) return prev;
+      const targetNames = new Set([targetLocation.name.toLowerCase(), (targetLocation.displayName || targetLocation.name).toLowerCase()]);
+      return {
+        ...prev,
+        locationSuggestions: prev.locationSuggestions.map(location => {
+          const key = (location.displayName || location.name).toLowerCase();
+          if (!targetNames.has(location.name.toLowerCase()) && !targetNames.has(key)) return location;
+          const nextSpots = updater(location.microLocations).map(spot => spot.trim()).filter(Boolean);
+          return {
+            ...location,
+            microLocations: Array.from(new Set(nextSpots)),
+          };
+        }),
+      };
+    });
+  };
+
+  const addMicroLocation = (location: SessionPlanLocation) => {
+    updateLocationMicroLocations(location, spots => [...spots, `New micro-spot ${spots.length + 1}`]);
+  };
+
+  const updateMicroLocation = (location: SessionPlanLocation, index: number, value: string) => {
+    updateLocationMicroLocations(location, spots => spots.map((spot, spotIndex) => (spotIndex === index ? value : spot)));
+  };
+
+  const removeMicroLocation = (location: SessionPlanLocation, index: number) => {
+    updateLocationMicroLocations(location, spots => spots.filter((_spot, spotIndex) => spotIndex !== index));
+  };
+
+  const moveMicroLocation = (location: SessionPlanLocation, index: number, direction: 'up' | 'down') => {
+    updateLocationMicroLocations(location, spots => {
+      const nextIndex = direction === 'up' ? index - 1 : index + 1;
+      if (nextIndex < 0 || nextIndex >= spots.length) return spots;
+      const next = [...spots];
+      const current = next[index];
+      const target = next[nextIndex];
+      if (!current || !target) return spots;
+      next[index] = target;
+      next[nextIndex] = current;
+      return next;
+    });
+  };
+
+  const suggestMicroLocations = (location: SessionPlanLocation) => {
+    const categorySuggestions: Record<string, string[]> = {
+      family: ['Parking lot meeting point', 'Open shade starter spot', 'Restroom reset stop', 'Seated blanket area'],
+      engagement: ['Arrival meet-up point', 'Walking candid path', 'Scenic wide portrait spot', 'Quiet close-up background'],
+      portrait: ['Clean hero background', 'Texture/detail wall', 'Seated portrait setup', 'Horizontal website crop spot'],
+      event: ['Registration arrival point', 'Main presentation zone', 'Sponsor/detail wall', 'Networking candid area'],
+    };
+    const logisticsSuggestions = [
+      location.logistics.parking ? 'Parking handoff point' : '',
+      location.logistics.restroom ? 'Restroom/change reset' : '',
+      location.logistics.walkingDistance ? 'Shortest walking transition' : '',
+    ].filter(Boolean);
+
+    updateLocationMicroLocations(location, spots => [
+      ...spots,
+      ...(categorySuggestions[sessionCategory] ?? categorySuggestions.portrait),
+      ...logisticsSuggestions,
+    ]);
+  };
+
   const buildSelectedLocationPlan = useCallback(() => {
     if (!plan || selectedLocations.length === 0) return plan;
 
@@ -1488,6 +1563,11 @@ export default function PlannerPage() {
 
   const createShareLink = async () => {
     if (!plan) return;
+
+    if (!isRouteConfirmed) {
+      setShareLinkError('Confirm the final session route before creating a client guide.');
+      return;
+    }
 
     if (hasReachedShareLimit) {
       setShareLinkError('You have used your free client guide link. Upgrade to Pro for unlimited client exports.');
@@ -1885,6 +1965,12 @@ export default function PlannerPage() {
             candidateLocationCount={candidateLocations.length}
             selectedLocationCount={selectedLocations.length}
             recommendedLocationCount={recommendedLocationCount}
+            isRouteConfirmed={isRouteConfirmed}
+            onConfirmRoute={() => {
+              setShareLinkError('');
+              setError(null);
+              setIsRouteConfirmed(true);
+            }}
             shotCount={displayedShots.length}
             expectedShotRange={expectedShotRange}
             durationMinutes={durationMinutes}
@@ -1926,8 +2012,14 @@ export default function PlannerPage() {
                   preferredVenueBucket={preferredVenueBucket}
                   excludedVenueBuckets={excludedVenueBuckets}
                   logisticsLookup={logisticsLookup}
-                  onToggleSelectedLocation={location => toggleSelectedLocation(location, recommendedLocationCount)}
-                  onClearSelectedLocations={clearSelectedLocations}
+                  onToggleSelectedLocation={location => {
+                    setIsRouteConfirmed(false);
+                    toggleSelectedLocation(location, recommendedLocationCount);
+                  }}
+                  onClearSelectedLocations={() => {
+                    setIsRouteConfirmed(false);
+                    clearSelectedLocations();
+                  }}
                   onVoteLocation={setLocationVote}
                   onTogglePreferredVenueBucket={togglePreferredVenueBucket}
                   onToggleExcludedVenueBucket={toggleExcludedVenueBucket}
@@ -1960,11 +2052,22 @@ export default function PlannerPage() {
                   excludedVenueBuckets={excludedVenueBuckets}
                   logisticsLookup={logisticsLookup}
                   locationRefinements={plan.locationRefinements}
-                  onToggleSelectedLocation={location => toggleSelectedLocation(location, recommendedLocationCount)}
-                  onClearSelectedLocations={clearSelectedLocations}
+                  onToggleSelectedLocation={location => {
+                    setIsRouteConfirmed(false);
+                    toggleSelectedLocation(location, recommendedLocationCount);
+                  }}
+                  onClearSelectedLocations={() => {
+                    setIsRouteConfirmed(false);
+                    clearSelectedLocations();
+                  }}
                   onVoteLocation={setLocationVote}
                   onTogglePreferredVenueBucket={togglePreferredVenueBucket}
                   onToggleExcludedVenueBucket={toggleExcludedVenueBucket}
+                  onAddMicroLocation={addMicroLocation}
+                  onUpdateMicroLocation={updateMicroLocation}
+                  onRemoveMicroLocation={removeMicroLocation}
+                  onMoveMicroLocation={moveMicroLocation}
+                  onSuggestMicroLocations={suggestMicroLocations}
                   displayedShots={displayedShots}
                   allShots={plan.shotList}
                   emptyShotMessage={emptyShotMessage}
