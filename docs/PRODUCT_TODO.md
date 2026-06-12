@@ -108,6 +108,7 @@
 ## Now: Pre-Launch Planner UX
 
 - [x] Add a dedicated location shortlisting workflow where AI can surface 6-10 candidate locations but the photographer chooses the actual shoot stops.
+- [x] Ask during intake how many final shoot locations or venue zones are necessary before AI generates the plan.
 - [x] Let photographers select 1-3 final locations for most shoots, with clear selected/unselected states and a recommended count by session duration.
 - [x] Make selected locations drive the map review, route order, shot list context, client guide export, and project creation instead of blindly using every AI candidate.
 - [x] Add micro-location mapping inside a selected location: named exact spots, notes, parking/restroom anchors, walking order, and client-facing arrival guidance.

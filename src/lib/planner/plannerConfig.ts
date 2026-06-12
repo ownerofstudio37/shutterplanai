@@ -94,6 +94,7 @@ export type ChatQuestionId =
   | 'locationMode'
   | 'providedLocations'
   | 'city'
+  | 'desiredLocationCount'
   | 'subjectDetails'
   | 'familyPacing'
   | 'engagementStory'
@@ -130,6 +131,7 @@ export type PlannerPreset = {
   subjectDetails: string;
   mustHaveShots: string;
   constraints: string;
+  desiredLocationCount?: string;
   familyPacing?: string;
   engagementStory?: string;
   brandingGoals?: string;
@@ -144,6 +146,7 @@ export type PlannerDraftState = {
   subjectDetails: string;
   mustHaveShots: string;
   constraints: string;
+  desiredLocationCount?: string;
   locationMode: LocationMode;
   providedLocations: string;
   familyPacing?: string;
@@ -289,6 +292,13 @@ export const CHAT_QUESTIONS: ChatQuestion[] = [
     showWhen: mode => mode === 'find-locations',
   },
   {
+    id: 'desiredLocationCount',
+    prompt: 'How many final shoot locations do you actually want to use?',
+    options: ['1 location', '2 locations', '3 locations', '4+ locations'],
+    placeholder: 'Most sessions only need 1-2 locations',
+    required: true,
+  },
+  {
     id: 'subjectDetails',
     prompt: 'Who is being photographed?',
     placeholder: '5 people, 2 toddlers, grandparents included',
@@ -359,6 +369,7 @@ export const PLANNER_PRESETS: PlannerPreset[] = [
     subjectDetails: 'Immediate family with young kids, want efficient transitions and easy walking',
     mustHaveShots: 'Whole family portrait, siblings together, each child solo, parents together',
     constraints: 'Need stroller-friendly access, quick transitions, minimal walking',
+    desiredLocationCount: '1 location',
     familyPacing: 'Fast-paced flow with short attention spans and minimal reset time',
   },
   {
@@ -372,6 +383,7 @@ export const PLANNER_PRESETS: PlannerPreset[] = [
     subjectDetails: 'Couple wants candid connection with a polished editorial finish',
     mustHaveShots: 'Wide scenic portraits, walking candids, close connection shots, ring detail',
     constraints: 'Need sunset-friendly sequence with easy outfit flow and low crowd pressure',
+    desiredLocationCount: '2 locations',
     engagementStory: 'Want the session to feel intimate, story-driven, and golden-hour focused',
   },
   {
@@ -385,6 +397,7 @@ export const PLANNER_PRESETS: PlannerPreset[] = [
     subjectDetails: 'Solo business owner who needs a confident mix of polished and approachable images',
     mustHaveShots: 'Website hero portrait, horizontal banner crop, speaking/profile image, social media variety',
     constraints: 'Need clean backgrounds, modern architecture, and quick location changes',
+    desiredLocationCount: '2 locations',
     brandingGoals: 'Website hero images, speaking profile photos, social content batch',
   },
   {
@@ -398,6 +411,7 @@ export const PLANNER_PRESETS: PlannerPreset[] = [
     subjectDetails: 'Business event with speakers, audience reactions, sponsor details, and networking',
     mustHaveShots: 'Speaker on stage, audience reactions, sponsor signage, venue details, candid networking',
     constraints: 'Need run-of-show awareness, low disruption, and coverage of key transitions',
+    desiredLocationCount: '3 locations',
     eventPriorities: 'Keynote moments, sponsor visibility, attendee candids, room-wide establishing shots',
   },
 ];
@@ -414,6 +428,13 @@ export function getSessionCategory(shootTypeValue: string): SessionCategory {
 }
 
 export function getAdaptivePrompt(question: ChatQuestion, sessionCategory: SessionCategory) {
+  if (question.id === 'desiredLocationCount') {
+    if (sessionCategory === 'family') return 'How many locations should the family actually visit?';
+    if (sessionCategory === 'engagement') return 'How many locations should be in the final engagement route?';
+    if (sessionCategory === 'event') return 'How many venue zones should the event coverage prioritize?';
+    return 'How many final shoot locations should this plan use?';
+  }
+
   if (question.id === 'subjectDetails') {
     if (sessionCategory === 'family') return 'Who is being photographed (ages, family members, any kids)?';
     if (sessionCategory === 'engagement') return 'Tell me about the couple and any important story context.';
@@ -436,6 +457,13 @@ export function getAdaptivePrompt(question: ChatQuestion, sessionCategory: Sessi
 }
 
 export function getAdaptivePlaceholder(question: ChatQuestion, sessionCategory: SessionCategory) {
+  if (question.id === 'desiredLocationCount') {
+    if (sessionCategory === 'family') return '1 location is usually best for young kids';
+    if (sessionCategory === 'engagement') return '2 locations for variety without rushing';
+    if (sessionCategory === 'event') return '3 venue zones or coverage areas';
+    return '2 locations';
+  }
+
   if (question.id === 'subjectDetails') {
     if (sessionCategory === 'family') return '2 parents, 3 kids (ages 2, 5, 8), stroller needed';
     if (sessionCategory === 'engagement') return 'Recently engaged couple, natural chemistry, want candid + editorial mix';

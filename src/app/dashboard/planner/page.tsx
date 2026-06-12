@@ -78,6 +78,14 @@ function slugifyFileName(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 60) || 'shoot-plan';
 }
 
+function parseDesiredLocationCount(value: string, fallback: number) {
+  const match = value.match(/\d+/);
+  if (!match) return fallback;
+  const parsed = Number(match[0]);
+  if (!Number.isFinite(parsed) || parsed < 1) return fallback;
+  return Math.min(4, parsed);
+}
+
 const PlannerLocationMap = dynamic(() => import('@/components/map/PlannerLocationMap'), {
   ssr: false,
   loading: () => (
@@ -113,6 +121,7 @@ export default function PlannerPage() {
   const [constraints, setConstraints] = useState('Need stroller-friendly paths and quick transitions');
   const [locationMode, setLocationMode] = useState<LocationMode>('find-locations');
   const [providedLocations, setProvidedLocations] = useState('');
+  const [desiredLocationCount, setDesiredLocationCount] = useState('2 locations');
   const [familyPacing, setFamilyPacing] = useState('');
   const [engagementStory, setEngagementStory] = useState('');
   const [brandingGoals, setBrandingGoals] = useState('');
@@ -187,7 +196,8 @@ export default function PlannerPage() {
 
   const durationMinutes = useMemo(() => parseDurationMinutes(duration), [duration]);
   const expectedShotRange = useMemo(() => getExpectedShotRange(durationMinutes), [durationMinutes]);
-  const recommendedLocationCount = durationMinutes <= 45 ? 1 : durationMinutes <= 90 ? 2 : 3;
+  const durationBasedLocationCount = durationMinutes <= 45 ? 1 : durationMinutes <= 90 ? 2 : 3;
+  const recommendedLocationCount = parseDesiredLocationCount(desiredLocationCount, durationBasedLocationCount);
   const sessionCategory = useMemo(() => getSessionCategory(shootType), [shootType]);
   const isFreeTier = billingUsage?.tier !== 'pro';
   const hasReachedPlannerLimit = billingUsage
@@ -215,6 +225,8 @@ export default function PlannerPage() {
         return providedLocations;
       case 'city':
         return city;
+      case 'desiredLocationCount':
+        return desiredLocationCount;
       case 'subjectDetails':
         return subjectDetails;
       case 'familyPacing':
@@ -242,6 +254,7 @@ export default function PlannerPage() {
     brandingGoals,
     city,
     constraints,
+    desiredLocationCount,
     duration,
     engagementStory,
     eventPriorities,
@@ -301,6 +314,9 @@ export default function PlannerPage() {
       case 'city':
         setCity(value);
         break;
+      case 'desiredLocationCount':
+        setDesiredLocationCount(value);
+        break;
       case 'subjectDetails':
         setSubjectDetails(value);
         break;
@@ -359,6 +375,7 @@ export default function PlannerPage() {
       constraints,
       locationMode,
       providedLocations,
+      desiredLocationCount,
       familyPacing,
       engagementStory,
       brandingGoals,
@@ -374,6 +391,7 @@ export default function PlannerPage() {
     brandingGoals,
     city,
     constraints,
+    desiredLocationCount,
     dailyDurationMinutes,
     duration,
     engagementStory,
@@ -410,6 +428,7 @@ export default function PlannerPage() {
     setConstraints(draftState.constraints || 'Need stroller-friendly paths and quick transitions');
     setLocationMode(mode);
     setProvidedLocations(draftState.providedLocations || '');
+    setDesiredLocationCount(draftState.desiredLocationCount || '2 locations');
     setFamilyPacing(draftState.familyPacing || '');
     setEngagementStory(draftState.engagementStory || '');
     setBrandingGoals(draftState.brandingGoals || '');
@@ -753,6 +772,7 @@ export default function PlannerPage() {
 
     const constraintsPayload = [
       constraints,
+      `Final shoot location target: ${recommendedLocationCount} location${recommendedLocationCount === 1 ? '' : 's'}; return extra candidate options only for photographer shortlisting.`,
       sessionCategory === 'family' && familyPacing ? `Pacing note: ${familyPacing}` : '',
     ]
       .filter(Boolean)
@@ -774,6 +794,7 @@ export default function PlannerPage() {
           mood,
           mustHaveShots: mustHaveShotsPayload,
           constraints: constraintsPayload,
+          desiredLocationCount: recommendedLocationCount,
           locationMode: locationMode === 'use-provided' ? 'use-provided' : 'find-locations',
           providedLocations: providedLocationList,
           // V2: multi-day fields (ignored by single-day AI handler, reserved for multi-day)
@@ -800,6 +821,7 @@ export default function PlannerPage() {
           sessionCategory,
           locationMode,
           locationCount: result.data?.locationSuggestions?.length ?? 0,
+          desiredLocationCount: recommendedLocationCount,
           shotCount: result.data?.shotList?.length ?? 0,
         });
         await loadBillingUsage();
@@ -881,6 +903,7 @@ export default function PlannerPage() {
 
       const constraintsPayload = [
         constraints,
+        `Final shoot location target: ${recommendedLocationCount} location${recommendedLocationCount === 1 ? '' : 's'}; keep regenerated content focused on selected/shortlisted stops.`,
         sessionCategory === 'family' && familyPacing ? `Pacing note: ${familyPacing}` : '',
       ]
         .filter(Boolean)
@@ -907,6 +930,7 @@ export default function PlannerPage() {
             mood,
             mustHaveShots: mustHaveShotsPayload,
             constraints: constraintsPayload,
+            desiredLocationCount: recommendedLocationCount,
           },
         }),
       });
@@ -1247,6 +1271,7 @@ export default function PlannerPage() {
     setMood(preset.mood);
     setMustHaveShots(preset.mustHaveShots);
     setConstraints(preset.constraints);
+    setDesiredLocationCount(preset.desiredLocationCount || (parseDurationMinutes(preset.duration) <= 45 ? '1 location' : '2 locations'));
     setProvidedLocations(presetProvidedLocations);
     setFamilyPacing(preset.familyPacing || '');
     setEngagementStory(preset.engagementStory || '');
@@ -1274,6 +1299,7 @@ export default function PlannerPage() {
     if (payload.subjectDetails) setSubjectDetails(payload.subjectDetails);
     if (payload.mustHaveShots) setMustHaveShots(payload.mustHaveShots);
     if (payload.constraints) setConstraints(payload.constraints);
+    if (payload.desiredLocationCount) setDesiredLocationCount(payload.desiredLocationCount);
     if (payload.providedLocations !== undefined) setProvidedLocations(payload.providedLocations);
     if (payload.familyPacing !== undefined) setFamilyPacing(payload.familyPacing);
     if (payload.engagementStory !== undefined) setEngagementStory(payload.engagementStory);
@@ -1496,6 +1522,7 @@ export default function PlannerPage() {
             duration,
             mood,
             shootDate,
+            desiredLocationCount: recommendedLocationCount,
             selectedLocationCount: selectedLocations.length || undefined,
           },
           sharePassword: isFreeTier ? undefined : sharePasswordInput.trim() || undefined,
@@ -1718,6 +1745,7 @@ export default function PlannerPage() {
             subjectDetails,
             mustHaveShots,
             constraints,
+            desiredLocationCount,
             providedLocations,
             familyPacing: familyPacing || undefined,
             engagementStory: engagementStory || undefined,
@@ -1783,6 +1811,7 @@ export default function PlannerPage() {
         shootType={shootType}
         locationMode={locationMode}
         city={city}
+        desiredLocationCount={desiredLocationCount}
         businessProfile={businessProfile}
         isGenerating={isGenerating}
         hasPlan={!!plan}

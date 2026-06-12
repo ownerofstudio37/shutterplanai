@@ -14,6 +14,7 @@ export type SessionTemplatePayload = {
   mustHaveShots?: string;
   constraints?: string;
   providedLocations?: string;
+  desiredLocationCount?: string;
   familyPacing?: string;
   engagementStory?: string;
   brandingGoals?: string;
@@ -54,6 +55,7 @@ const GUIDE_TEMPLATE_STARTERS: Array<{
       subjectDetails: 'Family with young kids, needs a relaxed flow and simple transitions',
       mustHaveShots: 'Whole family portrait, siblings, each child solo, parents together, playful candids',
       constraints: 'Prioritize stroller-friendly routes, restroom access, snack breaks, and short walking distances',
+      desiredLocationCount: '1 location',
       familyPacing: 'Keep poses short, rotate kids often, and leave a reset window midway through the session',
     },
   },
@@ -70,6 +72,7 @@ const GUIDE_TEMPLATE_STARTERS: Array<{
       subjectDetails: 'Engaged couple wants candid connection with a polished editorial finish',
       mustHaveShots: 'Walking candids, ring detail, wide scenic portraits, close connection shots, final sunset portraits',
       constraints: 'Minimize crowd risk, sequence locations for golden hour, and leave time for one outfit change',
+      desiredLocationCount: '2 locations',
       engagementStory: 'Build the flow around natural movement, emotional prompts, and sunset portraits',
     },
   },
@@ -86,6 +89,7 @@ const GUIDE_TEMPLATE_STARTERS: Array<{
       subjectDetails: 'Solo business owner needs website, social, and profile images',
       mustHaveShots: 'Website hero, horizontal banner, profile portrait, working/action shots, detail images',
       constraints: 'Need clean backgrounds, modern texture, quick transitions, and wardrobe variety',
+      desiredLocationCount: '2 locations',
       brandingGoals: 'Website hero images, about page portraits, speaking profile photos, and social content batch',
     },
   },
@@ -103,6 +107,7 @@ const GUIDE_TEMPLATE_STARTERS: Array<{
       mustHaveShots: 'Speaker on stage, audience reactions, sponsor signage, venue details, candid networking',
       constraints: 'Confirm venue access, parking, vendor arrival, stage lighting, and no-disruption shooting zones',
       providedLocations: 'Main stage, sponsor wall, registration table, networking area, venue exterior',
+      desiredLocationCount: '3 locations',
       eventPriorities: 'Keynote moments, sponsor visibility, VIP candids, attendee energy, and room-wide context',
     },
   },

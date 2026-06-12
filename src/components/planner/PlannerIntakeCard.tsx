@@ -52,6 +52,7 @@ type PlannerIntakeCardProps = {
   shootType: string;
   locationMode: LocationMode;
   city: string;
+  desiredLocationCount: string;
   businessProfile: BusinessProfileSummary | null;
   isGenerating: boolean;
   hasPlan: boolean;
@@ -111,6 +112,7 @@ export function PlannerIntakeCard({
   shootType,
   locationMode,
   city,
+  desiredLocationCount,
   businessProfile,
   isGenerating,
   hasPlan,
@@ -210,7 +212,7 @@ export function PlannerIntakeCard({
           </div>
         </div>
 
-        <div className="mt-5 grid gap-3 md:grid-cols-4">
+        <div className="mt-5 grid gap-3 md:grid-cols-5">
           <div className="rounded-lg border border-[#e4ded5] bg-[#faf9f6] px-3 py-3">
             <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#7c6f64]">Session</p>
             <p className="mt-1 truncate text-sm font-semibold text-[#1f2933]">{shootType}</p>
@@ -224,6 +226,10 @@ export function PlannerIntakeCard({
           <div className="rounded-lg border border-[#e4ded5] bg-[#faf9f6] px-3 py-3">
             <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#7c6f64]">Area</p>
             <p className="mt-1 truncate text-sm font-semibold text-[#1f2933]">{locationLabel}</p>
+          </div>
+          <div className="rounded-lg border border-[#e4ded5] bg-[#faf9f6] px-3 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#7c6f64]">Final stops</p>
+            <p className="mt-1 truncate text-sm font-semibold text-[#1f2933]">{desiredLocationCount}</p>
           </div>
           <div className={`rounded-lg border px-3 py-3 ${getDraftStatusClass(draftSaveStatus)}`}>
             <p className="text-[11px] font-semibold uppercase tracking-[0.12em] opacity-80">Draft</p>
