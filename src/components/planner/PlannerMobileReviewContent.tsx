@@ -116,8 +116,23 @@ export const PlannerMobileReviewContent = memo(function PlannerMobileReviewConte
 
         {selectedLocation ? (
           <div className="rounded-lg border border-[#d8d2c8] bg-white p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7c6f64]">Selected stop</p>
-            <p className="mt-2 text-base font-semibold text-[#1f2933]">{selectedLocation.displayName || selectedLocation.name}</p>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7c6f64]">Selected stop</p>
+                <p className="mt-2 text-base font-semibold text-[#1f2933]">{selectedLocation.displayName || selectedLocation.name}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => onToggleSelectedLocation(selectedLocation)}
+                className={`min-h-10 rounded-md border px-3 py-2 text-xs font-semibold ${
+                  selectedLocationKeys.includes((selectedLocation.displayName || selectedLocation.name).toLowerCase())
+                    ? 'border-[#1f2933] bg-[#1f2933] text-white'
+                    : 'border-[#d8d2c8] bg-white text-[#1f2933]'
+                }`}
+              >
+                {selectedLocationKeys.includes((selectedLocation.displayName || selectedLocation.name).toLowerCase()) ? 'Chosen' : 'Use'}
+              </button>
+            </div>
             <p className="mt-2 text-sm leading-6 text-[#5f6b76]">{selectedLocation.whyItWorks}</p>
             <div className="mt-3 flex flex-wrap gap-2 text-xs text-[#5f6b76]">
               {selectedLocation.venueBucket && (

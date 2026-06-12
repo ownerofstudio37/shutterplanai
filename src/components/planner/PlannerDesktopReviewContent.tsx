@@ -161,7 +161,12 @@ export const PlannerDesktopReviewContent = memo(function PlannerDesktopReviewCon
       <PlannerMapReviewPanel
         locations={locations}
         selectedLocation={selectedLocation}
+        selectedLocationKeys={selectedLocationKeys}
+        selectedLocationCount={selectedLocationCount}
+        recommendedLocationCount={recommendedLocationCount}
         onSelectLocation={onSelectLocation}
+        onToggleSelectedLocation={onToggleSelectedLocation}
+        onClearSelectedLocations={onClearSelectedLocations}
         mapContent={mapContent}
       />
     );
