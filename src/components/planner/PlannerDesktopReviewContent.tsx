@@ -88,10 +88,15 @@ type PlannerDesktopReviewContentProps = {
   // location tab
   emptyLocationMessage: string | null;
   locationVotes: Record<string, LocationVote>;
+  selectedLocationKeys: string[];
+  selectedLocationCount: number;
+  recommendedLocationCount: number;
   preferredVenueBucket: string | null;
   excludedVenueBuckets: string[];
   logisticsLookup: Map<string, LogisticsInfo>;
   locationRefinements?: LocationRefinement[];
+  onToggleSelectedLocation: (location: ReviewLocation) => void;
+  onClearSelectedLocations: () => void;
   onVoteLocation: (location: ReviewLocation, vote: LocationVote) => void;
   onTogglePreferredVenueBucket: (venueBucket?: string) => void;
   onToggleExcludedVenueBucket: (venueBucket?: string) => void;
@@ -123,10 +128,15 @@ export const PlannerDesktopReviewContent = memo(function PlannerDesktopReviewCon
   onSelectLocation,
   emptyLocationMessage,
   locationVotes,
+  selectedLocationKeys,
+  selectedLocationCount,
+  recommendedLocationCount,
   preferredVenueBucket,
   excludedVenueBuckets,
   logisticsLookup,
   locationRefinements,
+  onToggleSelectedLocation,
+  onClearSelectedLocations,
   onVoteLocation,
   onTogglePreferredVenueBucket,
   onToggleExcludedVenueBucket,
@@ -163,10 +173,15 @@ export const PlannerDesktopReviewContent = memo(function PlannerDesktopReviewCon
         locations={locations}
         emptyLocationMessage={emptyLocationMessage}
         locationVotes={locationVotes}
+        selectedLocationKeys={selectedLocationKeys}
+        selectedLocationCount={selectedLocationCount}
+        recommendedLocationCount={recommendedLocationCount}
         preferredVenueBucket={preferredVenueBucket}
         excludedVenueBuckets={excludedVenueBuckets}
         logisticsLookup={logisticsLookup}
         locationRefinements={locationRefinements}
+        onToggleSelectedLocation={onToggleSelectedLocation}
+        onClearSelectedLocations={onClearSelectedLocations}
         onVoteLocation={onVoteLocation}
         onTogglePreferredVenueBucket={onTogglePreferredVenueBucket}
         onToggleExcludedVenueBucket={onToggleExcludedVenueBucket}

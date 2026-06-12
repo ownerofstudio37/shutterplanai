@@ -104,3 +104,24 @@
 - [x] Add reusable guide templates by session type.
 - [x] Add onboarding prompts that connect business profile settings to visible planner output examples.
 - [x] Add upgrade-page copy and plan comparison tied directly to saved hours, client readiness, and premium guide controls.
+
+## Now: Pre-Launch Planner UX
+
+- [x] Add a dedicated location shortlisting workflow where AI can surface 6-10 candidate locations but the photographer chooses the actual shoot stops.
+- [x] Let photographers select 1-3 final locations for most shoots, with clear selected/unselected states and a recommended count by session duration.
+- [x] Make selected locations drive the map review, route order, shot list context, client guide export, and project creation instead of blindly using every AI candidate.
+- [x] Add micro-location mapping inside a selected location: named exact spots, notes, parking/restroom anchors, walking order, and client-facing arrival guidance.
+- [ ] Add controls to add, rename, reorder, and remove micro-spots before applying a plan.
+- [ ] Add AI-assisted micro-spot suggestions for the selected location based on session type, light, logistics, and client constraints.
+- [ ] Make the planner review UI sleeker: stronger visual hierarchy, fewer dense panels, clearer next actions, and a more polished “planning cockpit” flow.
+- [ ] Add a final “session route” confirmation step before creating the project or client guide.
+
+## Next: Launch Readiness
+
+- [ ] Fix local verification/toolchain reliability by using a supported Node version and rerunning lint, tests, build, and Playwright.
+- [ ] Create a launch checklist covering auth, production env vars, Supabase policies, observability, demo data, billing, and QA routes.
+- [ ] Build a real upgrade/payment path with checkout, customer portal, plan status, and testable premium states.
+- [ ] Seed a polished founder-demo shoot that shows the first two minutes of the product at its best.
+- [ ] Run a full mobile and desktop QA pass across planner, shared guide, settings, billing, dashboard, and public pages.
+- [ ] Tighten landing/onboarding copy around the photographer pain: fewer apps, faster planning, better-prepared clients.
+- [ ] Add a beta feedback loop for photographers to report confusing planner output, missing location details, and guide handoff friction.

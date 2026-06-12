@@ -14,6 +14,7 @@ export function usePlannerReviewState(plan: SessionPlan | null, intelligence: Pl
   const [locationVotes, setLocationVotes] = useState<Record<string, LocationVote>>({});
   const [preferredVenueBucket, setPreferredVenueBucket] = useState<string | null>(null);
   const [excludedVenueBuckets, setExcludedVenueBuckets] = useState<string[]>([]);
+  const [selectedLocationKeys, setSelectedLocationKeys] = useState<string[]>([]);
   const [selectedReviewLocationName, setSelectedReviewLocationName] = useState<string | null>(null);
 
   const resetReviewState = useCallback(() => {
@@ -22,6 +23,7 @@ export function usePlannerReviewState(plan: SessionPlan | null, intelligence: Pl
     setLocationVotes({});
     setPreferredVenueBucket(null);
     setExcludedVenueBuckets([]);
+    setSelectedLocationKeys([]);
     setSelectedReviewLocationName(null);
   }, []);
 
@@ -67,7 +69,7 @@ export function usePlannerReviewState(plan: SessionPlan | null, intelligence: Pl
     return map;
   }, [intelligence, plan]);
 
-  const displayedLocations = useMemo(() => {
+  const candidateLocations = useMemo(() => {
     const locations = [...(plan?.locationSuggestions ?? [])];
 
     return locations
@@ -92,6 +94,15 @@ export function usePlannerReviewState(plan: SessionPlan | null, intelligence: Pl
         return (b.confidenceScore ?? 0) - (a.confidenceScore ?? 0);
       });
   }, [excludedVenueBuckets, locationVotes, plan?.locationSuggestions, preferredVenueBucket, routeRankLookup]);
+
+  const selectedLocationKeySet = useMemo(() => new Set(selectedLocationKeys), [selectedLocationKeys]);
+
+  const selectedLocations = useMemo(
+    () => candidateLocations.filter(location => selectedLocationKeySet.has((location.displayName || location.name).toLowerCase())),
+    [candidateLocations, selectedLocationKeySet]
+  );
+
+  const displayedLocations = selectedLocations.length > 0 ? selectedLocations : candidateLocations;
 
   const displayedLocationNames = useMemo(
     () => new Set(displayedLocations.map(location => (location.displayName || location.name).toLowerCase())),
@@ -148,8 +159,21 @@ export function usePlannerReviewState(plan: SessionPlan | null, intelligence: Pl
     );
   }, []);
 
+  const toggleSelectedLocation = useCallback((location: SessionPlanLocation, maxSelected = 3) => {
+    const key = (location.displayName || location.name).toLowerCase();
+    setSelectedLocationKeys(prev => {
+      if (prev.includes(key)) return prev.filter(item => item !== key);
+      return [...prev.slice(Math.max(0, prev.length - Math.max(0, maxSelected - 1))), key];
+    });
+    setSelectedReviewLocationName(location.displayName || location.name);
+  }, []);
+
+  const clearSelectedLocations = useCallback(() => {
+    setSelectedLocationKeys([]);
+  }, []);
+
   const emptyLocationMessage = useMemo(() => {
-    if (displayedLocations.length > 0) return null;
+    if (candidateLocations.length > 0) return null;
     if ((plan?.locationSuggestions?.length ?? 0) === 0) {
       return 'No locations made it into the current plan. Try broadening the area, using a ZIP, or switching to provided locations.';
     }
@@ -157,7 +181,7 @@ export function usePlannerReviewState(plan: SessionPlan | null, intelligence: Pl
       return 'All current locations are hidden by your excluded type filters. Re-enable a venue type to see them again.';
     }
     return 'No locations match the current review filters. Clear preferences or regenerate for a broader set.';
-  }, [displayedLocations.length, excludedVenueBuckets.length, plan?.locationSuggestions?.length]);
+  }, [candidateLocations.length, excludedVenueBuckets.length, plan?.locationSuggestions?.length]);
 
   const emptyShotMessage = useMemo(() => {
     if (displayedShots.length > 0) return null;
@@ -174,7 +198,7 @@ export function usePlannerReviewState(plan: SessionPlan | null, intelligence: Pl
 
   const reviewTabItems: Array<{ id: ReviewTab; label: string }> = [
     { id: 'map', label: `Map (${displayedLocations.filter(location => location.latitude != null && location.longitude != null).length})` },
-    { id: 'locations', label: `Locations (${displayedLocations.length})` },
+    { id: 'locations', label: `Locations (${selectedLocations.length || candidateLocations.length})` },
     { id: 'shot-list', label: `Shot List (${displayedShots.length})` },
     { id: 'timeline', label: `Timeline (${plan?.timeline.length ?? 0})` },
     { id: 'prep', label: 'Prep + Backup' },
@@ -194,6 +218,9 @@ export function usePlannerReviewState(plan: SessionPlan | null, intelligence: Pl
     locationIndex,
     refinementIndex,
     logisticsLookup,
+    candidateLocations,
+    selectedLocationKeys,
+    selectedLocations,
     displayedLocations,
     displayedShots,
     emptyLocationMessage,
@@ -201,6 +228,8 @@ export function usePlannerReviewState(plan: SessionPlan | null, intelligence: Pl
     setLocationVote,
     togglePreferredVenueBucket,
     toggleExcludedVenueBucket,
+    toggleSelectedLocation,
+    clearSelectedLocations,
     toggleMobileReviewTab,
     reviewTabItems,
   };

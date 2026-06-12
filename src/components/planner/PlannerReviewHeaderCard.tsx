@@ -119,6 +119,9 @@ type PlannerReviewHeaderCardProps = {
     guideChangeRequests: number;
     guideComments: number;
   } | null;
+  candidateLocationCount: number;
+  selectedLocationCount: number;
+  recommendedLocationCount: number;
   shotCount: number;
   expectedShotRange: { min: number; max: number };
   durationMinutes: number;
@@ -182,6 +185,9 @@ export function PlannerReviewHeaderCard({
   onCopyShareLink,
   shareLinkError,
   guideActivity,
+  candidateLocationCount,
+  selectedLocationCount,
+  recommendedLocationCount,
   shotCount,
   expectedShotRange,
   durationMinutes,
@@ -202,9 +208,9 @@ export function PlannerReviewHeaderCard({
   const readinessItems = [
     {
       label: 'Locations',
-      value: String(locationCount),
-      detail: getSourceLabel(source),
-      className: getSourceClass(source),
+      value: selectedLocationCount > 0 ? `${selectedLocationCount}/${recommendedLocationCount}` : String(candidateLocationCount || locationCount),
+      detail: selectedLocationCount > 0 ? 'Selected route' : `${getSourceLabel(source)} candidates`,
+      className: selectedLocationCount > 0 ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : getSourceClass(source),
     },
     {
       label: 'Forecast',

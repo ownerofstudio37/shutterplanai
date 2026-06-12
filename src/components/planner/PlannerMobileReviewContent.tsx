@@ -60,9 +60,14 @@ type PlannerMobileReviewContentProps = {
   locations: ReviewLocation[];
   emptyLocationMessage: string | null;
   locationVotes: Record<string, LocationVote>;
+  selectedLocationKeys: string[];
+  selectedLocationCount: number;
+  recommendedLocationCount: number;
   preferredVenueBucket: string | null;
   excludedVenueBuckets: string[];
   logisticsLookup: Map<string, LogisticsInfo>;
+  onToggleSelectedLocation: (location: ReviewLocation) => void;
+  onClearSelectedLocations: () => void;
   onVoteLocation: (location: ReviewLocation, vote: LocationVote) => void;
   onTogglePreferredVenueBucket: (venueBucket?: string) => void;
   onToggleExcludedVenueBucket: (venueBucket?: string) => void;
@@ -80,9 +85,14 @@ export const PlannerMobileReviewContent = memo(function PlannerMobileReviewConte
   locations,
   emptyLocationMessage,
   locationVotes,
+  selectedLocationKeys,
+  selectedLocationCount,
+  recommendedLocationCount,
   preferredVenueBucket,
   excludedVenueBuckets,
   logisticsLookup,
+  onToggleSelectedLocation,
+  onClearSelectedLocations,
   onVoteLocation,
   onTogglePreferredVenueBucket,
   onToggleExcludedVenueBucket,
@@ -139,10 +149,23 @@ export const PlannerMobileReviewContent = memo(function PlannerMobileReviewConte
     return (
       <div className="space-y-4">
         <div className="rounded-lg border border-[#d8d2c8] bg-[#faf9f6] px-4 py-3">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7c6f64]">Micro-logistics</p>
-          <p className="mt-1 text-sm leading-6 text-[#5f6b76]">
-            Pressure-test parking, restroom access, walking burden, and exact micro-spots.
-          </p>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7c6f64]">Location shortlist</p>
+              <p className="mt-1 text-sm leading-6 text-[#5f6b76]">
+                Choose the real shoot stops, then tune parking, restroom access, walking burden, and exact micro-spots.
+              </p>
+            </div>
+            <div className="rounded-md bg-white px-2 py-1 text-right text-xs">
+              <p className="font-semibold text-[#1f2933]">{selectedLocationCount}/{recommendedLocationCount}</p>
+              <p className="text-[#5f6b76]">selected</p>
+            </div>
+          </div>
+          {selectedLocationCount > 0 && (
+            <button type="button" onClick={onClearSelectedLocations} className="mt-2 text-xs font-semibold text-[#7c6f64] underline">
+              Clear selected stops
+            </button>
+          )}
         </div>
 
         {emptyLocationMessage && (
@@ -155,12 +178,13 @@ export const PlannerMobileReviewContent = memo(function PlannerMobileReviewConte
         {locations.map(location => {
           const locationKey = (location.displayName || location.name).toLowerCase();
           const currentVote = locationVotes[locationKey];
+          const isSelectedStop = selectedLocationKeys.includes(locationKey);
           const isPreferredType = !!location.venueBucket && preferredVenueBucket === location.venueBucket;
           const isExcludedType = !!location.venueBucket && excludedVenueBuckets.includes(location.venueBucket);
           const intelligenceLogistics = logisticsLookup.get(locationKey);
 
           return (
-            <div key={`mobile-${location.name}`} className="rounded-lg border border-[#d8d2c8] bg-white p-3">
+            <div key={`mobile-${location.name}`} className={`rounded-lg border bg-white p-3 ${isSelectedStop ? 'border-[#1f2933] ring-2 ring-[#1f2933]/10' : 'border-[#d8d2c8]'}`}>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="font-semibold text-[#1f2933]">{location.displayName || location.name}</p>
@@ -169,6 +193,17 @@ export const PlannerMobileReviewContent = memo(function PlannerMobileReviewConte
                   )}
                 </div>
                 <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onToggleSelectedLocation(location)}
+                    className={`min-h-10 rounded-md border px-2 py-1 text-xs font-semibold ${
+                      isSelectedStop
+                        ? 'border-[#1f2933] bg-[#1f2933] text-white'
+                        : 'border-[#d8d2c8] bg-white text-[#1f2933]'
+                    }`}
+                  >
+                    {isSelectedStop ? 'Selected' : 'Use'}
+                  </button>
                   <button
                     type="button"
                     onClick={() => onVoteLocation(location, 'up')}
@@ -224,11 +259,19 @@ export const PlannerMobileReviewContent = memo(function PlannerMobileReviewConte
                 <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#7c6f64]">Why this location was picked</p>
                 <p className="mt-1 text-sm leading-6 text-[#5f6b76]">{location.whyItWorks}</p>
               </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {location.microLocations.map(spot => (
-                  <span key={`mobile-${location.name}-${spot}`} className="rounded-md bg-[#f6f3ee] px-2 py-1 text-xs text-[#1f2933]">
-                    {spot}
-                  </span>
+              <div className="mt-3 grid gap-2">
+                {location.microLocations.map((spot, spotIndex) => (
+                  <div key={`mobile-${location.name}-${spot}`} className="grid grid-cols-[28px_1fr] gap-2 rounded-md bg-[#f6f3ee] px-2 py-2 text-xs text-[#1f2933]">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-md bg-white font-semibold text-[#5f6b76]">
+                      {spotIndex + 1}
+                    </span>
+                    <span>
+                      <span className="block font-semibold">{spot}</span>
+                      <span className="mt-1 block text-[#5f6b76]">
+                        {spotIndex === 0 ? 'Arrival or first setup' : 'Portrait/background stop'}
+                      </span>
+                    </span>
+                  </div>
                 ))}
               </div>
               <div className="mt-3 grid gap-1 text-xs text-[#5f6b76]">

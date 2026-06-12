@@ -57,10 +57,15 @@ type PlannerLocationReviewPanelProps = {
   locations: ReviewLocation[];
   emptyLocationMessage: string | null;
   locationVotes: Record<string, LocationVote>;
+  selectedLocationKeys: string[];
+  selectedLocationCount: number;
+  recommendedLocationCount: number;
   preferredVenueBucket: string | null;
   excludedVenueBuckets: string[];
   logisticsLookup: Map<string, LogisticsInfo>;
   locationRefinements?: LocationRefinement[];
+  onToggleSelectedLocation: (location: ReviewLocation) => void;
+  onClearSelectedLocations: () => void;
   onVoteLocation: (location: ReviewLocation, vote: LocationVote) => void;
   onTogglePreferredVenueBucket: (venueBucket?: string) => void;
   onToggleExcludedVenueBucket: (venueBucket?: string) => void;
@@ -92,23 +97,46 @@ export const PlannerLocationReviewPanel = memo(function PlannerLocationReviewPan
   locations,
   emptyLocationMessage,
   locationVotes,
+  selectedLocationKeys,
+  selectedLocationCount,
+  recommendedLocationCount,
   preferredVenueBucket,
   excludedVenueBuckets,
   logisticsLookup,
   locationRefinements,
+  onToggleSelectedLocation,
+  onClearSelectedLocations,
   onVoteLocation,
   onTogglePreferredVenueBucket,
   onToggleExcludedVenueBucket,
 }: PlannerLocationReviewPanelProps) {
   const refinementLookup = new Map((locationRefinements ?? []).map(refinement => [refinement.name.toLowerCase(), refinement]));
+  const selectedKeySet = new Set(selectedLocationKeys);
 
   return (
     <div className="space-y-5">
       <div className="rounded-lg border border-[#d8d2c8] bg-[#faf9f6] px-4 py-3">
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7c6f64]">Micro-logistics review</p>
-        <p className="mt-1 text-sm leading-6 text-[#5f6b76]">
-          Pressure-test the physical details that make a session run smoothly: parking, restrooms, walking burden, crowd risk, and exact micro-spots.
-        </p>
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7c6f64]">Location shortlist</p>
+            <p className="mt-1 text-sm leading-6 text-[#5f6b76]">
+              Review the AI candidates, choose the actual shoot stops, then tune the exact micro-spots inside each selected location.
+            </p>
+          </div>
+          <div className="rounded-lg border border-[#d8d2c8] bg-white px-3 py-2 text-sm">
+            <p className="font-semibold text-[#1f2933]">{selectedLocationCount}/{recommendedLocationCount} selected</p>
+            <p className="mt-1 text-xs text-[#5f6b76]">Most sessions need fewer stops than the AI candidate set.</p>
+            {selectedLocationCount > 0 && (
+              <button
+                type="button"
+                onClick={onClearSelectedLocations}
+                className="mt-2 text-xs font-semibold text-[#7c6f64] underline"
+              >
+                Clear selected stops
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       {emptyLocationMessage && (
@@ -123,13 +151,14 @@ export const PlannerLocationReviewPanel = memo(function PlannerLocationReviewPan
           const locationName = location.displayName || location.name;
           const locationKey = locationName.toLowerCase();
           const currentVote = locationVotes[locationKey];
+          const isSelectedStop = selectedKeySet.has(locationKey);
           const isPreferredType = !!location.venueBucket && preferredVenueBucket === location.venueBucket;
           const isExcludedType = !!location.venueBucket && excludedVenueBuckets.includes(location.venueBucket);
           const intelligenceLogistics = logisticsLookup.get(locationKey);
           const refinement = refinementLookup.get(locationKey) ?? refinementLookup.get(location.name.toLowerCase());
 
           return (
-            <article key={location.name} className="overflow-hidden rounded-lg border border-[#d8d2c8] bg-white">
+            <article key={location.name} className={`overflow-hidden rounded-lg border bg-white ${isSelectedStop ? 'border-[#1f2933] ring-2 ring-[#1f2933]/10' : 'border-[#d8d2c8]'}`}>
               <div className="grid gap-4 border-b border-[#e4ded5] bg-[#faf9f6] p-4 lg:grid-cols-[1fr_auto]">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
@@ -144,6 +173,17 @@ export const PlannerLocationReviewPanel = memo(function PlannerLocationReviewPan
                 </div>
 
                 <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onToggleSelectedLocation(location)}
+                    className={`min-h-10 rounded-md border px-3 py-2 text-xs font-semibold ${
+                      isSelectedStop
+                        ? 'border-[#1f2933] bg-[#1f2933] text-white'
+                        : 'border-[#d8d2c8] bg-white text-[#1f2933] hover:border-[#1f2933]'
+                    }`}
+                  >
+                    {isSelectedStop ? 'Selected stop' : 'Use in shoot'}
+                  </button>
                   <button
                     type="button"
                     onClick={() => onVoteLocation(location, 'up')}
@@ -206,17 +246,43 @@ export const PlannerLocationReviewPanel = memo(function PlannerLocationReviewPan
                   </div>
 
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7c6f64]">Exact micro-spots</p>
-                    <div className="mt-2 flex flex-wrap gap-2">
+                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7c6f64]">Micro-location map</p>
+                      {isSelectedStop && (
+                        <span className="rounded-md bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-800">
+                          Included in route
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-2 grid gap-2 md:grid-cols-2">
                       {location.microLocations.length > 0 ? (
-                        location.microLocations.map(spot => (
-                          <span key={`${location.name}-${spot}`} className="rounded-md border border-[#e4ded5] bg-[#faf9f6] px-2.5 py-1.5 text-xs font-medium text-[#1f2933]">
-                            {spot}
-                          </span>
+                        location.microLocations.map((spot, spotIndex) => (
+                          <div key={`${location.name}-${spot}`} className="grid grid-cols-[28px_1fr] gap-2 rounded-md border border-[#e4ded5] bg-[#faf9f6] px-2.5 py-2 text-xs text-[#1f2933]">
+                            <span className="flex h-7 w-7 items-center justify-center rounded-md bg-white font-semibold text-[#5f6b76]">
+                              {spotIndex + 1}
+                            </span>
+                            <span>
+                              <span className="block font-semibold">{spot}</span>
+                              <span className="mt-1 block text-[#5f6b76]">
+                                {spotIndex === 0 ? 'Client arrival or first setup' : 'Optional portrait/background stop'}
+                              </span>
+                            </span>
+                          </div>
                         ))
                       ) : (
                         <span className="text-xs text-[#5f6b76]">No micro-spots listed yet.</span>
                       )}
+                    </div>
+                    <div className="mt-3 grid gap-2 text-xs text-[#5f6b76] md:grid-cols-3">
+                      <div className="rounded-md bg-[#f6f3ee] px-3 py-2">
+                        <span className="font-semibold text-[#1f2933]">Arrival anchor:</span> parking
+                      </div>
+                      <div className="rounded-md bg-[#f6f3ee] px-3 py-2">
+                        <span className="font-semibold text-[#1f2933]">Change/reset:</span> restroom
+                      </div>
+                      <div className="rounded-md bg-[#f6f3ee] px-3 py-2">
+                        <span className="font-semibold text-[#1f2933]">Walking order:</span> top to bottom
+                      </div>
                     </div>
                   </div>
 

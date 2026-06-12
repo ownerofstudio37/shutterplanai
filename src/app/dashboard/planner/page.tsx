@@ -169,6 +169,9 @@ export default function PlannerPage() {
     locationIndex,
     refinementIndex,
     logisticsLookup,
+    candidateLocations,
+    selectedLocationKeys,
+    selectedLocations,
     displayedLocations,
     displayedShots,
     emptyLocationMessage,
@@ -176,12 +179,15 @@ export default function PlannerPage() {
     setLocationVote,
     togglePreferredVenueBucket,
     toggleExcludedVenueBucket,
+    toggleSelectedLocation,
+    clearSelectedLocations,
     toggleMobileReviewTab,
     reviewTabItems,
   } = usePlannerReviewState(plan, intelligence);
 
   const durationMinutes = useMemo(() => parseDurationMinutes(duration), [duration]);
   const expectedShotRange = useMemo(() => getExpectedShotRange(durationMinutes), [durationMinutes]);
+  const recommendedLocationCount = durationMinutes <= 45 ? 1 : durationMinutes <= 90 ? 2 : 3;
   const sessionCategory = useMemo(() => getSessionCategory(shootType), [shootType]);
   const isFreeTier = billingUsage?.tier !== 'pro';
   const hasReachedPlannerLimit = billingUsage
@@ -935,6 +941,8 @@ export default function PlannerPage() {
 
   const applyPlanToWorkspace = async () => {
     if (!plan) return;
+    const workspacePlan = buildSelectedLocationPlan();
+    if (!workspacePlan) return;
 
     setIsApplying(true);
     setApplyProgress(null);
@@ -949,8 +957,8 @@ export default function PlannerPage() {
           ...getAuthHeader(),
         },
         body: JSON.stringify({
-          title: plan.projectTitle,
-          description: `${plan.creativeDirection}\n\nDuration: ${duration || 'Not specified'}\nConstraints: ${constraints || 'None'}`,
+          title: workspacePlan.projectTitle,
+          description: `${workspacePlan.creativeDirection}\n\nDuration: ${duration || 'Not specified'}\nConstraints: ${constraints || 'None'}`,
           status: 'planning',
           startDate: shootDate || undefined,
           tags: ['ai-generated', 'session-plan', shootType.toLowerCase()],
@@ -1014,10 +1022,10 @@ export default function PlannerPage() {
       let createdShots = 0;
       const failedShots: string[] = [];
       const failedReasons: string[] = [];
-      const totalShots = plan.shotList.length;
+      const totalShots = workspacePlan.shotList.length;
       setApplyProgress({ done: 0, total: totalShots, label: `Saving shot 1 of ${totalShots}…` });
 
-      for (const shot of plan.shotList) {
+      for (const shot of workspacePlan.shotList) {
         const location = locationIndex.get((shot.location || '').toLowerCase());
         const refinement = refinementIndex.get((shot.location || '').toLowerCase());
         const sanitizedCoordinates = sanitizeCoordinates(
@@ -1097,6 +1105,7 @@ export default function PlannerPage() {
       void trackPlannerEvent('planner_apply_success', {
         createdShots,
         failedShots: failedShots.length,
+        selectedLocationCount: selectedLocations.length || undefined,
       });
 
       router.push(`/dashboard/shot-board?project=${projectId}`);
@@ -1434,6 +1443,22 @@ export default function PlannerPage() {
     });
   };
 
+  const buildSelectedLocationPlan = useCallback(() => {
+    if (!plan || selectedLocations.length === 0) return plan;
+
+    const selectedNameSet = new Set(
+      selectedLocations.flatMap(location => [location.name.toLowerCase(), (location.displayName || location.name).toLowerCase()])
+    );
+    const selectedShots = plan.shotList.filter(shot => selectedNameSet.has((shot.location || '').toLowerCase()));
+
+    return {
+      ...plan,
+      locationSuggestions: selectedLocations,
+      shotList: selectedShots.length > 0 ? selectedShots : plan.shotList,
+      projectTitle: `${plan.projectTitle} - selected route`,
+    };
+  }, [plan, selectedLocations]);
+
   const createShareLink = async () => {
     if (!plan) return;
 
@@ -1456,6 +1481,7 @@ export default function PlannerPage() {
     setShareLinkError('');
 
     try {
+      const exportPlan = buildSelectedLocationPlan();
       const response = await fetch('/api/planner/export', {
         method: 'POST',
         headers: {
@@ -1463,13 +1489,14 @@ export default function PlannerPage() {
           ...getAuthHeader(),
         },
         body: JSON.stringify({
-          plan,
+          plan: exportPlan,
           planMetadata: {
             shootType,
             city,
             duration,
             mood,
             shootDate,
+            selectedLocationCount: selectedLocations.length || undefined,
           },
           sharePassword: isFreeTier ? undefined : sharePasswordInput.trim() || undefined,
           expiresInDays: isFreeTier ? 7 : 30,
@@ -1527,13 +1554,14 @@ export default function PlannerPage() {
     }
 
     const endsAt = new Date(startsAt.getTime() + parseDurationHours(duration) * 60 * 60 * 1000);
-    const primaryLocation = plan.locationSuggestions[0];
+    const exportPlan = buildSelectedLocationPlan();
+    const primaryLocation = exportPlan?.locationSuggestions[0];
     const primaryLocationName = primaryLocation?.displayName || primaryLocation?.name || city;
-    const timelineSummary = plan.timeline
+    const timelineSummary = (exportPlan?.timeline ?? [])
       .map(item => `${item.timeBlock || 'Block'} - ${item.focus || 'Session flow'}`)
       .join(' | ');
     const description = [
-      plan.creativeDirection,
+      exportPlan?.creativeDirection,
       timelineSummary ? `Timeline: ${timelineSummary}` : '',
       primaryLocation?.googleMapsUrl ? `Arrival map: ${primaryLocation.googleMapsUrl}` : '',
       primaryLocation?.logistics?.parking ? `Parking: ${primaryLocation.logistics.parking}` : '',
@@ -1549,7 +1577,7 @@ export default function PlannerPage() {
       `DTSTAMP:${formatCalendarDate(new Date())}`,
       `DTSTART:${formatCalendarDate(startsAt)}`,
       `DTEND:${formatCalendarDate(endsAt)}`,
-      `SUMMARY:${escapeCalendarText(plan.projectTitle || shootType)}`,
+      `SUMMARY:${escapeCalendarText(exportPlan?.projectTitle || shootType)}`,
       `LOCATION:${escapeCalendarText(primaryLocationName || '')}`,
       `DESCRIPTION:${escapeCalendarText(description)}`,
       'END:VEVENT',
@@ -1560,7 +1588,7 @@ export default function PlannerPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${slugifyFileName(plan.projectTitle || shootType)}.ics`;
+    link.download = `${slugifyFileName(exportPlan?.projectTitle || shootType)}.ics`;
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -1824,7 +1852,10 @@ export default function PlannerPage() {
             onCopyShareLink={() => void copyShareLink()}
             shareLinkError={shareLinkError}
             guideActivity={guideActivity}
-            shotCount={plan.shotList.length}
+            candidateLocationCount={candidateLocations.length}
+            selectedLocationCount={selectedLocations.length}
+            recommendedLocationCount={recommendedLocationCount}
+            shotCount={displayedShots.length}
             expectedShotRange={expectedShotRange}
             durationMinutes={durationMinutes}
           />
@@ -1856,12 +1887,17 @@ export default function PlannerPage() {
                     />
                   }
                   selectedLocation={selectedReviewLocation}
-                  locations={displayedLocations}
+                  locations={candidateLocations}
                   emptyLocationMessage={emptyLocationMessage}
                   locationVotes={locationVotes}
+                  selectedLocationKeys={selectedLocationKeys}
+                  selectedLocationCount={selectedLocations.length}
+                  recommendedLocationCount={recommendedLocationCount}
                   preferredVenueBucket={preferredVenueBucket}
                   excludedVenueBuckets={excludedVenueBuckets}
                   logisticsLookup={logisticsLookup}
+                  onToggleSelectedLocation={location => toggleSelectedLocation(location, recommendedLocationCount)}
+                  onClearSelectedLocations={clearSelectedLocations}
                   onVoteLocation={setLocationVote}
                   onTogglePreferredVenueBucket={togglePreferredVenueBucket}
                   onToggleExcludedVenueBucket={toggleExcludedVenueBucket}
@@ -1882,15 +1918,20 @@ export default function PlannerPage() {
                       onSelectLocation={setSelectedReviewLocationName}
                     />
                   )}
-                  locations={displayedLocations}
+                  locations={candidateLocations}
                   selectedLocation={selectedReviewLocation}
                   onSelectLocation={setSelectedReviewLocationName}
                   emptyLocationMessage={emptyLocationMessage}
                   locationVotes={locationVotes}
+                  selectedLocationKeys={selectedLocationKeys}
+                  selectedLocationCount={selectedLocations.length}
+                  recommendedLocationCount={recommendedLocationCount}
                   preferredVenueBucket={preferredVenueBucket}
                   excludedVenueBuckets={excludedVenueBuckets}
                   logisticsLookup={logisticsLookup}
                   locationRefinements={plan.locationRefinements}
+                  onToggleSelectedLocation={location => toggleSelectedLocation(location, recommendedLocationCount)}
+                  onClearSelectedLocations={clearSelectedLocations}
                   onVoteLocation={setLocationVote}
                   onTogglePreferredVenueBucket={togglePreferredVenueBucket}
                   onToggleExcludedVenueBucket={toggleExcludedVenueBucket}
