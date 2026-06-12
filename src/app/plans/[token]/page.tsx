@@ -68,6 +68,9 @@ type SharedPlanResponse = {
   error?: string;
 };
 
+type GuideRole = 'client' | 'assistant' | 'vendor' | 'photographer';
+type ApprovalStatus = 'pending' | 'approved' | 'changes-requested';
+
 function formatDate(value?: string) {
   if (!value) return null;
   const date = new Date(value);
@@ -102,6 +105,11 @@ export default function SharedPlanPage() {
   const [requiresPassword, setRequiresPassword] = useState(false);
   const [sharePassword, setSharePassword] = useState('');
   const [submittedPassword, setSubmittedPassword] = useState('');
+  const [viewerRole, setViewerRole] = useState<GuideRole>('client');
+  const [approvalStatus, setApprovalStatus] = useState<ApprovalStatus>('pending');
+  const [commentScope, setCommentScope] = useState('overall');
+  const [commentDraft, setCommentDraft] = useState('');
+  const [collaborationMessage, setCollaborationMessage] = useState('');
 
   useEffect(() => {
     const fetchSharedPlan = async () => {
@@ -149,6 +157,7 @@ export default function SharedPlanPage() {
   const primaryColor = branding?.primaryColor || '#1f2933';
   const accentColor = branding?.accentColor || '#d8d2c8';
   const studioName = branding?.studioName || 'ShutterPlan AI';
+  const guideVersion = data?.metadata?.shootDate || data?.metadata?.duration || 'v1';
 
   const trackGuideEngagement = async (eventName: string, payload: Record<string, unknown> = {}) => {
     if (!token) return;
@@ -159,12 +168,41 @@ export default function SharedPlanPage() {
         body: JSON.stringify({
           shareToken: token,
           eventName,
-          payload,
+          payload: {
+            role: viewerRole,
+            guideVersion,
+            ...payload,
+          },
         }),
       });
     } catch {
       // Public guide analytics are best-effort.
     }
+  };
+
+  const selectRole = (role: GuideRole) => {
+    setViewerRole(role);
+    void trackGuideEngagement('planner_guide_role_selected', { role });
+  };
+
+  const submitApproval = (status: Exclude<ApprovalStatus, 'pending'>) => {
+    setApprovalStatus(status);
+    setCollaborationMessage(status === 'approved' ? 'Approval sent to your photographer.' : 'Change request sent to your photographer.');
+    void trackGuideEngagement(
+      status === 'approved' ? 'planner_guide_approved' : 'planner_guide_changes_requested',
+      { approvalStatus: status }
+    );
+  };
+
+  const submitComment = () => {
+    const comment = commentDraft.trim();
+    if (!comment) return;
+    setCollaborationMessage('Comment sent to your photographer.');
+    setCommentDraft('');
+    void trackGuideEngagement('planner_guide_comment_added', {
+      scope: commentScope,
+      comment: comment.slice(0, 500),
+    });
   };
 
   return (
@@ -269,6 +307,70 @@ export default function SharedPlanPage() {
                 </div>
               </div>
             </section>
+
+            <Card className="border border-[#d8d2c8] bg-white shadow-sm">
+              <div className="grid gap-4 lg:grid-cols-[1fr_1.2fr]">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7c6f64]">Guide collaboration</p>
+                  <h2 className="mt-2 text-xl font-semibold text-[#1f2933]">Approval and comments</h2>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {(['client', 'assistant', 'vendor', 'photographer'] as GuideRole[]).map(role => (
+                      <button
+                        key={role}
+                        type="button"
+                        onClick={() => selectRole(role)}
+                        className={`rounded-lg border px-3 py-2.5 text-sm font-semibold capitalize ${
+                          viewerRole === role
+                            ? 'border-[#1f2933] bg-[#1f2933] text-white'
+                            : 'border-[#d8d2c8] bg-[#faf9f6] text-[#5f6b76]'
+                        }`}
+                      >
+                        {role}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button type="button" onClick={() => submitApproval('approved')} className="bg-[#0f766e] hover:bg-[#115e59]">
+                      Approve guide
+                    </Button>
+                    <Button type="button" variant="secondary" onClick={() => submitApproval('changes-requested')} className="bg-white hover:bg-[#ebe5db]">
+                      Request changes
+                    </Button>
+                  </div>
+                  <p className="mt-3 text-xs font-medium text-[#5f6b76]">
+                    Status: {approvalStatus === 'changes-requested' ? 'changes requested' : approvalStatus}
+                  </p>
+                  {collaborationMessage && <p className="mt-2 text-sm font-medium text-[#0f766e]">{collaborationMessage}</p>}
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold uppercase tracking-[0.12em] text-[#7c6f64]" htmlFor="guide-comment-scope">
+                    Comment target
+                  </label>
+                  <select
+                    id="guide-comment-scope"
+                    value={commentScope}
+                    onChange={event => setCommentScope(event.target.value)}
+                    className="mt-2 w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] px-3 py-2 text-sm text-[#1f2933] outline-none focus:border-[#1f2933]"
+                  >
+                    <option value="overall">Overall guide</option>
+                    <option value="locations">Locations</option>
+                    <option value="timeline">Timeline</option>
+                    <option value="shots">Shot list</option>
+                    <option value="prep">Prep details</option>
+                  </select>
+                  <textarea
+                    value={commentDraft}
+                    onChange={event => setCommentDraft(event.target.value)}
+                    placeholder="Add a comment or requested change"
+                    className="mt-3 min-h-24 w-full rounded-lg border border-[#d8d2c8] bg-[#faf9f6] px-3 py-2 text-sm text-[#1f2933] outline-none focus:border-[#1f2933]"
+                  />
+                  <Button type="button" onClick={submitComment} disabled={!commentDraft.trim()} className="mt-3 bg-[#1f2933] hover:bg-[#111827]">
+                    Send comment
+                  </Button>
+                </div>
+              </div>
+            </Card>
 
             <section className="grid gap-5 lg:grid-cols-[1fr_0.9fr]">
               <Card className="border border-[#d8d2c8] shadow-sm">

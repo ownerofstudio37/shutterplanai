@@ -70,6 +70,19 @@ const PlannerLocationMap = dynamic(() => import('@/components/map/PlannerLocatio
   ),
 });
 
+type GuideActivitySummary = {
+  guideViews: number;
+  guideEngagements: number;
+  guideApprovals: number;
+  guideChangeRequests: number;
+  guideComments: number;
+};
+
+type GuideActivityResponse = {
+  success?: boolean;
+  data?: GuideActivitySummary;
+};
+
 export default function PlannerPage() {
   const router = useRouter();
 
@@ -118,6 +131,7 @@ export default function PlannerPage() {
   const [shareUrl, setShareUrl] = useState<string>('');
   const [shareToken, setShareToken] = useState<string>('');
   const [shareLinkError, setShareLinkError] = useState<string>('');
+  const [guideActivity, setGuideActivity] = useState<GuideActivitySummary | null>(null);
 
   // V2: multi-day state
   const [multiDay, setMultiDay] = useState(false);
@@ -438,6 +452,22 @@ export default function PlannerPage() {
     }
   }, []);
 
+  const loadGuideActivity = useCallback(async () => {
+    try {
+      const response = await fetch('/api/planner/analytics', {
+        headers: {
+          ...getAuthHeader(),
+        },
+      });
+      const result = (await response.json()) as GuideActivityResponse;
+      if (response.ok && result.success && result.data) {
+        setGuideActivity(result.data);
+      }
+    } catch {
+      // Guide activity should not block planning UI.
+    }
+  }, []);
+
   useEffect(() => {
     return () => {
       if (aiTypingTimerRef.current) {
@@ -466,8 +496,9 @@ export default function PlannerPage() {
     queueMicrotask(() => {
       void loadBusinessProfile();
       void loadBillingUsage();
+      void loadGuideActivity();
     });
-  }, [loadBillingUsage]);
+  }, [loadBillingUsage, loadGuideActivity]);
 
   useEffect(() => {
     const readStoredDraft = () => {
@@ -1413,6 +1444,7 @@ export default function PlannerPage() {
       setShareToken(result.shareToken || '');
       void trackPlannerEvent('planner_share_link_created');
       void loadBillingUsage();
+      void loadGuideActivity();
     } catch {
       setShareLinkError('Failed to create share link.');
     } finally {
@@ -1620,6 +1652,7 @@ export default function PlannerPage() {
             shareUrl={shareUrl}
             onCopyShareLink={() => void copyShareLink()}
             shareLinkError={shareLinkError}
+            guideActivity={guideActivity}
             shotCount={plan.shotList.length}
             expectedShotRange={expectedShotRange}
             durationMinutes={durationMinutes}

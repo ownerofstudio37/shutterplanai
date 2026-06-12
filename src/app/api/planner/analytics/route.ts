@@ -10,6 +10,9 @@ export interface PlannerAnalyticsSummary {
   shareLinksCreated: number;
   guideViews: number;
   guideEngagements: number;
+  guideApprovals: number;
+  guideChangeRequests: number;
+  guideComments: number;
   draftsResumed: number;
   routesOptimized: number;
 }
@@ -70,7 +73,11 @@ export async function GET(request: NextRequest) {
       guideViews: counts['planner_guide_viewed'] ?? 0,
       guideEngagements:
         (counts['planner_guide_map_opened'] ?? 0) +
-        (counts['planner_guide_dashboard_clicked'] ?? 0),
+        (counts['planner_guide_dashboard_clicked'] ?? 0) +
+        (counts['planner_guide_role_selected'] ?? 0),
+      guideApprovals: counts['planner_guide_approved'] ?? 0,
+      guideChangeRequests: counts['planner_guide_changes_requested'] ?? 0,
+      guideComments: counts['planner_guide_comment_added'] ?? 0,
       draftsResumed: counts['planner_draft_resumed'] ?? 0,
       routesOptimized: counts['planner_route_optimized'] ?? 0,
     };

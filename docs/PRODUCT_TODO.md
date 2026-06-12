@@ -91,11 +91,11 @@
 
 ## Next: Collaboration and Client Approval
 
-- [ ] Add client approval states to shared guides: pending, approved, changes requested.
-- [ ] Add comments on locations, timeline items, and shot-list items.
-- [ ] Add share-link activity summaries back into the planner review UI.
-- [ ] Add role-based guide access for photographer, assistant, client, and vendor views.
-- [ ] Add version history for plan refinements and client-facing guide updates.
+- [x] Add client approval states to shared guides: pending, approved, changes requested.
+- [x] Add comments on locations, timeline items, and shot-list items.
+- [x] Add share-link activity summaries back into the planner review UI.
+- [x] Add role-based guide access for photographer, assistant, client, and vendor views.
+- [x] Add version history for plan refinements and client-facing guide updates.
 
 ## Next: Integrations and Growth
 

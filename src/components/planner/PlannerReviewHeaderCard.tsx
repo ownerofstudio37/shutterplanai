@@ -109,6 +109,13 @@ type PlannerReviewHeaderCardProps = {
   shareUrl: string;
   onCopyShareLink: () => void;
   shareLinkError: string;
+  guideActivity?: {
+    guideViews: number;
+    guideEngagements: number;
+    guideApprovals: number;
+    guideChangeRequests: number;
+    guideComments: number;
+  } | null;
   shotCount: number;
   expectedShotRange: { min: number; max: number };
   durationMinutes: number;
@@ -168,6 +175,7 @@ export function PlannerReviewHeaderCard({
   shareUrl,
   onCopyShareLink,
   shareLinkError,
+  guideActivity,
   shotCount,
   expectedShotRange,
   durationMinutes,
@@ -209,7 +217,7 @@ export function PlannerReviewHeaderCard({
     {
       label: 'Client guide',
       value: shareUrl ? 'Ready' : 'Draft',
-      detail: shareUrl ? 'Share link live' : 'Not exported',
+      detail: guideActivity && shareUrl ? `${guideActivity.guideViews} views` : shareUrl ? 'Share link live' : 'Not exported',
       className: shareUrl
         ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
         : 'border-[#e4ded5] bg-[#faf9f6] text-[#5f6b76]',
@@ -444,6 +452,27 @@ export function PlannerReviewHeaderCard({
                   <Button variant="ghost">Shot board</Button>
                 </Link>
               </div>
+            </div>
+          </div>
+        )}
+
+        {shareUrl && guideActivity && (
+          <div className="grid gap-2 text-xs text-[#5f6b76] sm:grid-cols-4">
+            <div className="rounded-lg border border-[#e4ded5] bg-white px-3 py-2">
+              <p className="font-semibold text-[#1f2933]">{guideActivity.guideViews}</p>
+              <p>Views</p>
+            </div>
+            <div className="rounded-lg border border-[#e4ded5] bg-white px-3 py-2">
+              <p className="font-semibold text-[#1f2933]">{guideActivity.guideComments}</p>
+              <p>Comments</p>
+            </div>
+            <div className="rounded-lg border border-[#e4ded5] bg-white px-3 py-2">
+              <p className="font-semibold text-[#1f2933]">{guideActivity.guideApprovals}</p>
+              <p>Approvals</p>
+            </div>
+            <div className="rounded-lg border border-[#e4ded5] bg-white px-3 py-2">
+              <p className="font-semibold text-[#1f2933]">{guideActivity.guideChangeRequests}</p>
+              <p>Change requests</p>
             </div>
           </div>
         )}

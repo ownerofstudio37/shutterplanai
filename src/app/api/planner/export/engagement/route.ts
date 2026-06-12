@@ -7,6 +7,10 @@ const supabase = createSupabaseAdminClient();
 const ALLOWED_EVENTS = new Set([
   'planner_guide_map_opened',
   'planner_guide_dashboard_clicked',
+  'planner_guide_approved',
+  'planner_guide_changes_requested',
+  'planner_guide_comment_added',
+  'planner_guide_role_selected',
 ]);
 
 export async function POST(request: NextRequest) {
