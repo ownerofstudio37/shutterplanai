@@ -98,6 +98,9 @@ type PlannerReviewHeaderCardProps = {
   onCreateShareLink: () => void;
   isRevokingShareLink: boolean;
   onRevokeShareLink: () => void;
+  onDownloadCalendar: () => void;
+  canDownloadCalendar: boolean;
+  onPrintGuide: () => void;
   isRefining: boolean;
   onRefinePlan: () => void;
   isApplying: boolean;
@@ -164,6 +167,9 @@ export function PlannerReviewHeaderCard({
   onCreateShareLink,
   isRevokingShareLink,
   onRevokeShareLink,
+  onDownloadCalendar,
+  canDownloadCalendar,
+  onPrintGuide,
   isRefining,
   onRefinePlan,
   isApplying,
@@ -277,6 +283,22 @@ export function PlannerReviewHeaderCard({
               className="border border-white/15 text-white hover:bg-white/10"
             >
               {isCreatingShareLink ? 'Creating...' : 'Create client link'}
+            </Button>
+            <Button
+              variant="ghost"
+              disabled={!canDownloadCalendar || isApplying}
+              onClick={onDownloadCalendar}
+              className="border border-white/15 text-white hover:bg-white/10"
+            >
+              Calendar export
+            </Button>
+            <Button
+              variant="ghost"
+              disabled={!shareUrl}
+              onClick={onPrintGuide}
+              className="border border-white/15 text-white hover:bg-white/10"
+            >
+              Branded PDF
             </Button>
             <Button
               isLoading={isApplying}
@@ -445,6 +467,8 @@ export function PlannerReviewHeaderCard({
               </div>
               <div className="flex flex-wrap gap-2">
                 <Button variant="secondary" disabled={isRevokingShareLink} onClick={onCopyShareLink}>Copy link</Button>
+                <Button variant="secondary" disabled={!canDownloadCalendar} onClick={onDownloadCalendar}>Calendar</Button>
+                <Button variant="secondary" onClick={onPrintGuide}>PDF</Button>
                 <Button variant="ghost" isLoading={isRevokingShareLink} disabled={isApplying || isRefining} onClick={onRevokeShareLink}>
                   {isRevokingShareLink ? 'Revoking...' : 'Revoke link'}
                 </Button>

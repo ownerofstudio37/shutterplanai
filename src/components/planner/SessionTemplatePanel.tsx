@@ -34,6 +34,80 @@ export type SessionTemplate = {
   updated_at: string;
 };
 
+const GUIDE_TEMPLATE_STARTERS: Array<{
+  id: string;
+  name: string;
+  sessionType: string;
+  description: string;
+  payload: SessionTemplatePayload;
+}> = [
+  {
+    id: 'family-client-ready',
+    name: 'Family Client Guide',
+    sessionType: 'Family Session',
+    description: 'Fast pacing, outfit prep, stroller logistics, and kid reset windows.',
+    payload: {
+      shootType: 'Family Session',
+      locationMode: 'find-locations',
+      duration: '60 minutes',
+      mood: 'Warm + candid',
+      subjectDetails: 'Family with young kids, needs a relaxed flow and simple transitions',
+      mustHaveShots: 'Whole family portrait, siblings, each child solo, parents together, playful candids',
+      constraints: 'Prioritize stroller-friendly routes, restroom access, snack breaks, and short walking distances',
+      familyPacing: 'Keep poses short, rotate kids often, and leave a reset window midway through the session',
+    },
+  },
+  {
+    id: 'engagement-golden-guide',
+    name: 'Engagement Client Guide',
+    sessionType: 'Engagement Session',
+    description: 'Golden-hour timing, outfit flow, map handoff, and romantic shot sequencing.',
+    payload: {
+      shootType: 'Engagement Session',
+      locationMode: 'find-locations',
+      duration: '90 minutes',
+      mood: 'Romantic + cinematic',
+      subjectDetails: 'Engaged couple wants candid connection with a polished editorial finish',
+      mustHaveShots: 'Walking candids, ring detail, wide scenic portraits, close connection shots, final sunset portraits',
+      constraints: 'Minimize crowd risk, sequence locations for golden hour, and leave time for one outfit change',
+      engagementStory: 'Build the flow around natural movement, emotional prompts, and sunset portraits',
+    },
+  },
+  {
+    id: 'branding-content-guide',
+    name: 'Branding Client Guide',
+    sessionType: 'Branding Session',
+    description: 'Website crops, wardrobe variety, prop reminders, and content batch coverage.',
+    payload: {
+      shootType: 'Branding Session',
+      locationMode: 'find-locations',
+      duration: '75 minutes',
+      mood: 'Polished + approachable',
+      subjectDetails: 'Solo business owner needs website, social, and profile images',
+      mustHaveShots: 'Website hero, horizontal banner, profile portrait, working/action shots, detail images',
+      constraints: 'Need clean backgrounds, modern texture, quick transitions, and wardrobe variety',
+      brandingGoals: 'Website hero images, about page portraits, speaking profile photos, and social content batch',
+    },
+  },
+  {
+    id: 'event-run-of-show-guide',
+    name: 'Event Client Guide',
+    sessionType: 'Event Session',
+    description: 'Run-of-show coverage, sponsor visibility, venue access, and vendor coordination.',
+    payload: {
+      shootType: 'Event Session',
+      locationMode: 'use-provided',
+      duration: '120 minutes',
+      mood: 'Documentary + professional',
+      subjectDetails: 'Business event with speakers, audience reactions, details, and networking',
+      mustHaveShots: 'Speaker on stage, audience reactions, sponsor signage, venue details, candid networking',
+      constraints: 'Confirm venue access, parking, vendor arrival, stage lighting, and no-disruption shooting zones',
+      providedLocations: 'Main stage, sponsor wall, registration table, networking area, venue exterior',
+      eventPriorities: 'Keynote moments, sponsor visibility, VIP candids, attendee energy, and room-wide context',
+    },
+  },
+];
+
 type SessionTemplatePanelProps = {
   /** Current intake state — used when saving the active intake as a new template. */
   currentPayload: SessionTemplatePayload;
@@ -122,6 +196,14 @@ export function SessionTemplatePanel({ currentPayload, onLoadTemplate }: Session
     [onLoadTemplate]
   );
 
+  const loadStarterTemplate = useCallback(
+    (payload: SessionTemplatePayload) => {
+      onLoadTemplate(payload);
+      setIsOpen(false);
+    },
+    [onLoadTemplate]
+  );
+
   const deleteTemplate = useCallback(async (id: string) => {
     setDeletingId(id);
     try {
@@ -149,12 +231,38 @@ export function SessionTemplatePanel({ currentPayload, onLoadTemplate }: Session
         onClick={handleToggle}
         className="flex w-full items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-left text-sm font-semibold text-emerald-900 hover:bg-emerald-100 transition"
       >
-        <span>📁 My Session Templates</span>
+        <span>Session templates</span>
         <span className="text-emerald-700 text-xs font-normal">{isOpen ? 'Hide ▲' : 'Show ▼'}</span>
       </button>
 
       {isOpen && (
         <div className="mt-2 rounded-xl border border-emerald-200 bg-white p-4 shadow-sm">
+          <div className="mb-4">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+              Guide starters by session type
+            </p>
+            <div className="grid gap-2 md:grid-cols-2">
+              {GUIDE_TEMPLATE_STARTERS.map(template => (
+                <button
+                  key={template.id}
+                  type="button"
+                  onClick={() => loadStarterTemplate(template.payload)}
+                  className="min-h-28 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-left transition hover:border-emerald-300 hover:bg-emerald-50"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900">{template.name}</p>
+                      <p className="mt-1 text-xs font-medium text-emerald-700">{template.sessionType}</p>
+                    </div>
+                    <span className="rounded-md bg-white px-2 py-1 text-[11px] font-semibold text-gray-600">
+                      Load
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs leading-5 text-gray-500">{template.description}</p>
+                </button>
+              ))}
+            </div>
+          </div>
 
           {/* Save current intake as template */}
           <div className="mb-4">
@@ -219,6 +327,11 @@ export function SessionTemplatePanel({ currentPayload, onLoadTemplate }: Session
                       {template.template_payload.duration && (
                         <span className="rounded-full bg-gray-200 px-2 py-0.5 text-gray-700">
                           {template.template_payload.duration}
+                        </span>
+                      )}
+                      {template.template_payload.locationMode && (
+                        <span className="rounded-full bg-gray-200 px-2 py-0.5 text-gray-700">
+                          {template.template_payload.locationMode === 'use-provided' ? 'Provided spots' : 'AI locations'}
                         </span>
                       )}
                       {template.template_payload.city && (

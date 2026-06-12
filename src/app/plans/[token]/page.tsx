@@ -95,6 +95,27 @@ function getMapsUrl(location: SharedLocation, index: number) {
   return `https://maps.google.com/?q=${encodeURIComponent(getLocationName(location, index))}`;
 }
 
+function escapeCalendarText(value: string) {
+  return value.replace(/\\/g, '\\\\').replace(/,/g, '\\,').replace(/;/g, '\\;').replace(/\r?\n/g, '\\n');
+}
+
+function formatCalendarDate(value: Date) {
+  return value.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+}
+
+function parseDurationHours(value?: string) {
+  if (!value) return 1;
+  const match = value.match(/(\d+(?:\.\d+)?)\s*(hour|hr|minute|min)/i);
+  if (!match) return 1;
+  const amount = Number(match[1]);
+  if (!Number.isFinite(amount) || amount <= 0) return 1;
+  return /hour|hr/i.test(match[2]) ? amount : amount / 60;
+}
+
+function slugifyFileName(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 60) || 'shoot-plan';
+}
+
 export default function SharedPlanPage() {
   const params = useParams<{ token: string }>();
   const token = params?.token;
@@ -158,6 +179,8 @@ export default function SharedPlanPage() {
   const accentColor = branding?.accentColor || '#d8d2c8';
   const studioName = branding?.studioName || 'ShutterPlan AI';
   const guideVersion = data?.metadata?.shootDate || data?.metadata?.duration || 'v1';
+  const calendarStart = data?.metadata?.shootDate ? new Date(data.metadata.shootDate) : null;
+  const canDownloadCalendar = Boolean(calendarStart && !Number.isNaN(calendarStart.getTime()));
 
   const trackGuideEngagement = async (eventName: string, payload: Record<string, unknown> = {}) => {
     if (!token) return;
@@ -205,9 +228,55 @@ export default function SharedPlanPage() {
     });
   };
 
+  const downloadCalendarFile = () => {
+    if (!plan || !calendarStart || Number.isNaN(calendarStart.getTime())) return;
+
+    const end = new Date(calendarStart.getTime() + parseDurationHours(data?.metadata?.duration) * 60 * 60 * 1000);
+    const primaryLocationName = primaryLocation ? getLocationName(primaryLocation, 0) : data?.metadata?.city || '';
+    const descriptionLines = [
+      plan.creativeDirection,
+      timeline.length ? `Timeline: ${timeline.map(item => `${item.timeBlock || 'Block'} - ${item.focus || 'Session flow'}`).join(' | ')}` : '',
+      primaryLocation ? `Arrival: ${getMapsUrl(primaryLocation, 0)}` : '',
+    ].filter(Boolean);
+    const title = `${studioName}: ${plan.projectTitle || data?.metadata?.shootType || 'Photo session'}`;
+    const ics = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//ShutterPlan AI//Client Guide//EN',
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH',
+      'BEGIN:VEVENT',
+      `UID:${token || Date.now()}@shutterplan.ai`,
+      `DTSTAMP:${formatCalendarDate(new Date())}`,
+      `DTSTART:${formatCalendarDate(calendarStart)}`,
+      `DTEND:${formatCalendarDate(end)}`,
+      `SUMMARY:${escapeCalendarText(title)}`,
+      `LOCATION:${escapeCalendarText(primaryLocationName)}`,
+      `DESCRIPTION:${escapeCalendarText(descriptionLines.join('\n'))}`,
+      'END:VEVENT',
+      'END:VCALENDAR',
+    ].join('\r\n');
+
+    const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${slugifyFileName(plan.projectTitle || 'shoot-plan')}.ics`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    void trackGuideEngagement('planner_guide_calendar_downloaded');
+  };
+
+  const printGuide = () => {
+    void trackGuideEngagement('planner_guide_pdf_export_clicked');
+    window.print();
+  };
+
   return (
     <main className="min-h-screen bg-[#f6f3ee] text-[#1f2933]">
-      <div className="mx-auto max-w-6xl px-4 py-5 md:px-6 md:py-8">
+      <div className="client-guide-print mx-auto max-w-6xl px-4 py-5 md:px-6 md:py-8">
         <header className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-3">
             {branding?.logoUrl ? (
@@ -222,9 +291,21 @@ export default function SharedPlanPage() {
               <p className="mt-1 text-sm text-[#5f6b76]">Prepared by your photographer</p>
             </div>
           </div>
-          <Link href="/auth/login" onClick={() => void trackGuideEngagement('planner_guide_dashboard_clicked')}>
-            <Button variant="secondary" className="bg-white hover:bg-[#ebe5db]">Open photographer dashboard</Button>
-          </Link>
+          <div className="print-hidden flex flex-wrap gap-2">
+            {plan && (
+              <>
+                <Button type="button" variant="secondary" onClick={downloadCalendarFile} disabled={!canDownloadCalendar} className="bg-white hover:bg-[#ebe5db]">
+                  Calendar
+                </Button>
+                <Button type="button" variant="secondary" onClick={printGuide} className="bg-white hover:bg-[#ebe5db]">
+                  Save PDF
+                </Button>
+              </>
+            )}
+            <Link href="/auth/login" onClick={() => void trackGuideEngagement('planner_guide_dashboard_clicked')}>
+              <Button variant="secondary" className="bg-white hover:bg-[#ebe5db]">Open photographer dashboard</Button>
+            </Link>
+          </div>
         </header>
 
         {isLoading && (

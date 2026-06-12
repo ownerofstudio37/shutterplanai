@@ -61,6 +61,23 @@ function getAuthHeader() {
   return headers;
 }
 
+function escapeCalendarText(value: string) {
+  return value.replace(/\\/g, '\\\\').replace(/,/g, '\\,').replace(/;/g, '\\;').replace(/\r?\n/g, '\\n');
+}
+
+function formatCalendarDate(value: Date) {
+  return value.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+}
+
+function parseDurationHours(value: string) {
+  const minutes = parseDurationMinutes(value);
+  return minutes > 0 ? minutes / 60 : 1;
+}
+
+function slugifyFileName(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 60) || 'shoot-plan';
+}
+
 const PlannerLocationMap = dynamic(() => import('@/components/map/PlannerLocationMap'), {
   ssr: false,
   loading: () => (
@@ -1301,6 +1318,41 @@ export default function PlannerPage() {
     }
   }, [plan]);
 
+  const profileOutputExamples = useMemo(() => {
+    if (!businessProfile) return [];
+
+    return [
+      businessProfile.baseLocation || businessProfile.zipCode
+        ? {
+            label: 'Location anchor',
+            source: businessProfile.baseLocation || businessProfile.zipCode || '',
+            output: `AI location searches will center around ${businessProfile.baseLocation || businessProfile.zipCode}.`,
+          }
+        : null,
+      businessProfile.brandTone
+        ? {
+            label: 'Brand tone',
+            source: businessProfile.brandTone,
+            output: `Planner copy and client prep will lean ${businessProfile.brandTone.toLowerCase()}.`,
+          }
+        : null,
+      businessProfile.preferredLocationTypes
+        ? {
+            label: 'Preferred spots',
+            source: businessProfile.preferredLocationTypes,
+            output: `Location suggestions will favor ${businessProfile.preferredLocationTypes.toLowerCase()}.`,
+          }
+        : null,
+      businessProfile.prepGuideNotes
+        ? {
+            label: 'Client prep',
+            source: businessProfile.prepGuideNotes,
+            output: 'Saved prep notes can flow into the client checklist and guide handoff.',
+          }
+        : null,
+    ].filter(Boolean).slice(0, 3) as Array<{ label: string; source: string; output: string }>;
+  }, [businessProfile]);
+
   const resumeDraft = () => {
     if (!resumableDraft) return;
     hydrateFromDraft(resumableDraft);
@@ -1462,6 +1514,70 @@ export default function PlannerPage() {
     }
   };
 
+  const downloadCalendarFile = () => {
+    if (!plan || !shootDate) {
+      setShareLinkError('Add a shoot date before exporting a calendar file.');
+      return;
+    }
+
+    const startsAt = new Date(shootDate);
+    if (Number.isNaN(startsAt.getTime())) {
+      setShareLinkError('Use a calendar-readable shoot date before exporting.');
+      return;
+    }
+
+    const endsAt = new Date(startsAt.getTime() + parseDurationHours(duration) * 60 * 60 * 1000);
+    const primaryLocation = plan.locationSuggestions[0];
+    const primaryLocationName = primaryLocation?.displayName || primaryLocation?.name || city;
+    const timelineSummary = plan.timeline
+      .map(item => `${item.timeBlock || 'Block'} - ${item.focus || 'Session flow'}`)
+      .join(' | ');
+    const description = [
+      plan.creativeDirection,
+      timelineSummary ? `Timeline: ${timelineSummary}` : '',
+      primaryLocation?.googleMapsUrl ? `Arrival map: ${primaryLocation.googleMapsUrl}` : '',
+      primaryLocation?.logistics?.parking ? `Parking: ${primaryLocation.logistics.parking}` : '',
+    ].filter(Boolean).join('\n');
+    const calendar = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//ShutterPlan AI//Planner Calendar Export//EN',
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH',
+      'BEGIN:VEVENT',
+      `UID:${draftId}@shutterplan.ai`,
+      `DTSTAMP:${formatCalendarDate(new Date())}`,
+      `DTSTART:${formatCalendarDate(startsAt)}`,
+      `DTEND:${formatCalendarDate(endsAt)}`,
+      `SUMMARY:${escapeCalendarText(plan.projectTitle || shootType)}`,
+      `LOCATION:${escapeCalendarText(primaryLocationName || '')}`,
+      `DESCRIPTION:${escapeCalendarText(description)}`,
+      'END:VEVENT',
+      'END:VCALENDAR',
+    ].join('\r\n');
+
+    const blob = new Blob([calendar], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${slugifyFileName(plan.projectTitle || shootType)}.ics`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    setShareLinkError('');
+    void trackPlannerEvent('planner_calendar_export_downloaded');
+  };
+
+  const openPrintableGuide = () => {
+    if (!shareUrl) {
+      setShareLinkError('Create a client link before opening the branded PDF export.');
+      return;
+    }
+    window.open(shareUrl, '_blank', 'noopener,noreferrer');
+    void trackPlannerEvent('planner_pdf_export_opened');
+  };
+
   const revokeShareLink = async () => {
     if (!shareToken) {
       setShareLinkError('Cannot revoke: missing share token. Create a new link first.');
@@ -1540,6 +1656,26 @@ export default function PlannerPage() {
               </div>
             ))}
           </div>
+          <div className="mt-4 overflow-x-auto rounded-lg border border-[#d8d2c8] bg-white">
+            <div className="min-w-[620px]">
+              <div className="grid grid-cols-[1.1fr_0.8fr_0.8fr] border-b border-[#e4ded5] bg-[#f6f3ee] text-xs font-semibold uppercase tracking-[0.12em] text-[#7c6f64]">
+                <div className="px-3 py-3">Outcome</div>
+                <div className="px-3 py-3">Free</div>
+                <div className="px-3 py-3">Pro</div>
+              </div>
+              {[
+                ['Saved planning hours', '3 AI plans', 'Unlimited plans and refinements'],
+                ['Client readiness', '1 short-lived guide', 'Unlimited branded client guides'],
+                ['Premium guide controls', 'Basic links', 'Passwords, longer expiry, PDF and calendar workflow'],
+              ].map(row => (
+                <div key={row[0]} className="grid grid-cols-[1.1fr_0.8fr_0.8fr] border-b border-[#f0ebe4] text-sm last:border-b-0">
+                  <div className="px-3 py-3 font-semibold text-[#1f2933]">{row[0]}</div>
+                  <div className="px-3 py-3 text-[#5f6b76]">{row[1]}</div>
+                  <div className="px-3 py-3 font-medium text-[#0f766e]">{row[2]}</div>
+                </div>
+              ))}
+            </div>
+          </div>
         </Card>
       )}
 
@@ -1567,6 +1703,38 @@ export default function PlannerPage() {
           }}
           onLoadTemplate={loadTemplate}
         />
+      )}
+
+      {workflowStage === 'intake' && (
+        <Card className="border border-[#d8d2c8] bg-white shadow-sm">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="max-w-2xl">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7c6f64]">Business profile output</p>
+              <h2 className="mt-2 text-xl font-semibold text-[#1f2933]">Your settings are already shaping the planner.</h2>
+              <p className="mt-2 text-sm leading-6 text-[#5f6b76]">
+                Complete the profile once, then reuse those preferences across AI plans, client guides, and saved session templates.
+              </p>
+            </div>
+            <Link href="/dashboard/settings">
+              <Button variant="secondary" className="bg-[#ebe5db] hover:bg-[#ded8ce]">Business profile</Button>
+            </Link>
+          </div>
+          {profileOutputExamples.length > 0 ? (
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+              {profileOutputExamples.map(example => (
+                <div key={example.label} className="rounded-lg border border-[#e4ded5] bg-[#faf9f6] px-4 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#7c6f64]">{example.label}</p>
+                  <p className="mt-2 text-sm font-semibold text-[#1f2933]">{example.source}</p>
+                  <p className="mt-2 text-xs leading-5 text-[#5f6b76]">{example.output}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              Add base location, tone, preferred location types, and prep notes to see profile-backed planner examples here.
+            </div>
+          )}
+        </Card>
       )}
 
       {workflowStage === 'intake' && (
@@ -1641,6 +1809,9 @@ export default function PlannerPage() {
             onCreateShareLink={() => void createShareLink()}
             isRevokingShareLink={isRevokingShareLink}
             onRevokeShareLink={() => void revokeShareLink()}
+            onDownloadCalendar={downloadCalendarFile}
+            canDownloadCalendar={Boolean(shootDate && !Number.isNaN(new Date(shootDate).getTime()))}
+            onPrintGuide={openPrintableGuide}
             isRefining={isRefining}
             onRefinePlan={() => void refinePlan()}
             isApplying={isApplying}

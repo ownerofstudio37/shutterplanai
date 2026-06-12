@@ -99,8 +99,8 @@
 
 ## Next: Integrations and Growth
 
-- [ ] Add calendar export or sync for confirmed shoot timelines.
-- [ ] Add downloadable branded PDF export for client guides.
-- [ ] Add reusable guide templates by session type.
-- [ ] Add onboarding prompts that connect business profile settings to visible planner output examples.
-- [ ] Add upgrade-page copy and plan comparison tied directly to saved hours, client readiness, and premium guide controls.
+- [x] Add calendar export or sync for confirmed shoot timelines.
+- [x] Add downloadable branded PDF export for client guides.
+- [x] Add reusable guide templates by session type.
+- [x] Add onboarding prompts that connect business profile settings to visible planner output examples.
+- [x] Add upgrade-page copy and plan comparison tied directly to saved hours, client readiness, and premium guide controls.

@@ -54,6 +54,17 @@ textarea {
     padding: 0 !important;
   }
 
+  .client-guide-print {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+
+  .client-guide-print section,
+  .client-guide-print article,
+  .client-guide-print [class*="rounded-lg"] {
+    break-inside: avoid;
+  }
+
   .print-card {
     break-inside: avoid;
     box-shadow: none !important;
