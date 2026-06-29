@@ -8,6 +8,8 @@ import { hasReachedLimit } from '@/lib/billing/planLimits';
 import { checkRateLimit, rateLimitResponse } from '@/lib/security/rateLimit';
 import { logSecurityEvent } from '@/lib/security/auditLog';
 
+export const maxDuration = 60;
+
 function toTrimmedOrUndefined(value: unknown) {
   if (typeof value !== 'string') return undefined;
   const trimmed = value.trim();

@@ -798,6 +798,26 @@ function getGeminiConfig() {
   return { apiKey, model };
 }
 
+function getGeminiTimeoutMs() {
+  const value = Number(process.env.GEMINI_TIMEOUT_MS);
+  return Number.isFinite(value) && value >= 5_000 ? value : 35_000;
+}
+
+function getGeminiMaxRetries() {
+  const value = Number(process.env.GEMINI_MAX_RETRIES);
+  return Number.isFinite(value) && value >= 1 ? Math.min(Math.round(value), 4) : 2;
+}
+
+function isRetryableStatus(status: number) {
+  return status === 408 || status === 429 || status >= 500;
+}
+
+function isAbortError(error: unknown) {
+  return error instanceof DOMException
+    ? error.name === 'AbortError'
+    : error instanceof Error && error.name === 'AbortError';
+}
+
 function extractJsonArray(text: string): ShotSuggestion[] {
   const trimmed = text.trim();
   const fencedMatch = trimmed.match(/```json\s*([\s\S]*?)```/i);
@@ -829,22 +849,29 @@ function extractJsonObject<T>(text: string): T {
   return JSON.parse(candidate.slice(startIndex, endIndex + 1)) as T;
 }
 
-async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3): Promise<Response> {
+async function fetchWithRetry(url: string, options: RequestInit, maxRetries = getGeminiMaxRetries()): Promise<Response> {
   let lastError: Error | null = null;
   for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), getGeminiTimeoutMs());
     try {
-      const response = await fetch(url, options);
-      if (response.status >= 400 && response.status < 500) return response;
-      if (!response.ok && response.status >= 500 && attempt < maxRetries - 1) {
+      const response = await fetch(url, { ...options, signal: controller.signal });
+      if (!response.ok && isRetryableStatus(response.status) && attempt < maxRetries - 1) {
         await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
         continue;
       }
       return response;
     } catch (error) {
-      lastError = error instanceof Error ? error : new Error(String(error));
+      lastError = isAbortError(error)
+        ? new Error('AI provider request timed out')
+        : error instanceof Error
+          ? error
+          : new Error(String(error));
       if (attempt < maxRetries - 1) {
         await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
       }
+    } finally {
+      clearTimeout(timeout);
     }
   }
   throw lastError || new Error('Fetch failed after retries');

@@ -4,6 +4,8 @@ import { createSupabaseAdminClient } from '@/lib/supabase/server';
 import { checkRateLimit, rateLimitResponse } from '@/lib/security/rateLimit';
 import { logSecurityEvent } from '@/lib/security/auditLog';
 
+export const maxDuration = 60;
+
 interface BusinessProfile {
   businessName?: string;
   businessType?: string;
@@ -25,6 +27,8 @@ interface BusinessProfile {
 
 const WEBSITE_FETCH_TIMEOUT_MS = 8_000;
 const WEBSITE_FETCH_MAX_BYTES = 512_000;
+const AI_INSIGHTS_TIMEOUT_MS = 25_000;
+const AI_INSIGHTS_MAX_RETRIES = 2;
 
 function trimOrUndefined(value: unknown, maxLength = 320): string | undefined {
   if (typeof value !== 'string') return undefined;
@@ -178,6 +182,54 @@ function extractJsonObject<T>(text: string): T {
   return JSON.parse(text.slice(start, end + 1)) as T;
 }
 
+function isRetryableStatus(status: number) {
+  return status === 408 || status === 429 || status >= 500;
+}
+
+function isAbortError(error: unknown) {
+  return error instanceof DOMException
+    ? error.name === 'AbortError'
+    : error instanceof Error && error.name === 'AbortError';
+}
+
+async function fetchAiInsights(url: string, body: unknown) {
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt < AI_INSIGHTS_MAX_RETRIES; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), AI_INSIGHTS_TIMEOUT_MS);
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+
+      if (!response.ok && isRetryableStatus(response.status) && attempt < AI_INSIGHTS_MAX_RETRIES - 1) {
+        await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+        continue;
+      }
+
+      return response;
+    } catch (error) {
+      lastError = isAbortError(error)
+        ? new Error('AI website analysis timed out')
+        : error instanceof Error
+          ? error
+          : new Error(String(error));
+      if (attempt < AI_INSIGHTS_MAX_RETRIES - 1) {
+        await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+      }
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  throw lastError ?? new Error('AI website analysis failed');
+}
+
 async function aiInsights(textSnippet: string, summary: string): Promise<WebsiteInsights | null> {
   const apiKey = process.env.GEMINI_API_KEY;
   const model = process.env.GEMINI_MODEL || 'gemini-3.1-pro-preview';
@@ -206,20 +258,18 @@ ${summary || 'None'}
 Website text snippet:
 ${textSnippet}`;
 
-  const response = await fetch(
+  const response = await fetchAiInsights(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
     {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.2,
-          responseMimeType: 'application/json',
-        },
-      }),
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: {
+        temperature: 0.2,
+        responseMimeType: 'application/json',
+      },
     }
-  );
+  ).catch(() => null);
+
+  if (!response) return null;
 
   if (!response.ok) return null;
 

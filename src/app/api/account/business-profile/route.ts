@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/serverAuth';
 import { createSupabaseAdminClient } from '@/lib/supabase/server';
 
+export const maxDuration = 30;
+
 interface BusinessProfile {
   businessName?: string;
   businessType?: string;
@@ -20,6 +22,8 @@ interface BusinessProfile {
   prepGuideNotes?: string;
   updatedAt?: string;
 }
+
+const WEBSITE_SUMMARY_TIMEOUT_MS = 6_000;
 
 function toOptionalTrimmed(value: unknown, maxLength = 300): string | undefined {
   if (typeof value !== 'string') return undefined;
@@ -54,12 +58,16 @@ function normalizeHexColor(value: unknown): string | undefined {
 async function getWebsiteSummary(websiteUrl?: string): Promise<string | undefined> {
   if (!websiteUrl) return undefined;
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), WEBSITE_SUMMARY_TIMEOUT_MS);
+
   try {
     const response = await fetch(websiteUrl, {
       headers: {
         'User-Agent': 'ShutterPlanAI/1.0',
       },
       cache: 'no-store',
+      signal: controller.signal,
     });
 
     if (!response.ok) return undefined;
@@ -75,6 +83,8 @@ async function getWebsiteSummary(websiteUrl?: string): Promise<string | undefine
     return summary ? summary.slice(0, 320) : undefined;
   } catch {
     return undefined;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 

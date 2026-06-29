@@ -6,6 +6,8 @@ import { hasReachedLimit } from '@/lib/billing/planLimits';
 import { checkRateLimit, rateLimitResponse } from '@/lib/security/rateLimit';
 import { logSecurityEvent } from '@/lib/security/auditLog';
 
+export const maxDuration = 60;
+
 export async function POST(request: NextRequest) {
   try {
     const auth = await requireAuth(request);
