@@ -1767,6 +1767,26 @@ export default function PlannerPage() {
     });
   };
 
+  const buildMicroLocationPlanItem = (location: SessionPlanLocation, spot: string, index: number, existing?: NonNullable<SessionPlanLocation['microLocationPlan']>[number]) => ({
+    id: existing?.id || `${(location.displayName || location.name).toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${spot.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${index + 1}`,
+    name: spot,
+    exactPin: existing?.exactPin || (
+      location.latitude != null && location.longitude != null
+        ? `${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)}`
+        : 'Confirm exact pin on map'
+    ),
+    purpose: existing?.purpose || (index === 0 ? 'Arrival, warmup, and first setup.' : 'Portrait, detail, or transition coverage spot.'),
+    bestLightDirection: existing?.bestLightDirection || 'Favor open shade or soft directional light.',
+    bestShotTypes: existing?.bestShotTypes?.length ? existing.bestShotTypes : ['portraits', 'movement', 'details'],
+    walkingOrder: index + 1,
+    backupUse: existing?.backupUse || 'Use if the preferred spot is crowded, windy, rainy, or too bright.',
+    parkingNote: existing?.parkingNote || location.logistics.parking,
+    restroomNote: existing?.restroomNote || location.logistics.restroom,
+    resetNote: existing?.resetNote || (index === 0 ? 'Confirm bags, wardrobe, and client comfort here.' : 'Keep the transition short and intentional.'),
+    latitude: existing?.latitude ?? location.latitude ?? null,
+    longitude: existing?.longitude ?? location.longitude ?? null,
+  });
+
   const updateLocationMicroLocations = (targetLocation: SessionPlanLocation, updater: (spots: string[]) => string[]) => {
     setIsRouteConfirmed(false);
     setPlan(prev => {
@@ -1778,9 +1798,15 @@ export default function PlannerPage() {
           const key = (location.displayName || location.name).toLowerCase();
           if (!targetNames.has(location.name.toLowerCase()) && !targetNames.has(key)) return location;
           const nextSpots = updater(location.microLocations).map(spot => spot.trim()).filter(Boolean);
+          const uniqueSpots = Array.from(new Set(nextSpots));
+          const nextMicroLocationPlan = uniqueSpots.map((spot, index) => {
+            const existing = location.microLocationPlan?.find(item => item.name === spot) || location.microLocationPlan?.[index];
+            return buildMicroLocationPlanItem(location, spot, index, existing);
+          });
           return {
             ...location,
-            microLocations: Array.from(new Set(nextSpots)),
+            microLocations: uniqueSpots,
+            microLocationPlan: nextMicroLocationPlan,
           };
         }),
       };
@@ -1793,6 +1819,44 @@ export default function PlannerPage() {
 
   const updateMicroLocation = (location: SessionPlanLocation, index: number, value: string) => {
     updateLocationMicroLocations(location, spots => spots.map((spot, spotIndex) => (spotIndex === index ? value : spot)));
+  };
+
+  const updateMicroLocationPlanField = (
+    targetLocation: SessionPlanLocation,
+    index: number,
+    field: 'purpose' | 'bestLightDirection' | 'backupUse' | 'bestShotTypes' | 'exactPin' | 'resetNote',
+    value: string
+  ) => {
+    setIsRouteConfirmed(false);
+    setPlan(prev => {
+      if (!prev) return prev;
+      const targetNames = new Set([targetLocation.name.toLowerCase(), (targetLocation.displayName || targetLocation.name).toLowerCase()]);
+
+      return {
+        ...prev,
+        locationSuggestions: prev.locationSuggestions.map(location => {
+          const key = (location.displayName || location.name).toLowerCase();
+          if (!targetNames.has(location.name.toLowerCase()) && !targetNames.has(key)) return location;
+          const microLocationPlan = location.microLocations.map((spot, spotIndex) => {
+            const existing = location.microLocationPlan?.find(item => item.name === spot) || location.microLocationPlan?.[spotIndex];
+            const nextItem = buildMicroLocationPlanItem(location, spot, spotIndex, existing);
+            if (spotIndex !== index) return nextItem;
+
+            return {
+              ...nextItem,
+              [field]: field === 'bestShotTypes'
+                ? value.split(',').map(item => item.trim()).filter(Boolean)
+                : value,
+            };
+          });
+
+          return {
+            ...location,
+            microLocationPlan,
+          };
+        }),
+      };
+    });
   };
 
   const removeMicroLocation = (location: SessionPlanLocation, index: number) => {
@@ -2595,6 +2659,7 @@ export default function PlannerPage() {
                   onUpdateMicroLocation={updateMicroLocation}
                   onRemoveMicroLocation={removeMicroLocation}
                   onMoveMicroLocation={moveMicroLocation}
+                  onUpdateMicroLocationPlanField={updateMicroLocationPlanField}
                   onSuggestMicroLocations={suggestMicroLocations}
                   displayedShots={displayedShots}
                   allShots={plan.shotList}

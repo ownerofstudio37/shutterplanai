@@ -90,6 +90,12 @@ type PlannerLocationReviewPanelProps = {
   onUpdateMicroLocation: (location: ReviewLocation, index: number, value: string) => void;
   onRemoveMicroLocation: (location: ReviewLocation, index: number) => void;
   onMoveMicroLocation: (location: ReviewLocation, index: number, direction: 'up' | 'down') => void;
+  onUpdateMicroLocationPlanField: (
+    location: ReviewLocation,
+    index: number,
+    field: 'purpose' | 'bestLightDirection' | 'backupUse' | 'bestShotTypes' | 'exactPin' | 'resetNote',
+    value: string
+  ) => void;
   onSuggestMicroLocations: (location: ReviewLocation) => void;
   onVoteLocation: (location: ReviewLocation, vote: LocationVote) => void;
   onTogglePreferredVenueBucket: (venueBucket?: string) => void;
@@ -135,6 +141,7 @@ export const PlannerLocationReviewPanel = memo(function PlannerLocationReviewPan
   onUpdateMicroLocation,
   onRemoveMicroLocation,
   onMoveMicroLocation,
+  onUpdateMicroLocationPlanField,
   onSuggestMicroLocations,
   onVoteLocation,
   onTogglePreferredVenueBucket,
@@ -339,14 +346,32 @@ export const PlannerLocationReviewPanel = memo(function PlannerLocationReviewPan
                                 {structuredSpot?.purpose || (spotIndex === 0 ? 'Client arrival or first setup' : 'Optional portrait/background stop')}
                               </span>
                               {structuredSpot && (
-                                <div className="mt-2 space-y-1 rounded-md border border-[#e4ded5] bg-white px-2 py-2 text-[#5f6b76]">
-                                  <p><span className="font-semibold text-[#1f2933]">Pin:</span> {structuredSpot.exactPin || 'Confirm on map'}</p>
-                                  <p><span className="font-semibold text-[#1f2933]">Best light:</span> {structuredSpot.bestLightDirection}</p>
-                                  <p><span className="font-semibold text-[#1f2933]">Shot types:</span> {structuredSpot.bestShotTypes.join(', ')}</p>
-                                  <p><span className="font-semibold text-[#1f2933]">Backup:</span> {structuredSpot.backupUse}</p>
-                                  {structuredSpot.resetNote && (
-                                    <p><span className="font-semibold text-[#1f2933]">Reset:</span> {structuredSpot.resetNote}</p>
-                                  )}
+                                <div className="mt-2 space-y-2 rounded-md border border-[#e4ded5] bg-white px-2 py-2 text-[#5f6b76]">
+                                  {[
+                                    ['exactPin', 'Pin', structuredSpot.exactPin || 'Confirm on map'],
+                                    ['purpose', 'Purpose', structuredSpot.purpose],
+                                    ['bestLightDirection', 'Best light', structuredSpot.bestLightDirection],
+                                    ['bestShotTypes', 'Shot types', structuredSpot.bestShotTypes.join(', ')],
+                                    ['backupUse', 'Backup', structuredSpot.backupUse],
+                                    ['resetNote', 'Reset', structuredSpot.resetNote || ''],
+                                  ].map(([field, label, value]) => (
+                                    <label key={`${structuredSpot.id}-${field}`} className="block">
+                                      <span className="block text-[10px] font-semibold uppercase tracking-[0.12em] text-[#7c6f64]">{label}</span>
+                                      <textarea
+                                        value={value}
+                                        rows={field === 'purpose' || field === 'bestLightDirection' || field === 'backupUse' ? 2 : 1}
+                                        onChange={event =>
+                                          onUpdateMicroLocationPlanField(
+                                            location,
+                                            spotIndex,
+                                            field as 'purpose' | 'bestLightDirection' | 'backupUse' | 'bestShotTypes' | 'exactPin' | 'resetNote',
+                                            event.target.value
+                                          )
+                                        }
+                                        className="mt-1 min-h-8 w-full resize-y rounded-md border border-[#d8d2c8] bg-[#faf9f6] px-2 py-1.5 text-xs text-[#1f2933] outline-none focus:border-[#1f2933]"
+                                      />
+                                    </label>
+                                  ))}
                                 </div>
                               )}
                               <span className="mt-2 flex flex-wrap gap-1.5">
