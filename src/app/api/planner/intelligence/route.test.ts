@@ -60,4 +60,30 @@ describe('planner intelligence route', () => {
     expect(body.logistics?.length).toBe(2);
     expect(body.optimizedRoute?.length).toBe(2);
   });
+
+  it('returns fallback intelligence instead of 500 for incomplete planner payloads', async () => {
+    const request = new Request('http://localhost/api/planner/intelligence', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        latitude: null,
+        longitude: null,
+        date: '',
+      }),
+    });
+
+    const response = await POST(request);
+    const body = (await response.json()) as {
+      success?: boolean;
+      goldenHours?: Record<string, string>;
+      logistics?: unknown[];
+      optimizedRoute?: number[];
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(body.goldenHours).toBeTruthy();
+    expect(body.logistics).toEqual([]);
+    expect(body.optimizedRoute).toEqual([]);
+  });
 });

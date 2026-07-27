@@ -1,5 +1,35 @@
 # ShutterPlan AI Product TODO
 
+## High Priority: True AI Planning Utility
+
+Recommended build order:
+
+1. Planner brain schema and stage-based action API.
+2. Persistent planner chat that can update the structured plan after generation.
+3. Location candidate decision screen centered on choosing one primary location.
+4. Micro-location editor for mapping exact spots inside the chosen location.
+5. Deliverable-to-shot matching from client needs, micro-spots, photographer style, and logistics.
+6. Sun/weather optimization that directly changes timeline and shot-card recommendations.
+7. Client guide polish with separate photographer-facing and client-facing outputs.
+
+- [ ] Make a real planning brain: replace mostly deterministic plan assembly with an AI orchestration layer for `intake`, `location_discovery`, `location_selection`, `micro_location_mapping`, `shot_list_generation`, `sun_weather_optimization`, and `client_guide_generation`, always returning one predictable structured `SessionPlan`.
+- [ ] Add a persistent planner chat that stays available through the whole flow, not only intake, and can update the structured plan from requests like “find more locations like the lake option,” “make this easier for toddlers,” “move golden-hour portraits later,” “add more editorial poses,” “build this around only one spot,” and “make the client guide sound warmer.”
+- [ ] Improve location discovery with real search results, parking/restroom/accessibility guesses, visual fit, crowd/permit risk, weather backup quality, sun direction/usefulness, and clear “why this fits this client/style” explanations.
+- [ ] Make the location decision screen center on the photographer choosing one primary location instead of dumping users into a broad multi-location plan.
+- [ ] Build a true micro-location workspace after location selection where photographers map the inside of the chosen location.
+- [ ] Extend micro-spots with name, exact pin, purpose, best light direction, best shot types, walking order, backup use, parking notes, restroom/reset notes, and client-facing arrival notes.
+- [ ] Support exemplar micro-spots such as South lot arrival, Oak tree open shade, Trail walking sequence, Lake edge hero frame, and Covered pavilion rain backup.
+- [ ] Match deliverables to micro-spots so every client need maps to the best spot, timing, pose/prompt, lens, angle, light note, backup spot, and priority.
+- [ ] Make sun and weather first-class planning inputs that alter decisions instead of living as a passive telemetry panel.
+- [ ] Add direct sun/weather decision examples: rain risk moves family formals to covered backup first, golden-hour portraits schedule at the right micro-spot/time, high UV avoids open fields too early, and wind avoids hair-sensitive closeups near exposed water.
+- [ ] Split outputs clearly into a photographer plan with timeline, shot list, poses/prompts, angle/lens suggestions, micro-location map, sun/weather notes, priority checklist, and backup plan.
+- [ ] Split outputs clearly into a client guide with arrival instructions, parking, what to wear/bring, session flow, weather expectations, reassurance, and photographer-branded tone.
+- [ ] Make the planner UI feel like one conversation: left-side chat assistant, right-side live plan preview.
+- [ ] Add live plan preview sections for brief, candidate locations, chosen location, micro-spots, shot list, sun/weather, and client guide.
+- [ ] Add section-level actions for edit, regenerate, ask AI, and lock/approve.
+- [ ] Save plans as drafts with version history, including autosaved chat history, structured plan drafts, before/after refinements, and restore previous version.
+- [ ] Replace the single “Generate full plan” mental model with guided step actions: Find locations, Choose location, Map micro-spots, Generate shot list, Optimize for sun/weather, and Build client guide, while still keeping a one-click full-plan option.
+
 ## Now: Onboarding and Readiness
 
 - [x] Add an empty-state First Shoot Plan flow on the dashboard.

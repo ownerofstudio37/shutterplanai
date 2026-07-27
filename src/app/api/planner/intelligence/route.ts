@@ -17,9 +17,9 @@ type IntelligenceLocation = {
 type IntelligenceRequestBody = {
   latitude?: number | null;
   longitude?: number | null;
-  date: string;
+  date?: string | null;
   durationMinutes?: number;
-  locations: IntelligenceLocation[];
+  locations?: IntelligenceLocation[] | null;
   sessionCategory?: string;
 };
 
@@ -29,34 +29,41 @@ export async function POST(request: Request) {
     const { latitude, longitude, date, durationMinutes, locations, sessionCategory } =
       (await request.json()) as IntelligenceRequestBody;
     const coordinates = sanitizeCoordinates(latitude, longitude);
+    const parsedDate = date ? new Date(date) : new Date();
+    const safeDate = Number.isNaN(parsedDate.getTime()) ? new Date() : parsedDate;
+    const safeLocations = Array.isArray(locations) ? locations : [];
+    const safeDurationMinutes = Number.isFinite(Number(durationMinutes))
+      ? Number(durationMinutes)
+      : 90;
 
     // Weather + golden hours from provider-backed forecast
     const forecast = await getForecastIntelligence({
       latitude: coordinates.latitude ?? 0,
       longitude: coordinates.longitude ?? 0,
-      date: new Date(date),
-      durationMinutes: Number(durationMinutes || 90),
+      date: safeDate,
+      durationMinutes: safeDurationMinutes,
     });
 
     // Logistics scoring for all locations
-    const logisticsScores = locations.map(loc =>
+    const logisticsScores = safeLocations.map(loc =>
       scoreLocationLogistics(loc, sessionCategory)
     );
 
     // Route optimization
     const optimizedIndices = optimizeRouteOrder(
-      locations.map((loc, i) => ({
+      safeLocations.map((loc, i) => ({
         ...loc,
         index: i,
       })),
       {
-        shootStartIso: date,
-        durationMinutes: Number(durationMinutes || 90),
+        shootStartIso: safeDate.toISOString(),
+        durationMinutes: safeDurationMinutes,
       }
     );
 
-    apiSuccess(requestContext, 200, { locationCount: locations.length });
+    apiSuccess(requestContext, 200, { locationCount: safeLocations.length });
     return jsonWithApiMeta(requestContext, {
+      success: true,
       goldenHours: {
         sunrise: forecast.weather.sunriseTime,
         sunset: forecast.weather.sunsetTime,
@@ -79,7 +86,7 @@ export async function POST(request: Request) {
     apiFailure(requestContext, 500, error, { stage: 'calculate_intelligence' });
     return jsonWithApiMeta(
       requestContext,
-      { error: 'Failed to calculate intelligence' },
+      { success: false, error: 'Failed to calculate intelligence' },
       { status: 500 }
     );
   }
