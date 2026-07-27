@@ -179,6 +179,234 @@ export function PlannerIntakeCard({
     );
   };
 
+  if (workflowStage === 'intake') {
+    return (
+      <section className="relative min-h-[calc(100vh-64px)] overflow-hidden bg-[#08090b] px-4 py-8 text-white md:px-8">
+        <div className="pointer-events-none absolute inset-x-0 top-[38%] h-[340px] bg-[#102365]/35 blur-3xl" />
+        <div className="relative z-10 flex min-h-[calc(100vh-128px)] flex-col">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-sm font-semibold text-[#08090b]">
+                S
+              </span>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8f95a3]">ShutterPlan AI</p>
+                <p className="mt-1 text-sm text-[#d7d9df]">Location, micro-spots, shot list, client guide</p>
+              </div>
+            </div>
+            <div className="hidden items-center gap-2 md:flex">
+              <span className={`rounded-full border px-3 py-1.5 text-xs font-medium ${getDraftStatusClass(draftSaveStatus)}`}>
+                {getDraftStatusLabel(draftSaveStatus)}
+              </span>
+              <Button
+                isLoading={isGenerating}
+                onClick={onGeneratePlan}
+                disabled={!isChatComplete || !isReviewConfirmed || isGenerating}
+                className="rounded-full bg-[#075985] px-5 text-white hover:bg-[#0369a1]"
+              >
+                {isGenerating ? 'Thinking...' : hasPlan ? 'Regenerate' : 'Create plan'}
+              </Button>
+            </div>
+          </div>
+
+          <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col items-center justify-center py-12">
+            {resumableDraft && (
+              <div className="mb-5 w-full max-w-3xl">
+                <DraftResumeBanner
+                  updatedAt={resumableDraft.updatedAt}
+                  shootType={resumableDraft.planState.shootType}
+                  onDiscard={onDismissDraft}
+                  onResume={onResumeDraft}
+                />
+              </div>
+            )}
+
+            <div className="mb-8 text-center">
+              <p className="text-sm font-medium text-[#8f95a3]">
+                Step {Math.min(answeredCount + 1, visibleQuestions.length)} of {visibleQuestions.length}
+              </p>
+              <h1 className="mt-4 text-4xl font-medium tracking-normal text-[#e6e8ee] md:text-6xl">
+                {isChatComplete ? 'Ready to build the plan.' : 'Your move.'}
+              </h1>
+              <p className="mx-auto mt-4 max-w-2xl text-sm leading-6 text-[#aeb4c0] md:text-base">
+                {isChatComplete
+                  ? 'Review the brief, unlock generation, and ShutterPlan will assemble locations, micro-spots, sun/weather timing, shot flow, and the client guide.'
+                  : activePrompt}
+              </p>
+            </div>
+
+            <div className="w-full max-w-3xl">
+              {!isChatComplete && activeQuestion && (
+                <div className="rounded-[28px] border border-white/10 bg-[#1f1f20] p-2 shadow-2xl shadow-[#102365]/35">
+                  {activeQuestion.options && activeQuestion.options.length > 0 ? (
+                    <div className="flex flex-wrap gap-2 p-2">
+                      {activeQuestion.options.map(option => (
+                        <button
+                          key={`${activeQuestion.id}-${option}`}
+                          type="button"
+                          onClick={() => onSubmitAnswerValue(option)}
+                          className="min-h-11 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-[#e6e8ee] transition hover:border-white/25 hover:bg-white/10"
+                        >
+                          {option}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-3 px-4 py-3">
+                        <button
+                          type="button"
+                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-2xl font-light text-[#d7d9df] hover:bg-white/5"
+                          aria-label="Add planning context"
+                        >
+                          +
+                        </button>
+                        <textarea
+                          className="max-h-40 min-h-12 flex-1 resize-none bg-transparent py-3 text-base text-[#f4f6fb] outline-none placeholder:text-[#9ca3af]"
+                          value={draftAnswer}
+                          onChange={event => onDraftAnswerChange(event.target.value)}
+                          placeholder={activePlaceholder || 'Ask ShutterPlan to plan the shoot...'}
+                          onKeyDown={event => {
+                            if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+                              event.preventDefault();
+                              onSubmitCurrentAnswer();
+                            }
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          onClick={onSubmitCurrentAnswer}
+                          className="rounded-full bg-white text-[#111827] hover:bg-[#e6e8ee]"
+                        >
+                          Send
+                        </Button>
+                      </div>
+                      {(activeProfileTemplates.length > 0 || activeQuickReplies.length > 0) && (
+                        <div className="flex flex-wrap gap-2 border-t border-white/10 px-4 py-3">
+                          {[...activeProfileTemplates, ...activeQuickReplies].map(option => (
+                            <button
+                              key={`${activeQuestion.id}-assist-${option}`}
+                              type="button"
+                              onClick={() => onSubmitAnswerValue(option)}
+                              className="min-h-9 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-[#c8ced8] hover:border-white/25 hover:text-white"
+                            >
+                              {option}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+
+              {isAiTyping && (
+                <div className="mx-auto mt-4 flex w-fit items-center gap-1 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs text-[#aeb4c0]">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#aeb4c0]" />
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#aeb4c0] [animation-delay:120ms]" />
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#aeb4c0] [animation-delay:240ms]" />
+                  Thinking through the next question
+                </div>
+              )}
+
+              {isChatComplete && (
+                <div className="rounded-[28px] border border-white/10 bg-[#1f1f20] p-4 shadow-2xl shadow-[#102365]/35">
+                  <div className="grid gap-2 md:grid-cols-2">
+                    {visibleQuestions.map(question => {
+                      const answer = getAnswerForQuestion(question.id);
+                      if (!answer && !question.required) return null;
+                      return (
+                        <button
+                          key={`review-${question.id}`}
+                          type="button"
+                          onClick={() => onJumpToQuestion(question.id)}
+                          className="rounded-2xl border border-white/10 bg-white/5 p-3 text-left transition hover:border-white/20"
+                        >
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#8f95a3]">
+                            {getAdaptivePrompt(question, sessionCategory)}
+                          </p>
+                          <p className="mt-2 text-sm leading-5 text-[#eef1f7]">{answer || '-'}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <Button variant="ghost" onClick={onEditAnswers} className="rounded-full border border-white/10 text-white hover:bg-white/5">
+                      Edit brief
+                    </Button>
+                    <div className="flex gap-2">
+                      <Button onClick={onReviewAnswers} disabled={isReviewConfirmed} className="rounded-full bg-white text-[#111827] hover:bg-[#e6e8ee]">
+                        {isReviewConfirmed ? 'Unlocked' : 'Unlock plan'}
+                      </Button>
+                      <Button isLoading={isGenerating} onClick={onGeneratePlan} disabled={!isReviewConfirmed || isGenerating} className="rounded-full bg-[#075985] text-white hover:bg-[#0369a1]">
+                        {isGenerating ? 'Thinking...' : 'Create plan'}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-8 grid w-full max-w-4xl gap-3 md:grid-cols-4">
+              {[
+                ['Brief', shootType],
+                ['Location', locationMode === 'use-provided' ? 'Chosen location' : locationLabel],
+                ['Route', desiredLocationCount],
+                ['Coverage', `${expectedShotRange.min}-${expectedShotRange.max} shots`],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#8f95a3]">{label}</p>
+                  <p className="mt-2 truncate text-sm font-medium text-[#eef1f7]">{value}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-5 flex w-full max-w-4xl flex-wrap justify-center gap-2">
+              {presets.slice(0, 4).map(preset => (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => onApplyPreset(preset)}
+                  className={`min-h-10 rounded-full border px-4 py-2 text-xs font-medium transition ${
+                    activePresetId === preset.id
+                      ? 'border-white/30 bg-white text-[#111827]'
+                      : 'border-white/10 bg-white/5 text-[#c8ced8] hover:border-white/25 hover:text-white'
+                  }`}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-3 text-xs text-[#777f8d]">
+            <button
+              type="button"
+              onClick={onGoBackQuestion}
+              disabled={chatStepIndex === 0}
+              className="min-h-10 rounded-full border border-white/10 px-4 font-medium text-[#aeb4c0] disabled:opacity-30"
+            >
+              Back
+            </button>
+            <p>Duration target: {durationMinutes} min</p>
+          </div>
+        </div>
+
+        {error && (
+          <div className={`absolute inset-x-4 bottom-5 z-20 mx-auto max-w-3xl rounded-2xl border px-4 py-3 text-sm ${
+            error.isWarning
+              ? 'border-amber-300/30 bg-amber-400/10 text-amber-100'
+              : 'border-red-300/30 bg-red-400/10 text-red-100'
+          }`}>
+            <p className="font-semibold">{error.title}</p>
+            <p className="mt-0.5">{error.message}</p>
+          </div>
+        )}
+      </section>
+    );
+  }
+
   return (
     <Card className="overflow-hidden border border-[#d8d2c8] p-0 shadow-sm">
       <div className="border-b border-[#e4ded5] bg-white p-5 md:p-6">

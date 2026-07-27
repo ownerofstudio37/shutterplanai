@@ -367,6 +367,7 @@ export default function PlannerPage() {
     : [];
   const isChatComplete = boundedChatStepIndex >= visibleQuestions.length;
   const workflowStage: WorkflowStage = plan ? (isApplying ? 'apply' : 'review') : 'intake';
+  const isImmersiveChat = workflowStage === 'intake' && plannerEntryMode === 'chat';
 
   const buildCurrentDraft = useCallback((currentDraftId: string): PlannerDraft => buildPlannerDraft({
     id: currentDraftId,
@@ -1757,12 +1758,12 @@ export default function PlannerPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <PlannerAssistantHero mode={plannerEntryMode} onModeChange={setPlannerEntryMode} />
+    <div className={isImmersiveChat ? 'min-h-screen bg-[#08090b]' : 'space-y-6'}>
+      {!isImmersiveChat && <PlannerAssistantHero mode={plannerEntryMode} onModeChange={setPlannerEntryMode} />}
 
-      <PlannerWorkflowStages stages={workflowStages} currentStage={workflowStage} hasPlan={!!plan} />
+      {!isImmersiveChat && <PlannerWorkflowStages stages={workflowStages} currentStage={workflowStage} hasPlan={!!plan} />}
 
-      {billingUsage && isFreeTier && (
+      {!isImmersiveChat && billingUsage && isFreeTier && (
         <Card className="border border-[#d8d2c8] bg-[#faf9f6] shadow-sm">
           <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
             <div>
@@ -1824,7 +1825,7 @@ export default function PlannerPage() {
         </Card>
       )}
 
-      {workflowStage === 'intake' && plannerEntryMode === 'chat' && (
+      {!isImmersiveChat && workflowStage === 'intake' && plannerEntryMode === 'chat' && (
         <SessionTemplatePanel
           currentPayload={{
             shootType,
@@ -1851,7 +1852,7 @@ export default function PlannerPage() {
         />
       )}
 
-      {workflowStage === 'intake' && (
+      {!isImmersiveChat && workflowStage === 'intake' && (
         <Card className="border border-[#d8d2c8] bg-white shadow-sm">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="max-w-2xl">
@@ -1883,7 +1884,7 @@ export default function PlannerPage() {
         </Card>
       )}
 
-      {workflowStage === 'intake' && (
+      {!isImmersiveChat && workflowStage === 'intake' && (
         <MultiDaySessionConfig
           multiDay={multiDay}
           sessionDates={sessionDates}

@@ -68,24 +68,34 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
   const firstName = user.name.split(' ')[0] || 'there';
   const pageTitle = getPageTitle(pathname);
+  const isPlannerRoute = Boolean(pathname?.startsWith('/dashboard/planner'));
 
   return (
-    <div className="min-h-screen bg-[#f6f3ee] text-[#1f2933]">
-      <div className="grid min-h-screen lg:grid-cols-[280px_1fr]">
-        <aside className="border-b border-[#ded8ce] bg-[#111827] text-white lg:border-b-0 lg:border-r">
+    <div className={`min-h-screen text-[#1f2933] ${isPlannerRoute ? 'bg-[#08090b]' : 'bg-[#f6f3ee]'}`}>
+      <div className={`grid min-h-screen ${isPlannerRoute ? 'lg:grid-cols-[64px_1fr]' : 'lg:grid-cols-[280px_1fr]'}`}>
+        <aside className={`border-b text-white lg:border-b-0 lg:border-r ${
+          isPlannerRoute ? 'border-white/5 bg-[#08090b]' : 'border-[#ded8ce] bg-[#111827]'
+        }`}>
           <div className="flex flex-col lg:h-full">
-            <div className="border-b border-white/10 px-4 py-4 lg:px-5 lg:py-5">
+            <div className={`border-b border-white/10 px-4 py-4 ${isPlannerRoute ? 'lg:px-3 lg:py-5' : 'lg:px-5 lg:py-5'}`}>
               <Link href="/dashboard" className="block">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#9ca3af]">
+                <p className={`text-[11px] font-semibold uppercase tracking-[0.18em] text-[#9ca3af] ${isPlannerRoute ? 'lg:hidden' : ''}`}>
                   ShutterPlan AI
                 </p>
-                <h1 className="mt-2 text-xl font-semibold tracking-normal text-white">
+                <h1 className={`mt-2 text-xl font-semibold tracking-normal text-white ${isPlannerRoute ? 'lg:hidden' : ''}`}>
                   Studio Ops
                 </h1>
+                {isPlannerRoute && (
+                  <span className="hidden h-9 w-9 items-center justify-center rounded-full bg-white text-sm font-semibold text-[#08090b] lg:flex">
+                    S
+                  </span>
+                )}
               </Link>
             </div>
 
-            <nav className="grid grid-cols-2 gap-2 px-3 py-3 sm:grid-cols-4 lg:block lg:flex-1 lg:space-y-1 lg:overflow-y-auto lg:py-4">
+            <nav className={`grid grid-cols-2 gap-2 px-3 py-3 sm:grid-cols-4 lg:flex-1 lg:overflow-y-auto ${
+              isPlannerRoute ? 'lg:flex lg:grid-cols-none lg:flex-col lg:items-center lg:gap-3 lg:px-2 lg:py-4' : 'lg:block lg:space-y-1 lg:py-4'
+            }`}>
               {navItems.map(item => {
                 const isActive = pathname === item.href || Boolean(pathname?.startsWith(`${item.href}/`));
 
@@ -93,34 +103,49 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   <Link
                     key={item.href}
                     href={item.href}
-                    className={`block rounded-lg border px-3 py-3 transition-colors ${
-                      isActive
-                        ? 'border-white/15 bg-white text-[#111827] shadow-sm'
-                        : 'border-transparent text-[#d1d5db] hover:border-white/10 hover:bg-white/10 hover:text-white'
+                    title={item.label}
+                    className={`block rounded-lg border transition-colors ${
+                      isPlannerRoute
+                        ? `flex h-10 w-10 items-center justify-center px-0 py-0 ${
+                            isActive
+                              ? 'border-white/10 bg-white/10 text-white shadow-sm'
+                              : 'border-transparent text-[#a1a1aa] hover:border-white/10 hover:bg-white/5 hover:text-white'
+                          }`
+                        : `px-3 py-3 ${
+                            isActive
+                              ? 'border-white/15 bg-white text-[#111827] shadow-sm'
+                              : 'border-transparent text-[#d1d5db] hover:border-white/10 hover:bg-white/10 hover:text-white'
+                          }`
                     }`}
                   >
-                    <span className={`block text-[10px] font-semibold uppercase tracking-[0.14em] ${
-                      isActive ? 'text-[#64748b]' : 'text-[#8b95a1]'
-                    }`}>
-                      {item.eyebrow}
-                    </span>
-                    <span className="mt-1 block text-sm font-semibold">{item.label}</span>
+                    {isPlannerRoute ? (
+                      <span className="text-xs font-semibold">{item.label.slice(0, 1)}</span>
+                    ) : (
+                      <>
+                        <span className={`block text-[10px] font-semibold uppercase tracking-[0.14em] ${
+                          isActive ? 'text-[#64748b]' : 'text-[#8b95a1]'
+                        }`}>
+                          {item.eyebrow}
+                        </span>
+                        <span className="mt-1 block text-sm font-semibold">{item.label}</span>
+                      </>
+                    )}
                   </Link>
                 );
               })}
             </nav>
 
-            <div className="hidden border-t border-white/10 p-4 lg:block">
+            <div className={`hidden border-t border-white/10 lg:block ${isPlannerRoute ? 'p-2' : 'p-4'}`}>
               <div className="rounded-lg border border-white/10 bg-white/5 p-3">
-                <p className="text-sm font-semibold text-white">{user.name}</p>
-                <p className="mt-1 truncate text-xs text-[#9ca3af]">{user.email}</p>
+                <p className={`text-sm font-semibold text-white ${isPlannerRoute ? 'sr-only' : ''}`}>{user.name}</p>
+                <p className={`mt-1 truncate text-xs text-[#9ca3af] ${isPlannerRoute ? 'sr-only' : ''}`}>{user.email}</p>
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={handleLogout}
-                  className="mt-3 w-full border border-white/10 text-white hover:bg-white/10"
+                  className={`${isPlannerRoute ? 'mt-0 h-9 w-9 px-0 text-xs' : 'mt-3 w-full'} border border-white/10 text-white hover:bg-white/10`}
                 >
-                  Sign out
+                  {isPlannerRoute ? 'Out' : 'Sign out'}
                 </Button>
               </div>
             </div>
@@ -128,32 +153,34 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         </aside>
 
         <main className="min-w-0">
-          <header className="sticky top-0 z-20 border-b border-[#ded8ce] bg-[#f6f3ee]/95 px-4 py-4 backdrop-blur md:px-8">
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7c6f64]">
-                  {new Date().toLocaleDateString(undefined, {
-                    weekday: 'long',
-                    month: 'short',
-                    day: 'numeric',
-                  })}
-                </p>
-                <h2 className="mt-1 text-2xl font-semibold tracking-normal text-[#1f2933]">
-                  {pageTitle}
-                </h2>
+          {!isPlannerRoute && (
+            <header className="sticky top-0 z-20 border-b border-[#ded8ce] bg-[#f6f3ee]/95 px-4 py-4 backdrop-blur md:px-8">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7c6f64]">
+                    {new Date().toLocaleDateString(undefined, {
+                      weekday: 'long',
+                      month: 'short',
+                      day: 'numeric',
+                    })}
+                  </p>
+                  <h2 className="mt-1 text-2xl font-semibold tracking-normal text-[#1f2933]">
+                    {pageTitle}
+                  </h2>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="min-h-10 rounded-md border border-[#d8d2c8] bg-white px-3 py-2 text-sm text-[#5f6b76]">
+                    Welcome back, {firstName}
+                  </span>
+                  <Link href="/dashboard/planner">
+                    <Button className="bg-[#1f2933] hover:bg-[#111827]">Plan a shoot</Button>
+                  </Link>
+                </div>
               </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="min-h-10 rounded-md border border-[#d8d2c8] bg-white px-3 py-2 text-sm text-[#5f6b76]">
-                  Welcome back, {firstName}
-                </span>
-                <Link href="/dashboard/planner">
-                  <Button className="bg-[#1f2933] hover:bg-[#111827]">Plan a shoot</Button>
-                </Link>
-              </div>
-            </div>
-          </header>
+            </header>
+          )}
 
-          <div className="px-4 py-5 md:px-8 md:py-7">{children}</div>
+          <div className={isPlannerRoute ? 'min-h-screen' : 'px-4 py-5 md:px-8 md:py-7'}>{children}</div>
         </main>
       </div>
     </div>
