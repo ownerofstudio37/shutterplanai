@@ -112,6 +112,12 @@ type GuideActivityResponse = {
   data?: GuideActivitySummary;
 };
 
+type PlannerBrainChatMessage = {
+  role: 'user' | 'assistant';
+  content: string;
+  changedSections?: string[];
+};
+
 export default function PlannerPage() {
   const router = useRouter();
 
@@ -142,6 +148,15 @@ export default function PlannerPage() {
   const [plan, setPlan] = useState<SessionPlan | null>(null);
   const [error, setRawError] = useState<PlannerErrorInfo | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [plannerBrainInput, setPlannerBrainInput] = useState('');
+  const [plannerBrainMessages, setPlannerBrainMessages] = useState<PlannerBrainChatMessage[]>([
+    {
+      role: 'assistant',
+      content: 'I can keep refining this plan. Try "make this easier for toddlers," "use only one spot," "add editorial poses," or "make the client guide warmer."',
+    },
+  ]);
+  const [isPlannerBrainUpdating, setIsPlannerBrainUpdating] = useState(false);
+  const [lastPlannerBrainChanges, setLastPlannerBrainChanges] = useState<string[]>([]);
 
   // Helper: classify raw error string before storing
   const setError = (raw: string | null) => setRawError(raw ? classifyPlannerError(raw) : null);
@@ -968,6 +983,87 @@ export default function PlannerPage() {
       setError(`Failed to regenerate ${sectionType}`);
     } finally {
       setIsRegenerating('idle');
+    }
+  };
+
+  const sendPlannerBrainMessage = async (messageOverride?: string) => {
+    if (!plan || isPlannerBrainUpdating) return;
+
+    const message = (messageOverride ?? plannerBrainInput).trim();
+    if (!message) return;
+
+    const userMessage: PlannerBrainChatMessage = { role: 'user', content: message };
+    setPlannerBrainMessages(prev => [...prev, userMessage]);
+    setPlannerBrainInput('');
+    setIsPlannerBrainUpdating(true);
+    setLastPlannerBrainChanges([]);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/planner/brain', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeader(),
+        },
+        body: JSON.stringify({
+          currentPlan: plan,
+          message,
+          stage: plan.plannerBrain?.currentStage ?? 'shot_list_generation',
+          chatHistory: plannerBrainMessages,
+          sessionInputs: {
+            shootType,
+            mood,
+            constraints,
+          },
+        }),
+      });
+
+      const result = (await response.json()) as {
+        success?: boolean;
+        data?: {
+          plan?: SessionPlan;
+          assistantMessage?: string;
+          changedSections?: string[];
+        };
+        error?: string;
+      };
+
+      if (!response.ok || !result.success || !result.data?.plan) {
+        setError(result.error ?? 'Failed to update the plan.');
+        setPlannerBrainMessages(prev => [
+          ...prev,
+          {
+            role: 'assistant',
+            content: result.error ?? 'I could not update the plan from that message. Try a more specific planning change.',
+          },
+        ]);
+        return;
+      }
+
+      const changedSections = Array.isArray(result.data.changedSections) ? result.data.changedSections : [];
+      setPlan(result.data.plan);
+      setIsRouteConfirmed(false);
+      setLastPlannerBrainChanges(changedSections);
+      setPlannerBrainMessages(prev => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: result.data?.assistantMessage || 'Done. I updated the structured plan.',
+          changedSections,
+        },
+      ]);
+    } catch {
+      setError('Failed to update the plan.');
+      setPlannerBrainMessages(prev => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: 'I could not reach the planner brain. Your current plan is unchanged.',
+        },
+      ]);
+    } finally {
+      setIsPlannerBrainUpdating(false);
     }
   };
 
@@ -2023,6 +2119,107 @@ export default function PlannerPage() {
             expectedShotRange={expectedShotRange}
             durationMinutes={durationMinutes}
           />
+
+          <Card className="border border-[#d8d2c8] bg-[#111216] text-white shadow-sm">
+            <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
+              <div>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8f95a3]">Planner brain</p>
+                    <h2 className="mt-2 text-xl font-semibold text-[#eef1f7]">Keep refining the plan by chat</h2>
+                  </div>
+                  {lastPlannerBrainChanges.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {lastPlannerBrainChanges.map(section => (
+                        <span key={section} className="rounded-full border border-emerald-300/20 bg-emerald-400/10 px-3 py-1 text-xs font-medium text-emerald-100">
+                          {section}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-4 max-h-72 space-y-3 overflow-y-auto pr-1">
+                  {plannerBrainMessages.slice(-8).map((message, index) => (
+                    <div
+                      key={`${message.role}-${index}-${message.content.slice(0, 18)}`}
+                      className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                    >
+                      <div
+                        className={`max-w-[86%] rounded-2xl px-4 py-3 text-sm leading-6 ${
+                          message.role === 'user'
+                            ? 'rounded-tr-md bg-[#2563eb] text-white'
+                            : 'rounded-tl-md border border-white/10 bg-white/5 text-[#d7dce7]'
+                        }`}
+                      >
+                        {message.content}
+                        {message.changedSections?.length ? (
+                          <p className="mt-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[#8f95a3]">
+                            Updated: {message.changedSections.join(', ')}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
+                  {isPlannerBrainUpdating && (
+                    <div className="w-fit rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs text-[#aeb4c0]">
+                      Updating the structured plan...
+                    </div>
+                  )}
+                </div>
+
+                <form
+                  className="mt-4 rounded-[26px] border border-white/10 bg-[#1f1f20] p-2"
+                  onSubmit={event => {
+                    event.preventDefault();
+                    void sendPlannerBrainMessage();
+                  }}
+                >
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                    <textarea
+                      value={plannerBrainInput}
+                      onChange={event => setPlannerBrainInput(event.target.value)}
+                      onKeyDown={event => {
+                        if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+                          event.preventDefault();
+                          void sendPlannerBrainMessage();
+                        }
+                      }}
+                      className="min-h-14 flex-1 resize-none bg-transparent px-4 py-3 text-sm text-[#f4f6fb] outline-none placeholder:text-[#8f95a3]"
+                      placeholder="Ask for a planning change..."
+                    />
+                    <Button
+                      type="submit"
+                      disabled={isPlannerBrainUpdating || plannerBrainInput.trim().length === 0}
+                      className="rounded-full bg-white text-[#111827] hover:bg-[#e6e8ee]"
+                    >
+                      {isPlannerBrainUpdating ? 'Updating...' : 'Send'}
+                    </Button>
+                  </div>
+                </form>
+              </div>
+
+              <div className="space-y-2">
+                {[
+                  'Make this easier for toddlers',
+                  'Build this around only one spot',
+                  'Add more editorial poses',
+                  'Move hero portraits later for golden hour',
+                  'Make the client guide sound warmer',
+                ].map(prompt => (
+                  <button
+                    key={prompt}
+                    type="button"
+                    onClick={() => void sendPlannerBrainMessage(prompt)}
+                    disabled={isPlannerBrainUpdating}
+                    className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-left text-sm font-medium text-[#d7dce7] transition hover:border-white/25 hover:bg-white/10 disabled:opacity-50"
+                  >
+                    {prompt}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </Card>
 
           {/* Show refinement incentive when plan is fresh (no refinements yet) */}
           {workflowStage === 'review' && !plan.locationRefinements?.length && (
