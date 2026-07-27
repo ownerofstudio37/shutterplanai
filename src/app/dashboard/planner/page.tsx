@@ -12,6 +12,7 @@ import { PlannerAssistantHero } from '@/components/planner/PlannerAssistantHero'
 import { PlannerManualBuilder } from '@/components/planner/PlannerManualBuilder';
 import { PlannerReviewHeaderCard } from '@/components/planner/PlannerReviewHeaderCard';
 import { PlannerLocationDecisionPanel } from '@/components/planner/PlannerLocationDecisionPanel';
+import { PlannerStepActionsPanel } from '@/components/planner/PlannerStepActionsPanel';
 import { PlannerReviewTabs } from '@/components/planner/PlannerReviewTabs';
 import { PlannerMobileReviewContent } from '@/components/planner/PlannerMobileReviewContent';
 import { PlannerGeneratingSkeleton } from '@/components/planner/PlannerGeneratingSkeleton';
@@ -292,6 +293,74 @@ export default function PlannerPage() {
       },
     ];
   }, [intelligence, isRouteConfirmed, plan, selectedLocations]);
+  const guidedStepActions = (() => {
+    if (!plan) return [];
+
+    const hasChosenLocation = selectedLocations.length > 0;
+    const selectedLocation = selectedLocations[0] || candidateLocations[0];
+    const hasMicroSpots = Boolean(selectedLocation?.microLocations?.length || selectedLocation?.microLocationPlan?.length);
+    const hasShotList = plan.shotList.length > 0;
+    const hasSunWeather = Boolean(intelligence || plan.photographerPlan?.sunWeatherNotes?.length);
+    const hasClientGuide = Boolean(plan.clientGuide);
+    const isBusy = isPlannerBrainUpdating || isRegenerating !== 'idle' || isGenerating;
+
+    return [
+      {
+        id: 'find-locations',
+        label: 'Find locations',
+        helper: `${candidateLocations.length} candidate${candidateLocations.length === 1 ? '' : 's'} available for review.`,
+        status: candidateLocations.length > 0 ? 'ready' as const : 'current' as const,
+        buttonLabel: 'Ask AI for more',
+        disabled: isBusy,
+        onClick: () => void sendPlannerBrainMessage('Find more primary location options that match this client, deliverables, style, logistics, sun, and weather constraints.'),
+      },
+      {
+        id: 'choose-location',
+        label: 'Choose location',
+        helper: hasChosenLocation ? `${selectedLocations[0].name} is selected as the anchor.` : 'Pick one primary location before mapping inside it.',
+        status: hasChosenLocation ? 'ready' as const : 'current' as const,
+        buttonLabel: hasChosenLocation ? 'View primary' : 'Choose primary',
+        disabled: candidateLocations.length === 0,
+        onClick: () => setActiveReviewTab('locations'),
+      },
+      {
+        id: 'map-micro-spots',
+        label: 'Map micro-spots',
+        helper: hasMicroSpots ? `${selectedLocation?.microLocations.length || selectedLocation?.microLocationPlan?.length || 0} spots ready to tune.` : 'Map the exact internal spots and walking order.',
+        status: hasChosenLocation ? (hasMicroSpots ? 'ready' as const : 'current' as const) : 'pending' as const,
+        buttonLabel: 'Map spots',
+        disabled: !hasChosenLocation,
+        onClick: () => setActiveReviewTab('locations'),
+      },
+      {
+        id: 'generate-shot-list',
+        label: 'Generate shot list',
+        helper: hasShotList ? `${plan.shotList.length} shots matched to locations and micro-spots.` : 'Build deliverable-based shots with poses, lenses, and backups.',
+        status: hasShotList ? 'ready' as const : hasChosenLocation ? 'current' as const : 'pending' as const,
+        buttonLabel: 'Regenerate shots',
+        disabled: isBusy || !hasChosenLocation,
+        onClick: () => void regenerateSection('shot-list'),
+      },
+      {
+        id: 'optimize-sun-weather',
+        label: 'Optimize sun/weather',
+        helper: hasSunWeather ? 'Light and forecast notes are available.' : 'Apply forecast and sun timing directly to the plan.',
+        status: hasSunWeather ? 'ready' as const : hasShotList ? 'current' as const : 'pending' as const,
+        buttonLabel: 'Optimize',
+        disabled: isBusy || !hasShotList,
+        onClick: () => void sendPlannerBrainMessage('Optimize the timeline and shot cards around current sun and weather data. Move must-have portraits, backups, close-ups, and hero frames to the best windows.'),
+      },
+      {
+        id: 'build-client-guide',
+        label: 'Build client guide',
+        helper: hasClientGuide ? 'Client guide fields are ready to polish and share.' : 'Create warm arrival, parking, prep, flow, weather, and reassurance copy.',
+        status: hasClientGuide ? 'ready' as const : hasShotList ? 'current' as const : 'pending' as const,
+        buttonLabel: 'Polish guide',
+        disabled: isBusy || !hasShotList,
+        onClick: () => void sendPlannerBrainMessage('Build or polish the client guide with warm arrival instructions, parking, what to wear and bring, session flow, weather expectations, and reassurance.'),
+      },
+    ];
+  })();
 
   const boundedChatStepIndex = Math.min(chatStepIndex, visibleQuestions.length);
   const aiTypingTimerRef = useRef<number | null>(null);
@@ -2251,6 +2320,12 @@ export default function PlannerPage() {
             }}
             onMapMicroSpots={() => setActiveReviewTab('locations')}
             onAskAiForMore={() => void sendPlannerBrainMessage('Find more primary location options like the strongest current candidate, and explain why each fits this client and style.')}
+          />
+
+          <PlannerStepActionsPanel
+            actions={guidedStepActions}
+            isGenerating={isGenerating}
+            onGenerateFullPlan={() => void generatePlan()}
           />
 
           <Card className="border border-[#d8d2c8] bg-[#111216] text-white shadow-sm">
