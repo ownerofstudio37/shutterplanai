@@ -33,6 +33,21 @@ describe('planner draft helpers', () => {
         multiDay: false,
         sessionDates: [],
       },
+      workspaceState: {
+        plan: {
+          projectTitle: 'Family Plan',
+          creativeDirection: 'Warm and candid.',
+          timeline: [],
+          locationSuggestions: [],
+          shotList: [],
+          clientPrepChecklist: [],
+          contingencyPlans: [],
+        },
+        plannerBrainMessages: [{ role: 'assistant', content: 'Ready.' }],
+        plannerPlanVersions: [],
+        lastPlannerBrainChanges: ['brief'],
+        isRouteConfirmed: true,
+      },
     });
 
     expect(draft).toMatchObject({
@@ -45,6 +60,11 @@ describe('planner draft helpers', () => {
         locationMode: 'find-locations',
         multiDay: undefined,
         sessionDates: undefined,
+      },
+      workspaceState: {
+        plannerBrainMessages: [{ role: 'assistant', content: 'Ready.' }],
+        lastPlannerBrainChanges: ['brief'],
+        isRouteConfirmed: true,
       },
     });
 
@@ -59,6 +79,10 @@ describe('planner draft helpers', () => {
         shootType: 'Engagement Session',
         locationMode: 'use-provided',
       },
+      workspace_state: {
+        plannerBrainMessages: [{ role: 'user', content: 'Use one spot.' }],
+        lastPlannerBrainChanges: ['shot list'],
+      },
       created_at: '2026-06-10T00:00:00.000Z',
       updated_at: '2026-06-11T00:00:00.000Z',
     });
@@ -71,6 +95,10 @@ describe('planner draft helpers', () => {
       planState: {
         shootType: 'Engagement Session',
         locationMode: 'use-provided',
+      },
+      workspaceState: {
+        plannerBrainMessages: [{ role: 'user', content: 'Use one spot.' }],
+        lastPlannerBrainChanges: ['shot list'],
       },
     });
   });

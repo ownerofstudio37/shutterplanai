@@ -3,6 +3,7 @@ import {
   type LocationMode,
   type PlannerDraft,
   type PlannerDraftState,
+  type PlannerDraftWorkspaceState,
   type WorkflowStage,
   getSessionCategory,
 } from './plannerConfig';
@@ -15,6 +16,7 @@ export function buildPlannerDraft(input: {
   id: string;
   workflowStage: WorkflowStage;
   state: PlannerDraftState;
+  workspaceState?: PlannerDraftWorkspaceState;
 }): PlannerDraft {
   const now = new Date().toISOString();
 
@@ -28,12 +30,14 @@ export function buildPlannerDraft(input: {
       multiDay: input.state.multiDay || undefined,
       sessionDates: input.state.sessionDates && input.state.sessionDates.length > 0 ? input.state.sessionDates : undefined,
     },
+    workspaceState: input.workspaceState,
   };
 }
 
 export function mapServerPlannerDraft(row: Record<string, unknown>): PlannerDraft | null {
   const id = typeof row.id === 'string' ? row.id : null;
   const planState = (row.plan_state || row.planState) as PlannerDraftState | undefined;
+  const workspaceState = (row.workspace_state || row.workspaceState) as PlannerDraftWorkspaceState | undefined;
   const status = typeof row.status === 'string' ? row.status : 'intake';
   if (!id || !planState) return null;
 
@@ -41,6 +45,7 @@ export function mapServerPlannerDraft(row: Record<string, unknown>): PlannerDraf
     id,
     status: status === 'applying' || status === 'review' ? status : 'intake',
     planState,
+    workspaceState,
     createdAt: typeof row.created_at === 'string' ? row.created_at : new Date().toISOString(),
     updatedAt: typeof row.updated_at === 'string' ? row.updated_at : new Date().toISOString(),
   };

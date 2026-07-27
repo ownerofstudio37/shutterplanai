@@ -228,9 +228,31 @@ export type PlannerDraftState = {
   maxTravelMinutesPerDay?: number; // travel budget per day
 };
 
+export type PlannerDraftWorkspaceState = {
+  plan?: SessionPlan | null;
+  plannerBrainMessages?: Array<{
+    role: 'user' | 'assistant';
+    content: string;
+    changedSections?: string[];
+    source?: 'ai' | 'fallback';
+  }>;
+  plannerPlanVersions?: Array<{
+    id: string;
+    label: string;
+    message: string;
+    previousPlan: SessionPlan;
+    nextPlan: SessionPlan;
+    changedSections: string[];
+    createdAt: string;
+  }>;
+  lastPlannerBrainChanges?: string[];
+  isRouteConfirmed?: boolean;
+};
+
 export type PlannerDraft = {
   id: string;
   planState: PlannerDraftState;
+  workspaceState?: PlannerDraftWorkspaceState;
   status: 'intake' | 'review' | 'applying';
   createdAt: string;
   updatedAt: string;

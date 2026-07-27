@@ -129,6 +129,11 @@ type PlannerPlanVersion = {
   createdAt: string;
 };
 
+const INITIAL_PLANNER_BRAIN_MESSAGE: PlannerBrainChatMessage = {
+  role: 'assistant',
+  content: 'I can keep refining this plan. Try "make this easier for toddlers," "use only one spot," "add editorial poses," or "make the client guide warmer."',
+};
+
 export default function PlannerPage() {
   const router = useRouter();
 
@@ -160,12 +165,7 @@ export default function PlannerPage() {
   const [error, setRawError] = useState<PlannerErrorInfo | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [plannerBrainInput, setPlannerBrainInput] = useState('');
-  const [plannerBrainMessages, setPlannerBrainMessages] = useState<PlannerBrainChatMessage[]>([
-    {
-      role: 'assistant',
-      content: 'I can keep refining this plan. Try "make this easier for toddlers," "use only one spot," "add editorial poses," or "make the client guide warmer."',
-    },
-  ]);
+  const [plannerBrainMessages, setPlannerBrainMessages] = useState<PlannerBrainChatMessage[]>([INITIAL_PLANNER_BRAIN_MESSAGE]);
   const [isPlannerBrainUpdating, setIsPlannerBrainUpdating] = useState(false);
   const [lastPlannerBrainChanges, setLastPlannerBrainChanges] = useState<string[]>([]);
   const [plannerPlanVersions, setPlannerPlanVersions] = useState<PlannerPlanVersion[]>([]);
@@ -466,6 +466,13 @@ export default function PlannerPage() {
       dailyDurationMinutes,
       maxTravelMinutesPerDay,
     },
+    workspaceState: {
+      plan,
+      plannerBrainMessages,
+      plannerPlanVersions,
+      lastPlannerBrainChanges,
+      isRouteConfirmed,
+    },
   }), [
     brandingGoals,
     city,
@@ -476,10 +483,15 @@ export default function PlannerPage() {
     engagementStory,
     eventPriorities,
     familyPacing,
+    isRouteConfirmed,
+    lastPlannerBrainChanges,
     locationMode,
     maxTravelMinutesPerDay,
     mood,
     mustHaveShots,
+    plan,
+    plannerBrainMessages,
+    plannerPlanVersions,
     providedLocations,
     sessionDates,
     shootDate,
@@ -518,7 +530,15 @@ export default function PlannerPage() {
     setSessionDates(draftState.sessionDates ?? []);
     setDailyDurationMinutes(draftState.dailyDurationMinutes);
     setMaxTravelMinutesPerDay(draftState.maxTravelMinutesPerDay);
-    setPlan(null);
+    setPlan(draft.workspaceState?.plan ?? null);
+    setPlannerBrainMessages(
+      draft.workspaceState?.plannerBrainMessages && draft.workspaceState.plannerBrainMessages.length > 0
+        ? draft.workspaceState.plannerBrainMessages
+        : [INITIAL_PLANNER_BRAIN_MESSAGE]
+    );
+    setPlannerPlanVersions(draft.workspaceState?.plannerPlanVersions ?? []);
+    setLastPlannerBrainChanges(draft.workspaceState?.lastPlannerBrainChanges ?? []);
+    setIsRouteConfirmed(draft.workspaceState?.isRouteConfirmed ?? false);
     setError(null);
     setIsReviewConfirmed(true);
     setChatStepIndex(resumeQuestionCount);
@@ -896,6 +916,9 @@ export default function PlannerPage() {
       resetReviewState();
       setIsRouteConfirmed(false);
       setPlan(result.data ?? null);
+      setPlannerBrainMessages([INITIAL_PLANNER_BRAIN_MESSAGE]);
+      setPlannerPlanVersions([]);
+      setLastPlannerBrainChanges([]);
       void (async () => {
         await trackPlannerEvent('planner_generate_success', {
           sessionCategory,

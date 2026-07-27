@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/serverAuth';
 import { createSupabaseAdminClient } from '@/lib/supabase/server';
+import type { PlannerDraftWorkspaceState } from '@/lib/planner/plannerConfig';
 
 interface DraftPlan {
   id: string;
@@ -25,6 +26,7 @@ interface DraftPlan {
     dailyDurationMinutes?: number;
     maxTravelMinutesPerDay?: number;
   };
+  workspaceState?: PlannerDraftWorkspaceState;
   createdAt: string;
   updatedAt: string;
   status: 'intake' | 'review' | 'applying';
@@ -48,6 +50,7 @@ export async function POST(request: NextRequest) {
           id: body.draftPlan.id,
           user_id: authResult.userId,
           plan_state: body.draftPlan.planState,
+          workspace_state: body.draftPlan.workspaceState ?? null,
           status: body.draftPlan.status,
           created_at: body.draftPlan.createdAt,
           updated_at: new Date().toISOString(),
