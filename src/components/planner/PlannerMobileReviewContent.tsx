@@ -49,6 +49,9 @@ type ReviewShot = {
   timingHint?: string;
   lensSuggestion?: string;
   deliverableCategory?: string;
+  angleSuggestion?: string;
+  backupMicroSpot?: string;
+  priority?: 'must-have' | 'should-have' | 'nice-to-have';
   lightWeatherNote?: string;
 };
 
@@ -107,6 +110,12 @@ export const PlannerMobileReviewContent = memo(function PlannerMobileReviewConte
   checklist,
   contingencyPlans,
 }: PlannerMobileReviewContentProps) {
+  const getPriorityLabel = (priority?: ReviewShot['priority']) => {
+    if (priority === 'must-have') return 'Must-have';
+    if (priority === 'should-have') return 'Should-have';
+    return 'Nice-to-have';
+  };
+
   if (reviewTab === 'map') {
     return (
       <div className="space-y-4">
@@ -350,14 +359,21 @@ export const PlannerMobileReviewContent = memo(function PlannerMobileReviewConte
 
         {shots.map(shot => (
           <div key={`mobile-${shot.title}-${shot.microSpot}`} className="rounded-lg border border-gray-200 p-3">
-            <p className="font-semibold text-gray-900">{shot.title}</p>
+            <div className="flex items-start justify-between gap-2">
+              <p className="font-semibold text-gray-900">{shot.title}</p>
+              <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[11px] font-semibold text-gray-600">
+                {getPriorityLabel(shot.priority)}
+              </span>
+            </div>
             <p className="mt-1 text-sm text-gray-600">{shot.description}</p>
             <p className="mt-2 text-xs text-gray-500">Location: {shot.location}</p>
             <p className="text-xs text-gray-500">Micro-spot: {shot.microSpot}</p>
             {shot.deliverableCategory && <p className="text-xs text-gray-500">Deliverable: {shot.deliverableCategory}</p>}
             <p className="text-xs text-gray-500">Pose: {shot.poseSuggestion}</p>
             {shot.compositionSuggestion && <p className="text-xs text-gray-500">Angle: {shot.compositionSuggestion}</p>}
+            {shot.angleSuggestion && <p className="text-xs text-gray-500">Camera angle: {shot.angleSuggestion}</p>}
             {shot.lensSuggestion && <p className="text-xs text-gray-500">Lens: {shot.lensSuggestion}</p>}
+            {shot.backupMicroSpot && <p className="text-xs text-gray-500">Backup: {shot.backupMicroSpot}</p>}
             {shot.lightWeatherNote && <p className="text-xs text-gray-500">Sun/weather: {shot.lightWeatherNote}</p>}
           </div>
         ))}

@@ -37,6 +37,9 @@ type ReviewShot = {
   timingHint: string;
   lensSuggestion?: string;
   deliverableCategory?: string;
+  angleSuggestion?: string;
+  backupMicroSpot?: string;
+  priority?: 'must-have' | 'should-have' | 'nice-to-have';
   lightWeatherNote?: string;
   latitude?: number | null;
   longitude?: number | null;
