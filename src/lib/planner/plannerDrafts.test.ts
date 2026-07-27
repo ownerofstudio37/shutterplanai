@@ -47,6 +47,7 @@ describe('planner draft helpers', () => {
         plannerPlanVersions: [],
         lastPlannerBrainChanges: ['brief'],
         isRouteConfirmed: true,
+        selectedLocationKeys: ['lake park'],
       },
     });
 
@@ -65,6 +66,7 @@ describe('planner draft helpers', () => {
         plannerBrainMessages: [{ role: 'assistant', content: 'Ready.' }],
         lastPlannerBrainChanges: ['brief'],
         isRouteConfirmed: true,
+        selectedLocationKeys: ['lake park'],
       },
     });
 

@@ -11,6 +11,7 @@ import { PlannerIntakeCard } from '@/components/planner/PlannerIntakeCard';
 import { PlannerAssistantHero } from '@/components/planner/PlannerAssistantHero';
 import { PlannerManualBuilder } from '@/components/planner/PlannerManualBuilder';
 import { PlannerReviewHeaderCard } from '@/components/planner/PlannerReviewHeaderCard';
+import { PlannerLocationDecisionPanel } from '@/components/planner/PlannerLocationDecisionPanel';
 import { PlannerReviewTabs } from '@/components/planner/PlannerReviewTabs';
 import { PlannerMobileReviewContent } from '@/components/planner/PlannerMobileReviewContent';
 import { PlannerGeneratingSkeleton } from '@/components/planner/PlannerGeneratingSkeleton';
@@ -213,12 +214,14 @@ export default function PlannerPage() {
     logisticsLookup,
     candidateLocations,
     selectedLocationKeys,
+    setSelectedLocationKeys,
     selectedLocations,
     displayedLocations,
     displayedShots,
     emptyLocationMessage,
     emptyShotMessage,
     setLocationVote,
+    choosePrimaryLocation,
     togglePreferredVenueBucket,
     toggleExcludedVenueBucket,
     toggleSelectedLocation,
@@ -472,6 +475,7 @@ export default function PlannerPage() {
       plannerPlanVersions,
       lastPlannerBrainChanges,
       isRouteConfirmed,
+      selectedLocationKeys,
     },
   }), [
     brandingGoals,
@@ -493,6 +497,7 @@ export default function PlannerPage() {
     plannerBrainMessages,
     plannerPlanVersions,
     providedLocations,
+    selectedLocationKeys,
     sessionDates,
     shootDate,
     shootType,
@@ -539,6 +544,7 @@ export default function PlannerPage() {
     setPlannerPlanVersions(draft.workspaceState?.plannerPlanVersions ?? []);
     setLastPlannerBrainChanges(draft.workspaceState?.lastPlannerBrainChanges ?? []);
     setIsRouteConfirmed(draft.workspaceState?.isRouteConfirmed ?? false);
+    setSelectedLocationKeys(draft.workspaceState?.selectedLocationKeys ?? []);
     setError(null);
     setIsReviewConfirmed(true);
     setChatStepIndex(resumeQuestionCount);
@@ -2227,6 +2233,24 @@ export default function PlannerPage() {
             shotCount={displayedShots.length}
             expectedShotRange={expectedShotRange}
             durationMinutes={durationMinutes}
+          />
+
+          <PlannerLocationDecisionPanel
+            locations={candidateLocations}
+            selectedLocationKeys={selectedLocationKeys}
+            isRouteConfirmed={isRouteConfirmed}
+            onChoosePrimaryLocation={location => {
+              setIsRouteConfirmed(false);
+              choosePrimaryLocation(location);
+              setActiveReviewTab('locations');
+            }}
+            onConfirmRoute={() => {
+              setShareLinkError('');
+              setError(null);
+              setIsRouteConfirmed(true);
+            }}
+            onMapMicroSpots={() => setActiveReviewTab('locations')}
+            onAskAiForMore={() => void sendPlannerBrainMessage('Find more primary location options like the strongest current candidate, and explain why each fits this client and style.')}
           />
 
           <Card className="border border-[#d8d2c8] bg-[#111216] text-white shadow-sm">

@@ -247,6 +247,7 @@ export type PlannerDraftWorkspaceState = {
   }>;
   lastPlannerBrainChanges?: string[];
   isRouteConfirmed?: boolean;
+  selectedLocationKeys?: string[];
 };
 
 export type PlannerDraft = {

@@ -168,6 +168,12 @@ export function usePlannerReviewState(plan: SessionPlan | null, intelligence: Pl
     setSelectedReviewLocationName(location.displayName || location.name);
   }, []);
 
+  const choosePrimaryLocation = useCallback((location: SessionPlanLocation) => {
+    const key = (location.displayName || location.name).toLowerCase();
+    setSelectedLocationKeys([key]);
+    setSelectedReviewLocationName(location.displayName || location.name);
+  }, []);
+
   const clearSelectedLocations = useCallback(() => {
     setSelectedLocationKeys([]);
   }, []);
@@ -220,12 +226,14 @@ export function usePlannerReviewState(plan: SessionPlan | null, intelligence: Pl
     logisticsLookup,
     candidateLocations,
     selectedLocationKeys,
+    setSelectedLocationKeys,
     selectedLocations,
     displayedLocations,
     displayedShots,
     emptyLocationMessage,
     emptyShotMessage,
     setLocationVote,
+    choosePrimaryLocation,
     togglePreferredVenueBucket,
     toggleExcludedVenueBucket,
     toggleSelectedLocation,

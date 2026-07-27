@@ -37,6 +37,14 @@ type PlannerDraftSummary = {
   planState: {
     shootType: string;
   };
+  workspaceState?: {
+    plan?: {
+      locationSuggestions?: unknown[];
+      shotList?: unknown[];
+    } | null;
+    plannerBrainMessages?: unknown[];
+    plannerPlanVersions?: unknown[];
+  };
 };
 
 type BusinessProfileSummary = {
@@ -274,6 +282,11 @@ export function PlannerIntakeCard({
                 <DraftResumeBanner
                   updatedAt={resumableDraft.updatedAt}
                   shootType={resumableDraft.planState.shootType}
+                  hasWorkspacePlan={Boolean(resumableDraft.workspaceState?.plan)}
+                  locationCount={resumableDraft.workspaceState?.plan?.locationSuggestions?.length ?? 0}
+                  shotCount={resumableDraft.workspaceState?.plan?.shotList?.length ?? 0}
+                  messageCount={resumableDraft.workspaceState?.plannerBrainMessages?.length ?? 0}
+                  versionCount={resumableDraft.workspaceState?.plannerPlanVersions?.length ?? 0}
                   onDiscard={onDismissDraft}
                   onResume={onResumeDraft}
                 />
