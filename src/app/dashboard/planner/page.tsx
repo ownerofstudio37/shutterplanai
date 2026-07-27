@@ -8,6 +8,8 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { PlannerWorkflowStages } from '@/components/planner/PlannerWorkflowStages';
 import { PlannerIntakeCard } from '@/components/planner/PlannerIntakeCard';
+import { PlannerAssistantHero } from '@/components/planner/PlannerAssistantHero';
+import { PlannerManualBuilder } from '@/components/planner/PlannerManualBuilder';
 import { PlannerReviewHeaderCard } from '@/components/planner/PlannerReviewHeaderCard';
 import { PlannerReviewTabs } from '@/components/planner/PlannerReviewTabs';
 import { PlannerMobileReviewContent } from '@/components/planner/PlannerMobileReviewContent';
@@ -113,6 +115,7 @@ type GuideActivityResponse = {
 export default function PlannerPage() {
   const router = useRouter();
 
+  const [plannerEntryMode, setPlannerEntryMode] = useState<'chat' | 'manual'>('chat');
   const [shootType, setShootType] = useState('Family Session');
   const [subjectDetails, setSubjectDetails] = useState('5 people, 2 toddlers');
   const [city, setCity] = useState('Dallas, TX');
@@ -123,7 +126,7 @@ export default function PlannerPage() {
   const [constraints, setConstraints] = useState('Need stroller-friendly paths and quick transitions');
   const [locationMode, setLocationMode] = useState<LocationMode>('find-locations');
   const [providedLocations, setProvidedLocations] = useState('');
-  const [desiredLocationCount, setDesiredLocationCount] = useState('2 locations');
+  const [desiredLocationCount, setDesiredLocationCount] = useState('1 location');
   const [familyPacing, setFamilyPacing] = useState('');
   const [engagementStory, setEngagementStory] = useState('');
   const [brandingGoals, setBrandingGoals] = useState('');
@@ -431,7 +434,7 @@ export default function PlannerPage() {
     setConstraints(draftState.constraints || 'Need stroller-friendly paths and quick transitions');
     setLocationMode(mode);
     setProvidedLocations(draftState.providedLocations || '');
-    setDesiredLocationCount(draftState.desiredLocationCount || '2 locations');
+    setDesiredLocationCount(draftState.desiredLocationCount || '1 location');
     setFamilyPacing(draftState.familyPacing || '');
     setEngagementStory(draftState.engagementStory || '');
     setBrandingGoals(draftState.brandingGoals || '');
@@ -1068,8 +1071,11 @@ export default function PlannerPage() {
 
         const notes = [
           shot.notes,
+          shot.deliverableCategory ? `Deliverable: ${shot.deliverableCategory}` : '',
+          shot.lensSuggestion ? `Lens: ${shot.lensSuggestion}` : '',
           `Pose suggestion: ${shot.poseSuggestion}`,
           `Composition: ${shot.compositionSuggestion}`,
+          shot.lightWeatherNote ? `Sun/weather: ${shot.lightWeatherNote}` : '',
           `Timing: ${shot.timingHint}`,
           shot.geocodedLocationName ? `Map match: ${shot.geocodedLocationName}` : '',
           refinement ? `Location score: ${refinement.overallScore}/10` : '',
@@ -1325,9 +1331,9 @@ export default function PlannerPage() {
   };
 
   const workflowStages: Array<{ id: WorkflowStage; label: string; description: string }> = [
-    { id: 'intake', label: '1. Intake', description: 'Answer the planning chat' },
-    { id: 'review', label: '2. Plan Review', description: 'Inspect locations and shot flow' },
-    { id: 'apply', label: '3. Apply to Project', description: 'Create your project and shot list' },
+    { id: 'intake', label: '1. Brief', description: 'Chat or enter the shoot details' },
+    { id: 'review', label: '2. Location + Shot Flow', description: 'Choose the location, map micro-spots, and match deliverables' },
+    { id: 'apply', label: '3. Guide + Project', description: 'Create the photographer shot list and client prep guide' },
   ];
 
   const planningSourceExplanation = useMemo(() => {
@@ -1752,6 +1758,8 @@ export default function PlannerPage() {
 
   return (
     <div className="space-y-6">
+      <PlannerAssistantHero mode={plannerEntryMode} onModeChange={setPlannerEntryMode} />
+
       <PlannerWorkflowStages stages={workflowStages} currentStage={workflowStage} hasPlan={!!plan} />
 
       {billingUsage && isFreeTier && (
@@ -1816,7 +1824,7 @@ export default function PlannerPage() {
         </Card>
       )}
 
-      {workflowStage === 'intake' && (
+      {workflowStage === 'intake' && plannerEntryMode === 'chat' && (
         <SessionTemplatePanel
           currentPayload={{
             shootType,
@@ -1888,48 +1896,86 @@ export default function PlannerPage() {
         />
       )}
 
-      <PlannerIntakeCard
-        workflowStage={workflowStage}
-        shootType={shootType}
-        locationMode={locationMode}
-        city={city}
-        desiredLocationCount={desiredLocationCount}
-        businessProfile={businessProfile}
-        isGenerating={isGenerating}
-        hasPlan={!!plan}
-        isChatComplete={isChatComplete}
-        isReviewConfirmed={isReviewConfirmed}
-        onGeneratePlan={() => void generatePlan()}
-        onEditAnswers={editAnswers}
-        resumableDraft={resumableDraft}
-        onDismissDraft={() => void dismissDraft()}
-        onResumeDraft={resumeDraft}
-        presets={PLANNER_PRESETS}
-        activePresetId={activePresetId}
-        onApplyPreset={applyPreset}
-        chatStepIndex={boundedChatStepIndex}
-        visibleQuestions={visibleQuestions}
-        sessionCategory={sessionCategory}
-        getAdaptivePrompt={(question, category) => getAdaptivePrompt(question as ChatQuestion, category)}
-        getAnswerForQuestion={questionId => getAnswerForQuestion(questionId as ChatQuestionId)}
-        activeQuestion={activeQuestion}
-        isAiTyping={isAiTyping}
-        activePrompt={activePrompt}
-        activeProfileTemplates={activeProfileTemplates}
-        activeQuickReplies={activeQuickReplies}
-        draftAnswer={draftAnswer}
-        onDraftAnswerChange={setDraftAnswer}
-        activePlaceholder={activePlaceholder}
-        onSubmitAnswerValue={submitAnswerValue}
-        onSubmitCurrentAnswer={submitCurrentAnswer}
-        onGoBackQuestion={goBackQuestion}
-        onJumpToQuestion={questionId => jumpToQuestion(questionId as ChatQuestionId)}
-        onReviewAnswers={reviewAnswers}
-        durationMinutes={durationMinutes}
-        expectedShotRange={expectedShotRange}
-        draftSaveStatus={draftSaveStatus}
-        error={error}
-      />
+      {plannerEntryMode === 'chat' ? (
+        <PlannerIntakeCard
+          workflowStage={workflowStage}
+          shootType={shootType}
+          locationMode={locationMode}
+          city={city}
+          desiredLocationCount={desiredLocationCount}
+          businessProfile={businessProfile}
+          isGenerating={isGenerating}
+          hasPlan={!!plan}
+          isChatComplete={isChatComplete}
+          isReviewConfirmed={isReviewConfirmed}
+          onGeneratePlan={() => void generatePlan()}
+          onEditAnswers={editAnswers}
+          resumableDraft={resumableDraft}
+          onDismissDraft={() => void dismissDraft()}
+          onResumeDraft={resumeDraft}
+          presets={PLANNER_PRESETS}
+          activePresetId={activePresetId}
+          onApplyPreset={applyPreset}
+          chatStepIndex={boundedChatStepIndex}
+          visibleQuestions={visibleQuestions}
+          sessionCategory={sessionCategory}
+          getAdaptivePrompt={(question, category) => getAdaptivePrompt(question as ChatQuestion, category)}
+          getAnswerForQuestion={questionId => getAnswerForQuestion(questionId as ChatQuestionId)}
+          activeQuestion={activeQuestion}
+          isAiTyping={isAiTyping}
+          activePrompt={activePrompt}
+          activeProfileTemplates={activeProfileTemplates}
+          activeQuickReplies={activeQuickReplies}
+          draftAnswer={draftAnswer}
+          onDraftAnswerChange={setDraftAnswer}
+          activePlaceholder={activePlaceholder}
+          onSubmitAnswerValue={submitAnswerValue}
+          onSubmitCurrentAnswer={submitCurrentAnswer}
+          onGoBackQuestion={goBackQuestion}
+          onJumpToQuestion={questionId => jumpToQuestion(questionId as ChatQuestionId)}
+          onReviewAnswers={reviewAnswers}
+          durationMinutes={durationMinutes}
+          expectedShotRange={expectedShotRange}
+          draftSaveStatus={draftSaveStatus}
+          error={error}
+        />
+      ) : workflowStage === 'intake' ? (
+        <PlannerManualBuilder
+          shootType={shootType}
+          onShootTypeChange={setShootType}
+          locationMode={locationMode}
+          onLocationModeChange={value => {
+            setLocationMode(value);
+            setIsReviewConfirmed(false);
+            setPlan(null);
+          }}
+          city={city}
+          onCityChange={setCity}
+          providedLocations={providedLocations}
+          onProvidedLocationsChange={setProvidedLocations}
+          desiredLocationCount={desiredLocationCount}
+          onDesiredLocationCountChange={setDesiredLocationCount}
+          shootDate={shootDate}
+          onShootDateChange={setShootDate}
+          duration={duration}
+          onDurationChange={setDuration}
+          subjectDetails={subjectDetails}
+          onSubjectDetailsChange={setSubjectDetails}
+          mood={mood}
+          onMoodChange={setMood}
+          mustHaveShots={mustHaveShots}
+          onMustHaveShotsChange={setMustHaveShots}
+          constraints={constraints}
+          onConstraintsChange={setConstraints}
+          isGenerating={isGenerating}
+          hasPlan={!!plan}
+          onGeneratePlan={() => {
+            setChatStepIndex(visibleQuestions.length);
+            setIsReviewConfirmed(true);
+            void generatePlan();
+          }}
+        />
+      ) : null}
 
       {isGenerating && !plan && <PlannerGeneratingSkeleton />}
 

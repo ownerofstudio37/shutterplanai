@@ -9,6 +9,9 @@ type ReviewShot = {
   poseSuggestion: string;
   compositionSuggestion: string;
   timingHint: string;
+  lensSuggestion?: string;
+  deliverableCategory?: string;
+  lightWeatherNote?: string;
   latitude?: number | null;
   longitude?: number | null;
 };
@@ -128,7 +131,21 @@ export function PlannerShotListPanel({
                     <p className="font-semibold uppercase tracking-[0.12em] text-[#7c6f64]">Composition</p>
                     <p className="mt-1 text-[#1f2933]">{shot.compositionSuggestion || 'Composition pending'}</p>
                   </div>
+                  <div className="rounded-md bg-white px-3 py-2">
+                    <p className="font-semibold uppercase tracking-[0.12em] text-[#7c6f64]">Lens</p>
+                    <p className="mt-1 text-[#1f2933]">{shot.lensSuggestion || '35mm or 50mm flexible'}</p>
+                  </div>
+                  <div className="rounded-md bg-white px-3 py-2">
+                    <p className="font-semibold uppercase tracking-[0.12em] text-[#7c6f64]">Sun/weather</p>
+                    <p className="mt-1 text-[#1f2933]">{shot.lightWeatherNote || 'Favor open shade or soft directional light.'}</p>
+                  </div>
                 </div>
+
+                {shot.deliverableCategory && (
+                  <p className="rounded-md bg-white px-3 py-2 text-xs font-semibold text-[#1f2933]">
+                    Deliverable: {shot.deliverableCategory}
+                  </p>
+                )}
 
                 {shot.latitude != null && shot.longitude != null && (
                   <p className="rounded-md bg-white px-3 py-2 text-xs text-[#5f6b76]">

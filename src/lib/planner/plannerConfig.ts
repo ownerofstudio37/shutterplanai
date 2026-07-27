@@ -33,6 +33,9 @@ export interface SessionPlanShot {
   poseSuggestion: string;
   compositionSuggestion: string;
   timingHint: string;
+  lensSuggestion?: string;
+  deliverableCategory?: string;
+  lightWeatherNote?: string;
   notes: string;
   latitude?: number | null;
   longitude?: number | null;
@@ -274,21 +277,21 @@ export const CHAT_QUESTIONS: ChatQuestion[] = [
   },
   {
     id: 'locationMode',
-    prompt: 'Do you want me to find locations, or are your locations already selected?',
+    prompt: 'Should I find the shoot location, or are we building around one you already chose?',
     options: ['Find locations for me', 'I already have locations'],
     required: true,
   },
   {
     id: 'providedLocations',
-    prompt: 'List your chosen locations (comma-separated).',
-    placeholder: 'Example: Trinity River Greenbelt, White Rock Lake, Historic Downtown Square',
+    prompt: 'What chosen location should we map micro-spots inside?',
+    placeholder: 'Example: White Rock Lake, then note any known parking, trail, garden, or building zones',
     showWhen: mode => mode === 'use-provided',
     required: true,
   },
   {
     id: 'city',
-    prompt: 'What city/area should I center the plan around?',
-    placeholder: 'Dallas, TX',
+    prompt: 'What city or area should I search for location candidates?',
+    placeholder: 'Dallas, TX or a neighborhood/ZIP',
     showWhen: mode => mode === 'find-locations',
   },
   {
@@ -300,8 +303,8 @@ export const CHAT_QUESTIONS: ChatQuestion[] = [
   },
   {
     id: 'subjectDetails',
-    prompt: 'Who is being photographed?',
-    placeholder: '5 people, 2 toddlers, grandparents included',
+    prompt: 'Who is being photographed, and what does the client need delivered?',
+    placeholder: '5 people, 2 toddlers, grandparents included; needs full family, siblings, parents, kid solos',
     required: true,
   },
   {
@@ -335,25 +338,25 @@ export const CHAT_QUESTIONS: ChatQuestion[] = [
   },
   {
     id: 'duration',
-    prompt: 'How long is the session?',
+    prompt: 'How long do we have to move through the location and complete the shot list?',
     placeholder: '60 minutes',
     required: true,
   },
   {
     id: 'mood',
-    prompt: 'What mood/style do you want?',
-    placeholder: 'Warm, candid, storytelling',
+    prompt: 'What is your shooting style for this plan?',
+    placeholder: 'Warm, candid, movement-first, true-to-color, editorial, lightly posed',
     required: true,
   },
   {
     id: 'mustHaveShots',
-    prompt: 'Any must-have shots?',
-    placeholder: 'Whole family portrait, siblings, parents together',
+    prompt: 'What deliverables or must-have frames should the shot list cover?',
+    placeholder: 'Whole family, siblings, parents together, individual portraits, detail shots, horizontal hero crop',
   },
   {
     id: 'constraints',
-    prompt: 'Any constraints I should plan around?',
-    placeholder: 'Mobility, weather risk, permit limits, short toddler attention span',
+    prompt: 'What should I plan around for sun, weather, logistics, or client comfort?',
+    placeholder: 'Golden hour, shade, wind/rain backup, mobility, parking, permits, restroom, short toddler attention span',
   },
 ];
 
@@ -436,21 +439,21 @@ export function getAdaptivePrompt(question: ChatQuestion, sessionCategory: Sessi
   }
 
   if (question.id === 'subjectDetails') {
-    if (sessionCategory === 'family') return 'Who is being photographed (ages, family members, any kids)?';
-    if (sessionCategory === 'engagement') return 'Tell me about the couple and any important story context.';
-    if (sessionCategory === 'event') return 'Who are the key people and moments to prioritize?';
+    if (sessionCategory === 'family') return 'Who is in the family, and what images do they expect in the gallery?';
+    if (sessionCategory === 'engagement') return 'Tell me about the couple, their story, and the images they care most about.';
+    if (sessionCategory === 'event') return 'Who are the key people, moments, and deliverables to prioritize?';
   }
 
   if (question.id === 'mustHaveShots') {
-    if (sessionCategory === 'family') return 'What family moments are non-negotiable?';
-    if (sessionCategory === 'engagement') return 'Any specific couple moments or ring/detail shots required?';
-    if (sessionCategory === 'event') return 'List must-capture moments, VIPs, and detail shots.';
+    if (sessionCategory === 'family') return 'Which family deliverables are non-negotiable?';
+    if (sessionCategory === 'engagement') return 'Which couple moments, ring/details, and hero frames are required?';
+    if (sessionCategory === 'event') return 'List must-capture moments, VIPs, sponsor details, and room shots.';
   }
 
   if (question.id === 'constraints') {
-    if (sessionCategory === 'family') return 'Any family constraints (mobility, naps, attention span, stroller)?';
-    if (sessionCategory === 'engagement') return 'Any constraints (outfit changes, permit risk, privacy concerns)?';
-    if (sessionCategory === 'event') return 'Any event constraints (run-of-show timing, venue rules, access limits)?';
+    if (sessionCategory === 'family') return 'Any sun, weather, walking, nap, stroller, or attention-span constraints?';
+    if (sessionCategory === 'engagement') return 'Any sun, weather, outfit-change, permit, or privacy constraints?';
+    if (sessionCategory === 'event') return 'Any timing, venue-rule, weather, access, or lighting constraints?';
   }
 
   return question.prompt;
@@ -465,9 +468,9 @@ export function getAdaptivePlaceholder(question: ChatQuestion, sessionCategory: 
   }
 
   if (question.id === 'subjectDetails') {
-    if (sessionCategory === 'family') return '2 parents, 3 kids (ages 2, 5, 8), stroller needed';
-    if (sessionCategory === 'engagement') return 'Recently engaged couple, natural chemistry, want candid + editorial mix';
-    if (sessionCategory === 'event') return '80-person event, keynote + networking + sponsor details';
+    if (sessionCategory === 'family') return '2 parents, 3 kids; needs full family, siblings, kid solos, parent portraits';
+    if (sessionCategory === 'engagement') return 'Recently engaged couple; wants walking candids, ring detail, wide scenic hero images';
+    if (sessionCategory === 'event') return '80-person event; keynote, networking, sponsor details, audience reactions';
   }
 
   return question.placeholder ?? 'Type your answer...';

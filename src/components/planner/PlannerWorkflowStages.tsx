@@ -19,10 +19,10 @@ export function PlannerWorkflowStages({ stages, currentStage, hasPlan }: Planner
     <Card className="border border-[#d8d2c8] shadow-sm">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7c6f64]">Production flow</p>
-          <h2 className="mt-2 text-xl font-semibold text-[#1f2933]">From intake to client-ready guide</h2>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7c6f64]">Planning flow</p>
+          <h2 className="mt-2 text-xl font-semibold text-[#1f2933]">Location, micro-spots, shot list, guide</h2>
           <p className="mt-1 text-sm text-[#5f6b76]">
-            Capture the brief, pressure-test logistics, then turn the approved plan into a working project.
+            Start with the client brief, choose the shoot location, map the exact working spots, then build the photographer and client outputs.
           </p>
         </div>
         <div className="grid gap-2 sm:grid-cols-3 lg:min-w-[560px]">

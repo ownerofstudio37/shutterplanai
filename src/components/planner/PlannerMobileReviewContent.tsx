@@ -45,6 +45,11 @@ type ReviewShot = {
   location: string;
   microSpot: string;
   poseSuggestion: string;
+  compositionSuggestion?: string;
+  timingHint?: string;
+  lensSuggestion?: string;
+  deliverableCategory?: string;
+  lightWeatherNote?: string;
 };
 
 type TimelineItem = {
@@ -349,7 +354,11 @@ export const PlannerMobileReviewContent = memo(function PlannerMobileReviewConte
             <p className="mt-1 text-sm text-gray-600">{shot.description}</p>
             <p className="mt-2 text-xs text-gray-500">Location: {shot.location}</p>
             <p className="text-xs text-gray-500">Micro-spot: {shot.microSpot}</p>
+            {shot.deliverableCategory && <p className="text-xs text-gray-500">Deliverable: {shot.deliverableCategory}</p>}
             <p className="text-xs text-gray-500">Pose: {shot.poseSuggestion}</p>
+            {shot.compositionSuggestion && <p className="text-xs text-gray-500">Angle: {shot.compositionSuggestion}</p>}
+            {shot.lensSuggestion && <p className="text-xs text-gray-500">Lens: {shot.lensSuggestion}</p>}
+            {shot.lightWeatherNote && <p className="text-xs text-gray-500">Sun/weather: {shot.lightWeatherNote}</p>}
           </div>
         ))}
       </div>

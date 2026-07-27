@@ -35,6 +35,9 @@ type ReviewShot = {
   poseSuggestion: string;
   compositionSuggestion: string;
   timingHint: string;
+  lensSuggestion?: string;
+  deliverableCategory?: string;
+  lightWeatherNote?: string;
   latitude?: number | null;
   longitude?: number | null;
 };

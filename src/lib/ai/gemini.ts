@@ -54,6 +54,9 @@ export interface SessionPlanShot {
   poseSuggestion: string;
   compositionSuggestion: string;
   timingHint: string;
+  lensSuggestion?: string;
+  deliverableCategory?: string;
+  lightWeatherNote?: string;
   notes: string;
 }
 
@@ -477,6 +480,44 @@ function mergeShots(primary: SessionPlanShot[], secondary: SessionPlanShot[], ma
   return output;
 }
 
+function inferDeliverableCategory(shot: SessionPlanShot, sessionCategory: SessionCategory) {
+  const text = `${shot.title} ${shot.description}`.toLowerCase();
+  if (/detail|ring|hands|accessor|texture/.test(text)) return 'Detail / gallery variety';
+  if (/whole|family|group|vip|speaker|audience/.test(text)) return sessionCategory === 'event' ? 'Priority coverage' : 'Must-have grouping';
+  if (/walking|movement|candid|laugh/.test(text)) return 'Movement / candid variety';
+  if (/hero|signature|environmental|wide/.test(text)) return 'Hero image';
+  if (/parent|couple|connection|forehead/.test(text)) return 'Connection portrait';
+  return 'Core gallery coverage';
+}
+
+function inferLensSuggestion(shot: SessionPlanShot, sessionCategory: SessionCategory) {
+  const text = `${shot.title} ${shot.compositionSuggestion}`.toLowerCase();
+  if (/detail|ring|close-up|tight/.test(text)) return '85mm or macro; shallow depth of field';
+  if (/wide|environmental|scenic|room|establishing/.test(text)) return '24-35mm for context and leading lines';
+  if (/walking|movement|candid/.test(text)) return '35mm or 50mm with room for movement';
+  if (sessionCategory === 'family') return '50mm or 85mm for flattering compression';
+  if (sessionCategory === 'event') return '24-70mm for fast coverage changes';
+  return '50mm or 85mm depending on background distance';
+}
+
+function inferLightWeatherNote(shot: SessionPlanShot) {
+  const text = `${shot.microSpot} ${shot.timingHint} ${shot.compositionSuggestion}`.toLowerCase();
+  if (/detail|close-up|tight/.test(text)) return 'Use shade or soft window-like light; shield hands/details from harsh wind.';
+  if (/wide|scenic|environment/.test(text)) return 'Best near golden hour; if clouds arrive, keep the sky controlled and use the setting as context.';
+  if (/path|walking|movement/.test(text)) return 'Backlight or open shade works best; avoid slick paths if rain is likely.';
+  if (/start|anchor|family/.test(text)) return 'Start in reliable open shade so the must-have frame is secure before light or weather shifts.';
+  return 'Favor soft directional light and keep a nearby covered backup in mind.';
+}
+
+function enrichShotForExecution(shot: SessionPlanShot, sessionCategory: SessionCategory): SessionPlanShot {
+  return {
+    ...shot,
+    deliverableCategory: shot.deliverableCategory ?? inferDeliverableCategory(shot, sessionCategory),
+    lensSuggestion: shot.lensSuggestion ?? inferLensSuggestion(shot, sessionCategory),
+    lightWeatherNote: shot.lightWeatherNote ?? inferLightWeatherNote(shot),
+  };
+}
+
 function buildSessionPlanningDataPackage(input: {
   shootType: string;
   city: string;
@@ -764,12 +805,12 @@ function buildDeterministicPlan(input: {
       brandNotes.push(`Pose style: ${planningData.businessContext.poseDirectionStyle}`);
     }
 
-    return {
+    return enrichShotForExecution({
       ...shot,
       location: location.name,
       microSpot,
       notes: [shot.notes || 'Grounded from session planning data.', ...brandNotes].filter(Boolean).join(' '),
-    };
+    }, planningData.sessionCategory);
   });
 
   return {
