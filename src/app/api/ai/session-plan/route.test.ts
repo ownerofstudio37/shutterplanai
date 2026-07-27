@@ -29,6 +29,7 @@ vi.mock('@/lib/geo/geocode', () => ({
 
 vi.mock('@/lib/ai/gemini', () => ({
   generateSessionPlan: vi.fn(),
+  hydrateSessionPlanOutputs: ({ plan }: { plan: unknown }) => plan,
 }));
 
 function billingUsage(input: {

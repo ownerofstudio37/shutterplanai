@@ -4,10 +4,16 @@ export interface SessionPlanLocation {
   name: string;
   whyItWorks: string;
   microLocations: string[];
+  microLocationPlan?: SessionPlanMicroLocation[];
   selectionReasons?: string[];
   confidenceScore?: number;
   venueBucket?: string;
   sourceQuery?: string;
+  visualFit?: string;
+  crowdRisk?: 'low' | 'medium' | 'high';
+  permitRisk?: 'low' | 'medium' | 'high';
+  weatherBackupQuality?: 'poor' | 'fair' | 'strong';
+  sunDirectionUsefulness?: string;
   latitude?: number | null;
   longitude?: number | null;
   displayName?: string;
@@ -17,6 +23,22 @@ export interface SessionPlanLocation {
     restroom: string;
     walkingDistance: string;
   };
+}
+
+export interface SessionPlanMicroLocation {
+  id: string;
+  name: string;
+  exactPin?: string;
+  purpose: string;
+  bestLightDirection: string;
+  bestShotTypes: string[];
+  walkingOrder: number;
+  backupUse: string;
+  parkingNote?: string;
+  restroomNote?: string;
+  resetNote?: string;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 export interface SessionPlanTimelineItem {
@@ -35,6 +57,9 @@ export interface SessionPlanShot {
   timingHint: string;
   lensSuggestion?: string;
   deliverableCategory?: string;
+  angleSuggestion?: string;
+  backupMicroSpot?: string;
+  priority?: 'must-have' | 'should-have' | 'nice-to-have';
   lightWeatherNote?: string;
   notes: string;
   latitude?: number | null;
@@ -70,6 +95,45 @@ export interface SessionPlan {
     usedBusinessZipDisambiguation?: boolean;
     businessGeoAnchorSource?: string;
   };
+  plannerBrain?: PlannerBrainState;
+  photographerPlan?: PhotographerPlanOutput;
+  clientGuide?: ClientGuideOutput;
+}
+
+export type PlannerStageId =
+  | 'intake'
+  | 'location_discovery'
+  | 'location_selection'
+  | 'micro_location_mapping'
+  | 'shot_list_generation'
+  | 'sun_weather_optimization'
+  | 'client_guide_generation';
+
+export interface PlannerBrainState {
+  currentStage: PlannerStageId;
+  completedStages: PlannerStageId[];
+  nextRecommendedStage: PlannerStageId;
+  lockedSections: string[];
+  manualModeAvailable: boolean;
+}
+
+export interface PhotographerPlanOutput {
+  timeline: SessionPlanTimelineItem[];
+  shotList: SessionPlanShot[];
+  microLocationMap: SessionPlanMicroLocation[];
+  sunWeatherNotes: string[];
+  priorityChecklist: string[];
+  backupPlan: string[];
+}
+
+export interface ClientGuideOutput {
+  arrivalInstructions: string;
+  parking: string;
+  whatToWearAndBring: string[];
+  sessionFlow: string;
+  weatherExpectations: string;
+  reassurance: string;
+  tone: string;
 }
 
 export type BusinessProfile = {

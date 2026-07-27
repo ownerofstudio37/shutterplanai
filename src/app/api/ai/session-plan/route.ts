@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/serverAuth';
 import { createSupabaseAdminClient } from '@/lib/supabase/server';
-import { BusinessContext, generateSessionPlan, SessionPlan, SessionPlanLocation } from '@/lib/ai/gemini';
+import { BusinessContext, generateSessionPlan, hydrateSessionPlanOutputs, SessionPlan, SessionPlanLocation } from '@/lib/ai/gemini';
 import { geocodeLocations, geocodePlace, searchLocationCandidates } from '@/lib/geo/geocode';
 import { getBillingUsageForUser } from '@/lib/billing/serverUsage';
 import { hasReachedLimit } from '@/lib/billing/planLimits';
@@ -440,13 +440,22 @@ export async function POST(request: NextRequest) {
       };
     });
 
+    const hydratedPlan = hydrateSessionPlanOutputs({
+      plan: {
+        ...plan,
+        locationSuggestions: groundedLocations,
+        shotList: enrichedShotList,
+      },
+      shootType: payload.shootType,
+      constraints: typeof payload.constraints === 'string' ? payload.constraints : undefined,
+      businessContext,
+    });
+
     return NextResponse.json(
       {
         success: true,
         data: {
-          ...plan,
-          locationSuggestions: groundedLocations,
-          shotList: enrichedShotList,
+          ...hydratedPlan,
           planningDiagnostics: {
             locationCandidateCount: locationCandidates.length,
             locationSource,

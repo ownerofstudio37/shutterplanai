@@ -25,12 +25,18 @@ export interface SessionPlanLocation {
   name: string;
   whyItWorks: string;
   microLocations: string[];
+  microLocationPlan?: SessionPlanMicroLocation[];
   selectionReasons?: string[];
   confidenceScore?: number;
   venueBucket?: string;
   sourceQuery?: string;
   displayName?: string;
   googleMapsUrl?: string;
+  visualFit?: string;
+  crowdRisk?: 'low' | 'medium' | 'high';
+  permitRisk?: 'low' | 'medium' | 'high';
+  weatherBackupQuality?: 'poor' | 'fair' | 'strong';
+  sunDirectionUsefulness?: string;
   latitude?: number | null;
   longitude?: number | null;
   logistics: {
@@ -38,6 +44,22 @@ export interface SessionPlanLocation {
     restroom: string;
     walkingDistance: string;
   };
+}
+
+export interface SessionPlanMicroLocation {
+  id: string;
+  name: string;
+  exactPin?: string;
+  purpose: string;
+  bestLightDirection: string;
+  bestShotTypes: string[];
+  walkingOrder: number;
+  backupUse: string;
+  parkingNote?: string;
+  restroomNote?: string;
+  resetNote?: string;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 export interface SessionPlanTimelineItem {
@@ -56,6 +78,9 @@ export interface SessionPlanShot {
   timingHint: string;
   lensSuggestion?: string;
   deliverableCategory?: string;
+  angleSuggestion?: string;
+  backupMicroSpot?: string;
+  priority?: 'must-have' | 'should-have' | 'nice-to-have';
   lightWeatherNote?: string;
   notes: string;
 }
@@ -68,6 +93,45 @@ export interface SessionPlan {
   shotList: SessionPlanShot[];
   clientPrepChecklist: string[];
   contingencyPlans: string[];
+  plannerBrain?: PlannerBrainState;
+  photographerPlan?: PhotographerPlanOutput;
+  clientGuide?: ClientGuideOutput;
+}
+
+export type PlannerStageId =
+  | 'intake'
+  | 'location_discovery'
+  | 'location_selection'
+  | 'micro_location_mapping'
+  | 'shot_list_generation'
+  | 'sun_weather_optimization'
+  | 'client_guide_generation';
+
+export interface PlannerBrainState {
+  currentStage: PlannerStageId;
+  completedStages: PlannerStageId[];
+  nextRecommendedStage: PlannerStageId;
+  lockedSections: string[];
+  manualModeAvailable: boolean;
+}
+
+export interface PhotographerPlanOutput {
+  timeline: SessionPlanTimelineItem[];
+  shotList: SessionPlanShot[];
+  microLocationMap: SessionPlanMicroLocation[];
+  sunWeatherNotes: string[];
+  priorityChecklist: string[];
+  backupPlan: string[];
+}
+
+export interface ClientGuideOutput {
+  arrivalInstructions: string;
+  parking: string;
+  whatToWearAndBring: string[];
+  sessionFlow: string;
+  weatherExpectations: string;
+  reassurance: string;
+  tone: string;
 }
 
 export interface LocationRefinement {
@@ -687,6 +751,219 @@ function buildSupplementalShotTemplates(input: {
   ].slice(0, input.durationMinutes <= 45 ? 1 : 2);
 }
 
+function slugifyPlannerId(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 48) || 'spot';
+}
+
+function getMicroLocationPurpose(name: string, sessionCategory: SessionCategory) {
+  const value = name.toLowerCase();
+  if (/arrival|lot|parking|entrance/.test(value)) return 'Arrival, warmup, and quick client reset.';
+  if (/shade|tree|covered|pavilion/.test(value)) return 'Reliable portraits when light, heat, wind, or rain needs control.';
+  if (/path|trail|walk|line/.test(value)) return 'Movement prompts, walking candids, and transition frames.';
+  if (/lake|water|overlook|scenic|open/.test(value)) return 'Hero frame and wider environmental compositions.';
+  if (sessionCategory === 'event') return 'Coverage zone for priority people, details, and candid moments.';
+  return 'Flexible portrait micro-spot for variety without leaving the primary location.';
+}
+
+function getMicroLocationShotTypes(name: string, sessionCategory: SessionCategory) {
+  const value = name.toLowerCase();
+  if (/arrival|lot|parking|entrance/.test(value)) return ['arrival candids', 'wardrobe check', 'warmup portraits'];
+  if (/shade|tree|covered|pavilion/.test(value)) return ['formal portraits', 'close-ups', 'weather backup frames'];
+  if (/path|trail|walk|line/.test(value)) return ['walking prompts', 'movement', 'candid transitions'];
+  if (/lake|water|overlook|scenic|open/.test(value)) return ['hero portraits', 'wide frames', 'silhouettes'];
+  if (sessionCategory === 'event') return ['establishing frames', 'details', 'candid coverage'];
+  return ['portraits', 'details', 'composition variety'];
+}
+
+function buildMicroLocationPlan(input: {
+  location: SessionPlanLocation;
+  sessionCategory: SessionCategory;
+}): SessionPlanMicroLocation[] {
+  return input.location.microLocations.map((spot, index) => ({
+    id: `${slugifyPlannerId(input.location.name)}-${slugifyPlannerId(spot)}-${index + 1}`,
+    name: spot,
+    exactPin:
+      input.location.latitude != null && input.location.longitude != null
+        ? `${input.location.latitude.toFixed(5)}, ${input.location.longitude.toFixed(5)}`
+        : 'Pin after photographer confirms the exact spot.',
+    purpose: getMicroLocationPurpose(spot, input.sessionCategory),
+    bestLightDirection:
+      index === 0
+        ? 'Start in open shade or backlight, then rotate the subject until catchlights are clean.'
+        : index === 1
+          ? 'Use side light for depth, avoiding direct overhead sun when possible.'
+          : 'Save for softer light, golden hour, or weather backup coverage.',
+    bestShotTypes: getMicroLocationShotTypes(spot, input.sessionCategory),
+    walkingOrder: index + 1,
+    backupUse:
+      /shade|covered|pavilion|tree/i.test(spot)
+        ? 'Primary rain, heat, or harsh-sun fallback.'
+        : 'Use if the preferred spot is crowded or light shifts.',
+    parkingNote: input.location.logistics.parking,
+    restroomNote: input.location.logistics.restroom,
+    resetNote: index === 0 ? 'Use this stop to confirm wardrobe, bags, and client comfort.' : 'Keep this transition short and purposeful.',
+    latitude: input.location.latitude ?? null,
+    longitude: input.location.longitude ?? null,
+  }));
+}
+
+function enrichLocationForPlanning(location: SessionPlanLocation, sessionCategory: SessionCategory): SessionPlanLocation {
+  const microLocationPlan = buildMicroLocationPlan({ location, sessionCategory });
+  const hasCoveredBackup = microLocationPlan.some(spot => /covered|pavilion|shade|tree/i.test(spot.name));
+
+  return {
+    ...location,
+    microLocationPlan,
+    visualFit:
+      sessionCategory === 'family'
+        ? 'Easy, warm, and low-pressure with enough variety for family groups and kid movement.'
+        : sessionCategory === 'engagement'
+          ? 'Romantic movement, scenic depth, and close-up variety without a rushed route.'
+          : sessionCategory === 'event'
+            ? 'Clear coverage zones for arrivals, key moments, details, and candid transitions.'
+            : 'Clean backgrounds, subject separation, and enough texture for brand/story variety.',
+    crowdRisk: location.selectionReasons?.some(reason => /crowd/i.test(reason)) ? 'medium' : 'low',
+    permitRisk: location.selectionReasons?.some(reason => /permit/i.test(reason)) ? 'medium' : 'low',
+    weatherBackupQuality: hasCoveredBackup ? 'strong' : 'fair',
+    sunDirectionUsefulness: 'Prioritize open shade first, then use side/back light for dimensional portraits near golden hour.',
+  };
+}
+
+function enrichShotForPlanning(input: {
+  shot: SessionPlanShot;
+  index: number;
+  locationSuggestions: SessionPlanLocation[];
+}): SessionPlanShot {
+  const location = input.locationSuggestions.find(item => item.name === input.shot.location) ?? input.locationSuggestions[0];
+  const microSpots = location?.microLocationPlan ?? [];
+  const backupMicroSpot = microSpots.find(spot => spot.name !== input.shot.microSpot)?.name ?? 'Nearest open shade or covered backup';
+  const priority = input.index <= 2 ? 'must-have' : input.index <= 6 ? 'should-have' : 'nice-to-have';
+
+  return {
+    ...input.shot,
+    angleSuggestion:
+      input.shot.angleSuggestion ??
+      (input.index % 3 === 0
+        ? 'Start at eye level, then step back for a wider environmental frame.'
+        : input.index % 3 === 1
+          ? 'Use a slightly lower angle to add presence while keeping faces clean.'
+          : 'Move 30-45 degrees off the light for depth and background separation.'),
+    backupMicroSpot: input.shot.backupMicroSpot ?? backupMicroSpot,
+    priority: input.shot.priority ?? priority,
+  };
+}
+
+function buildPlannerBrainState(): PlannerBrainState {
+  return {
+    currentStage: 'client_guide_generation',
+    completedStages: [
+      'intake',
+      'location_discovery',
+      'location_selection',
+      'micro_location_mapping',
+      'shot_list_generation',
+      'sun_weather_optimization',
+      'client_guide_generation',
+    ],
+    nextRecommendedStage: 'location_selection',
+    lockedSections: [],
+    manualModeAvailable: true,
+  };
+}
+
+function buildPhotographerPlanOutput(input: {
+  timeline: SessionPlanTimelineItem[];
+  shotList: SessionPlanShot[];
+  locationSuggestions: SessionPlanLocation[];
+  contingencyPlans: string[];
+  constraints?: string;
+}): PhotographerPlanOutput {
+  const microLocationMap = input.locationSuggestions.flatMap(location => location.microLocationPlan ?? []);
+  const priorityChecklist = input.shotList
+    .filter(shot => shot.priority === 'must-have')
+    .map(shot => `${shot.title} at ${shot.microSpot}`);
+
+  return {
+    timeline: input.timeline,
+    shotList: input.shotList,
+    microLocationMap,
+    sunWeatherNotes: [
+      'Check final sun position and forecast the morning of the session.',
+      'Move must-have portraits into open shade or covered backup if rain, heat, wind, or harsh UV increases.',
+      input.constraints?.trim() ? `Client/weather constraint to honor: ${input.constraints.trim()}` : '',
+    ].filter(Boolean),
+    priorityChecklist: priorityChecklist.length > 0 ? priorityChecklist : input.shotList.slice(0, 3).map(shot => shot.title),
+    backupPlan: input.contingencyPlans,
+  };
+}
+
+function buildClientGuideOutput(input: {
+  locationSuggestions: SessionPlanLocation[];
+  clientPrepChecklist: string[];
+  timeline: SessionPlanTimelineItem[];
+  businessContext?: BusinessContext;
+}): ClientGuideOutput {
+  const primaryLocation = input.locationSuggestions[0];
+  const brandTone = input.businessContext?.brandTone || 'warm, calm, and clear';
+
+  return {
+    arrivalInstructions: primaryLocation
+      ? `Meet near ${primaryLocation.name}. Plan to arrive 10 minutes early so we can start smoothly.`
+      : 'Plan to arrive 10 minutes early so we can start smoothly.',
+    parking: primaryLocation?.logistics.parking || 'Parking details will be confirmed before the session.',
+    whatToWearAndBring: input.clientPrepChecklist,
+    sessionFlow: input.timeline.map(item => `${item.timeBlock}: ${item.focus}`).join(' '),
+    weatherExpectations: 'I will watch the forecast and adjust the order of portraits, movement, and backup spots if weather changes.',
+    reassurance: 'The plan is flexible, so we can keep the session relaxed while still covering the important images.',
+    tone: brandTone,
+  };
+}
+
+export function hydrateSessionPlanOutputs(input: {
+  plan: SessionPlan;
+  shootType?: string;
+  constraints?: string;
+  businessContext?: BusinessContext;
+}): SessionPlan {
+  const sessionCategory = getSessionCategory(input.shootType || input.plan.projectTitle);
+  const locationSuggestions = input.plan.locationSuggestions.map(location =>
+    enrichLocationForPlanning(location, sessionCategory)
+  );
+  const shotList = input.plan.shotList.map((shot, index) =>
+    enrichShotForPlanning({
+      shot,
+      index,
+      locationSuggestions,
+    })
+  );
+  const photographerPlan = buildPhotographerPlanOutput({
+    timeline: input.plan.timeline,
+    shotList,
+    locationSuggestions,
+    contingencyPlans: input.plan.contingencyPlans,
+    constraints: input.constraints,
+  });
+  const clientGuide = buildClientGuideOutput({
+    locationSuggestions,
+    clientPrepChecklist: input.plan.clientPrepChecklist,
+    timeline: input.plan.timeline,
+    businessContext: input.businessContext,
+  });
+
+  return {
+    ...input.plan,
+    locationSuggestions,
+    shotList,
+    plannerBrain: input.plan.plannerBrain ?? buildPlannerBrainState(),
+    photographerPlan,
+    clientGuide,
+  };
+}
+
 function buildGroundedLocationSuggestions(input: {
   sessionCategory: SessionCategory;
   city: string;
@@ -702,58 +979,65 @@ function buildGroundedLocationSuggestions(input: {
 
   if (preferred.length === 0) {
     return [
-      {
-        name: input.city,
-        whyItWorks: 'Central city fallback when no better real candidates are available.',
-        microLocations: ['Open shade', 'Simple walkway', 'Quiet corner'],
-        logistics: {
-          parking: 'Confirm parking before arrival.',
-          restroom: 'Check a nearby public restroom or venue.',
-          walkingDistance: 'Keep transitions minimal.',
+      enrichLocationForPlanning(
+        {
+          name: input.city,
+          whyItWorks: 'Central city fallback when no better real candidates are available.',
+          microLocations: ['Arrival zone', 'Open shade', 'Simple walkway', 'Covered backup'],
+          logistics: {
+            parking: 'Confirm parking before arrival.',
+            restroom: 'Check a nearby public restroom or venue.',
+            walkingDistance: 'Keep transitions minimal.',
+          },
         },
-      },
+        input.sessionCategory
+      ),
     ];
   }
 
   return preferred.map((candidate, index) => {
     const label = candidate.displayName?.split(',').slice(0, 2).join(',').trim() || candidate.name;
     const isFirst = index === 0;
+    const microLocations =
+      input.sessionCategory === 'engagement'
+        ? ['Arrival zone', 'Primary scenic angle', 'Quiet side path', 'Clean backdrop corner']
+        : input.sessionCategory === 'family'
+          ? ['Arrival zone', 'Open shade area', 'Walking path', 'Quiet seated spot']
+          : ['Arrival zone', 'Leading lines', 'Texture wall', 'Open frame'];
 
-    return {
-      name: label,
-      displayName: candidate.displayName || label,
-      latitude: candidate.latitude ?? null,
-      longitude: candidate.longitude ?? null,
-      googleMapsUrl:
-        candidate.latitude != null && candidate.longitude != null
-          ? `https://maps.google.com/?q=${candidate.latitude},${candidate.longitude}`
-          : `https://maps.google.com/?q=${encodeURIComponent(candidate.displayName || label)}`,
-      whyItWorks:
-        input.sessionCategory === 'engagement'
-          ? isFirst
-            ? 'Best anchor spot for a couple session with easy flow and strong visual variety.'
-            : 'Secondary real-world option that keeps the session moving without long travel.'
-          : input.sessionCategory === 'family'
+    return enrichLocationForPlanning(
+      {
+        name: label,
+        displayName: candidate.displayName || label,
+        latitude: candidate.latitude ?? null,
+        longitude: candidate.longitude ?? null,
+        googleMapsUrl:
+          candidate.latitude != null && candidate.longitude != null
+            ? `https://maps.google.com/?q=${candidate.latitude},${candidate.longitude}`
+            : `https://maps.google.com/?q=${encodeURIComponent(candidate.displayName || label)}`,
+        whyItWorks:
+          input.sessionCategory === 'engagement'
             ? isFirst
-              ? 'Family-friendly anchor location with the shortest walk and best pacing.'
-              : 'Alternate spot that still supports quick transitions and calmer pacing.'
-            : isFirst
-              ? 'Strong foundational location with reliable composition options.'
-              : 'Supporting location that adds variety without inventing a new venue.',
-      microLocations:
-        input.sessionCategory === 'engagement'
-          ? ['Primary scenic angle', 'Quiet side path', 'Clean backdrop corner']
-          : input.sessionCategory === 'family'
-            ? ['Open shade area', 'Walking path', 'Quiet seated spot']
-            : ['Leading lines', 'Texture wall', 'Open frame'],
-      logistics: {
-        parking: 'Confirm the closest practical parking option before the shoot.',
-        restroom: 'Verify restroom access or nearby public facilities before arrival.',
-        walkingDistance: candidate.latitude != null && candidate.longitude != null
-          ? 'Aim for short transitions between micro-spots.'
-          : 'Confirm access and keep transitions short.',
+              ? 'Best anchor spot for a couple session with easy flow and strong visual variety.'
+              : 'Secondary real-world option that keeps the session moving without long travel.'
+            : input.sessionCategory === 'family'
+              ? isFirst
+                ? 'Family-friendly anchor location with the shortest walk and best pacing.'
+                : 'Alternate spot that still supports quick transitions and calmer pacing.'
+              : isFirst
+                ? 'Strong foundational location with reliable composition options.'
+                : 'Supporting location that adds variety without inventing a new venue.',
+        microLocations,
+        logistics: {
+          parking: 'Confirm the closest practical parking option before the shoot.',
+          restroom: 'Verify restroom access or nearby public facilities before arrival.',
+          walkingDistance: candidate.latitude != null && candidate.longitude != null
+            ? 'Aim for short transitions between micro-spots.'
+            : 'Confirm access and keep transitions short.',
+        },
       },
-    };
+      input.sessionCategory
+    );
   });
 }
 
@@ -812,6 +1096,26 @@ function buildDeterministicPlan(input: {
       notes: [shot.notes || 'Grounded from session planning data.', ...brandNotes].filter(Boolean).join(' '),
     }, planningData.sessionCategory);
   });
+  const enrichedShotPool = shotPool.map((shot, index) =>
+    enrichShotForPlanning({
+      shot,
+      index,
+      locationSuggestions,
+    })
+  );
+  const photographerPlan = buildPhotographerPlanOutput({
+    timeline: planningData.timeline,
+    shotList: enrichedShotPool,
+    locationSuggestions,
+    contingencyPlans: planningData.contingencyPlans,
+    constraints: input.constraints,
+  });
+  const clientGuide = buildClientGuideOutput({
+    locationSuggestions,
+    clientPrepChecklist: planningData.clientPrepChecklist,
+    timeline: planningData.timeline,
+    businessContext: input.businessContext,
+  });
 
   return {
     projectTitle: `${input.businessContext?.businessName ? `${input.businessContext.businessName} • ` : ''}${input.shootType} Session Plan`,
@@ -826,9 +1130,12 @@ function buildDeterministicPlan(input: {
     }),
     timeline: planningData.timeline,
     locationSuggestions,
-    shotList: shotPool,
+    shotList: enrichedShotPool,
     clientPrepChecklist: planningData.clientPrepChecklist,
     contingencyPlans: planningData.contingencyPlans,
+    plannerBrain: buildPlannerBrainState(),
+    photographerPlan,
+    clientGuide,
   };
 }
 

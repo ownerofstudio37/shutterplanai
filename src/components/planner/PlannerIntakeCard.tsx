@@ -150,6 +150,66 @@ export function PlannerIntakeCard({
 }: PlannerIntakeCardProps) {
   const answeredCount = Math.min(chatStepIndex, visibleQuestions.length);
   const locationLabel = city || businessProfile?.baseLocation || businessProfile?.zipCode || 'Location pending';
+  const answeredQuestions = visibleQuestions.slice(0, answeredCount);
+  const planPreviewSections = [
+    {
+      label: 'Brief',
+      value: shootType,
+      status: Boolean(shootType),
+      action: 'edit',
+      questionId: 'shootType',
+    },
+    {
+      label: 'Location search',
+      value: locationMode === 'use-provided' ? 'Building around your chosen location' : locationLabel,
+      status: locationMode === 'use-provided' ? Boolean(getAnswerForQuestion('providedLocations')) : Boolean(locationLabel),
+      action: 'ask AI',
+      questionId: locationMode === 'use-provided' ? 'providedLocations' : 'city',
+    },
+    {
+      label: 'Chosen location',
+      value: locationMode === 'use-provided' ? getAnswerForQuestion('providedLocations') || 'Location pending' : 'Pick after AI discovery',
+      status: locationMode === 'use-provided' && Boolean(getAnswerForQuestion('providedLocations')),
+      action: 'lock',
+      questionId: 'locationMode',
+    },
+    {
+      label: 'Micro-spots',
+      value: 'Mapped after location selection',
+      status: false,
+      action: 'map',
+      questionId: 'providedLocations',
+    },
+    {
+      label: 'Shot list',
+      value: `${expectedShotRange.min}-${expectedShotRange.max} planned frames`,
+      status: Boolean(getAnswerForQuestion('mustHaveShots')),
+      action: 'regenerate',
+      questionId: 'mustHaveShots',
+    },
+    {
+      label: 'Sun/weather',
+      value: getAnswerForQuestion('shootDate') || 'Date/time pending',
+      status: Boolean(getAnswerForQuestion('shootDate')),
+      action: 'optimize',
+      questionId: 'shootDate',
+    },
+    {
+      label: 'Client guide',
+      value: isChatComplete ? 'Ready after plan generation' : 'Waiting on brief',
+      status: isChatComplete,
+      action: 'build',
+      questionId: 'constraints',
+    },
+  ];
+  const stageActions = [
+    { label: 'Find locations', helper: 'Search candidates', questionId: 'city', active: locationMode === 'find-locations' },
+    { label: 'Choose location', helper: 'Lock one spot', questionId: 'locationMode', active: locationMode === 'use-provided' },
+    { label: 'Map micro-spots', helper: 'Plan inside it', questionId: 'providedLocations', active: locationMode === 'use-provided' },
+    { label: 'Generate shot list', helper: 'Match deliverables', questionId: 'mustHaveShots', active: Boolean(getAnswerForQuestion('mustHaveShots')) },
+    { label: 'Optimize sun/weather', helper: 'Time the flow', questionId: 'shootDate', active: Boolean(getAnswerForQuestion('shootDate')) },
+    { label: 'Build client guide', helper: 'Prep handoff', questionId: 'constraints', active: isChatComplete },
+  ];
 
   const renderQuestionSummary = (question: IntakeQuestion, mode: 'editable' | 'locked') => {
     const answer = getAnswerForQuestion(question.id);
@@ -207,7 +267,8 @@ export function PlannerIntakeCard({
             </div>
           </div>
 
-          <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col items-center justify-center py-12">
+          <div className="mx-auto grid w-full max-w-7xl flex-1 items-center gap-8 py-10 xl:grid-cols-[minmax(0,1fr)_390px]">
+            <div className="min-w-0">
             {resumableDraft && (
               <div className="mb-5 w-full max-w-3xl">
                 <DraftResumeBanner
@@ -219,18 +280,55 @@ export function PlannerIntakeCard({
               </div>
             )}
 
-            <div className="mb-8 text-center">
+            <div className="mb-7 text-center xl:text-left">
               <p className="text-sm font-medium text-[#8f95a3]">
                 Step {Math.min(answeredCount + 1, visibleQuestions.length)} of {visibleQuestions.length}
               </p>
               <h1 className="mt-4 text-4xl font-medium tracking-normal text-[#e6e8ee] md:text-6xl">
-                {isChatComplete ? 'Ready to build the plan.' : 'Your move.'}
+                {isChatComplete ? 'Ready to build the plan.' : 'What are we planning?'}
               </h1>
-              <p className="mx-auto mt-4 max-w-2xl text-sm leading-6 text-[#aeb4c0] md:text-base">
+              <p className="mx-auto mt-4 max-w-2xl text-sm leading-6 text-[#aeb4c0] md:text-base xl:mx-0">
                 {isChatComplete
                   ? 'Review the brief, unlock generation, and ShutterPlan will assemble locations, micro-spots, sun/weather timing, shot flow, and the client guide.'
                   : activePrompt}
               </p>
+            </div>
+
+            <div className="mb-5 max-h-[250px] space-y-3 overflow-y-auto pr-1">
+              <div className="flex max-w-[85%] gap-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-xs font-semibold text-[#08090b]">
+                  S
+                </div>
+                <div className="rounded-3xl rounded-tl-md border border-white/10 bg-white/5 px-4 py-3 text-sm leading-6 text-[#d7dce7]">
+                  Tell me the shoot type, client deliverables, location constraints, and style. I will turn it into location candidates, micro-spots, shot flow, sun/weather timing, and a client guide.
+                </div>
+              </div>
+              {answeredQuestions.map(question => {
+                const answer = getAnswerForQuestion(question.id);
+                if (!answer && !question.required) return null;
+                return (
+                  <div key={`chat-history-${question.id}`} className="space-y-2">
+                    <div className="ml-auto max-w-[82%] rounded-3xl rounded-tr-md bg-[#2563eb] px-4 py-3 text-sm leading-6 text-white">
+                      {answer || '-'}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onJumpToQuestion(question.id)}
+                      className="flex max-w-[86%] gap-3 text-left"
+                    >
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-xs font-semibold text-[#08090b]">
+                        S
+                      </div>
+                      <div className="rounded-3xl rounded-tl-md border border-white/10 bg-white/5 px-4 py-3 text-sm leading-6 text-[#d7dce7] transition hover:border-white/20">
+                        <span className="block text-[10px] font-semibold uppercase tracking-[0.14em] text-[#8f95a3]">
+                          Captured
+                        </span>
+                        {getAdaptivePrompt(question, sessionCategory)}
+                      </div>
+                    </button>
+                  </div>
+                );
+              })}
             </div>
 
             <div className="w-full max-w-3xl">
@@ -346,7 +444,25 @@ export function PlannerIntakeCard({
               )}
             </div>
 
-            <div className="mt-8 grid w-full max-w-4xl gap-3 md:grid-cols-4">
+            <div className="mt-7 flex flex-wrap gap-2">
+              {stageActions.map(action => (
+                <button
+                  key={action.label}
+                  type="button"
+                  onClick={() => onJumpToQuestion(action.questionId)}
+                  className={`min-h-10 rounded-full border px-3 py-2 text-left transition ${
+                    action.active
+                      ? 'border-white/25 bg-white text-[#111827]'
+                      : 'border-white/10 bg-white/5 text-[#c8ced8] hover:border-white/25 hover:text-white'
+                  }`}
+                >
+                  <span className="block text-xs font-semibold">{action.label}</span>
+                  <span className={`block text-[10px] ${action.active ? 'text-[#475569]' : 'text-[#8f95a3]'}`}>{action.helper}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="mt-7 grid w-full max-w-4xl gap-3 md:grid-cols-4">
               {[
                 ['Brief', shootType],
                 ['Location', locationMode === 'use-provided' ? 'Chosen location' : locationLabel],
@@ -376,6 +492,39 @@ export function PlannerIntakeCard({
                 </button>
               ))}
             </div>
+            </div>
+
+            <aside className="rounded-[28px] border border-white/10 bg-[#111216]/85 p-4 shadow-2xl shadow-black/30 backdrop-blur">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8f95a3]">Live plan preview</p>
+                  <h2 className="mt-2 text-xl font-medium text-[#eef1f7]">One structured plan</h2>
+                </div>
+                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-[#c8ced8]">
+                  {Math.round((answeredCount / Math.max(visibleQuestions.length, 1)) * 100)}%
+                </span>
+              </div>
+              <div className="mt-5 space-y-2">
+                {planPreviewSections.map(section => (
+                  <button
+                    key={section.label}
+                    type="button"
+                    onClick={() => onJumpToQuestion(section.questionId)}
+                    className="w-full rounded-2xl border border-white/10 bg-white/5 p-3 text-left transition hover:border-white/20 hover:bg-white/10"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#8f95a3]">{section.label}</p>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                        section.status ? 'bg-emerald-400/15 text-emerald-200' : 'bg-white/10 text-[#aeb4c0]'
+                      }`}>
+                        {section.status ? 'ready' : section.action}
+                      </span>
+                    </div>
+                    <p className="mt-2 line-clamp-2 text-sm leading-5 text-[#eef1f7]">{section.value}</p>
+                  </button>
+                ))}
+              </div>
+            </aside>
           </div>
 
           <div className="flex items-center justify-between gap-3 text-xs text-[#777f8d]">
