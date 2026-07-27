@@ -25,6 +25,24 @@ type BusinessProfile = {
   prepGuideNotes: string;
 };
 
+type BillingSummary = {
+  tier: 'free' | 'pro';
+  planStatus?: {
+    status: 'free' | 'trialing' | 'active' | 'past_due' | 'canceled';
+    currentPeriodEnd: string | null;
+    testMode: boolean;
+  };
+  usage: {
+    plannerGenerations: number;
+    shareLinks: number;
+  };
+  remaining: {
+    plannerGenerations: number | null;
+    shareLinks: number | null;
+  };
+  upgradeValueProps: string[];
+};
+
 const EMPTY_PROFILE: BusinessProfile = {
   businessName: '',
   businessType: '',
@@ -127,6 +145,11 @@ export default function SettingsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isAnalyzingWebsite, setIsAnalyzingWebsite] = useState(false);
+  const [billing, setBilling] = useState<BillingSummary | null>(null);
+  const [isBillingLoading, setIsBillingLoading] = useState(false);
+  const [feedbackType, setFeedbackType] = useState('planner-output');
+  const [feedbackMessage, setFeedbackMessage] = useState('');
+  const [isSendingFeedback, setIsSendingFeedback] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -166,13 +189,20 @@ export default function SettingsPage() {
       setIsLoading(true);
       setError(null);
       try {
-        const response = await fetch('/api/account/business-profile', {
-          headers: {
-            ...getAuthHeader(),
-          },
-        });
+        const [profileResponse, billingResponse] = await Promise.all([
+          fetch('/api/account/business-profile', {
+            headers: {
+              ...getAuthHeader(),
+            },
+          }),
+          fetch('/api/billing/status', {
+            headers: {
+              ...getAuthHeader(),
+            },
+          }),
+        ]);
 
-        const result = await response.json();
+        const result = await profileResponse.json();
         if (!result.success) {
           setError(result.error ?? 'Failed to load profile');
           return;
@@ -182,6 +212,11 @@ export default function SettingsPage() {
           ...EMPTY_PROFILE,
           ...(result.data ?? {}),
         });
+
+        const billingResult = await billingResponse.json();
+        if (billingResult.success) {
+          setBilling(billingResult.data);
+        }
       } catch {
         setError('Failed to load profile');
       } finally {
@@ -227,6 +262,71 @@ export default function SettingsPage() {
     }
   };
 
+  const startCheckout = async () => {
+    setIsBillingLoading(true);
+    setError(null);
+    setMessage(null);
+
+    try {
+      const response = await fetch('/api/billing/checkout', {
+        method: 'POST',
+        headers: getAuthHeader(),
+      });
+      const result = await response.json();
+
+      if (!result.success) {
+        setError(result.error ?? 'Failed to start checkout');
+        return;
+      }
+
+      if (result.data?.checkoutUrl) {
+        window.location.assign(result.data.checkoutUrl);
+        return;
+      }
+
+      const statusResponse = await fetch('/api/billing/status', { headers: getAuthHeader() });
+      const statusResult = await statusResponse.json();
+      if (statusResult.success) {
+        setBilling(statusResult.data);
+      }
+      setMessage(result.data?.message ?? 'Plan updated.');
+    } catch {
+      setError('Failed to start checkout');
+    } finally {
+      setIsBillingLoading(false);
+    }
+  };
+
+  const openBillingPortal = async () => {
+    setIsBillingLoading(true);
+    setError(null);
+    setMessage(null);
+
+    try {
+      const response = await fetch('/api/billing/portal', {
+        method: 'POST',
+        headers: getAuthHeader(),
+      });
+      const result = await response.json();
+
+      if (!result.success) {
+        setError(result.error ?? 'Failed to open billing portal');
+        return;
+      }
+
+      if (result.data?.portalUrl) {
+        window.location.assign(result.data.portalUrl);
+        return;
+      }
+
+      setMessage(result.data?.message ?? 'Billing portal is not configured yet.');
+    } catch {
+      setError('Failed to open billing portal');
+    } finally {
+      setIsBillingLoading(false);
+    }
+  };
+
   const analyzeWebsite = async () => {
     setIsAnalyzingWebsite(true);
     setError(null);
@@ -257,6 +357,42 @@ export default function SettingsPage() {
       setError('Failed to analyze website');
     } finally {
       setIsAnalyzingWebsite(false);
+    }
+  };
+
+  const sendFeedback = async () => {
+    setIsSendingFeedback(true);
+    setError(null);
+    setMessage(null);
+
+    try {
+      const response = await fetch('/api/planner/feedback', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeader(),
+        },
+        body: JSON.stringify({
+          feedbackType,
+          message: feedbackMessage,
+          planMetadata: {
+            city: profile.baseLocation,
+            shootType: profile.businessType,
+          },
+        }),
+      });
+      const result = await response.json();
+      if (!result.success) {
+        setError(result.error ?? 'Failed to send feedback');
+        return;
+      }
+
+      setFeedbackMessage('');
+      setMessage('Feedback sent. Thanks for helping shape the beta.');
+    } catch {
+      setError('Failed to send feedback');
+    } finally {
+      setIsSendingFeedback(false);
     }
   };
 
@@ -490,6 +626,49 @@ export default function SettingsPage() {
         </div>
 
         <aside className="space-y-6">
+          <Card className="border border-[#d8d2c8] bg-white shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#7c6f64]">Billing</p>
+            <div className="mt-2 flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-semibold text-[#1f2933]">
+                  {billing?.tier === 'pro' ? 'Pro plan active' : 'Free plan'}
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-[#5f6b76]">
+                  {billing?.tier === 'pro'
+                    ? 'Unlimited planning, protected guide links, longer expirations, and multi-day shoots are unlocked.'
+                    : `${billing?.remaining.plannerGenerations ?? 0} AI plan generations and ${billing?.remaining.shareLinks ?? 0} guide link left.`}
+                </p>
+              </div>
+              <span className="rounded-full bg-[#d9eee6] px-3 py-1 text-xs font-semibold text-[#0f766e]">
+                {billing?.planStatus?.status ?? 'free'}
+              </span>
+            </div>
+            {billing?.upgradeValueProps?.length ? (
+              <div className="mt-4 space-y-2">
+                {billing.upgradeValueProps.map(prop => (
+                  <p key={prop} className="rounded-md bg-[#faf9f6] px-3 py-2 text-sm text-[#1f2933]">
+                    {prop}
+                  </p>
+                ))}
+              </div>
+            ) : null}
+            <div className="mt-5 grid gap-2">
+              <Button
+                onClick={billing?.tier === 'pro' ? openBillingPortal : startCheckout}
+                isLoading={isBillingLoading}
+                disabled={isLoading || isBillingLoading}
+                className="w-full bg-[#1f2933] hover:bg-[#111827]"
+              >
+                {billing?.tier === 'pro' ? 'Manage billing' : 'Upgrade to Pro'}
+              </Button>
+              {billing?.planStatus?.testMode ? (
+                <p className="text-xs leading-5 text-[#7c6f64]">
+                  Test billing is enabled for launch QA. Configure hosted billing URLs before taking payments.
+                </p>
+              ) : null}
+            </div>
+          </Card>
+
           <Card className="border border-[#d8d2c8] bg-[#faf9f6] shadow-sm">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#7c6f64]">AI context map</p>
             <h2 className="mt-2 text-xl font-semibold text-[#1f2933]">What the planner knows</h2>
@@ -527,6 +706,38 @@ export default function SettingsPage() {
               className="mt-5 w-full bg-[#1f2933] hover:bg-[#111827]"
             >
               Save business profile
+            </Button>
+          </Card>
+
+          <Card className="border border-[#d8d2c8] bg-white shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#7c6f64]">Beta feedback</p>
+            <h2 className="mt-2 text-xl font-semibold text-[#1f2933]">Report planner friction</h2>
+            <select
+              className={getInputClass()}
+              value={feedbackType}
+              onChange={event => setFeedbackType(event.target.value)}
+              disabled={isSendingFeedback}
+            >
+              <option value="planner-output">Confusing planner output</option>
+              <option value="missing-location-details">Missing location details</option>
+              <option value="guide-handoff">Client guide handoff friction</option>
+              <option value="other">Other beta note</option>
+            </select>
+            <textarea
+              className={getInputClass()}
+              rows={4}
+              value={feedbackMessage}
+              onChange={event => setFeedbackMessage(event.target.value)}
+              placeholder="What felt unclear, missing, or slow?"
+              disabled={isSendingFeedback}
+            />
+            <Button
+              onClick={sendFeedback}
+              isLoading={isSendingFeedback}
+              disabled={isSendingFeedback || feedbackMessage.trim().length < 8}
+              className="mt-4 w-full bg-[#1f2933] hover:bg-[#111827]"
+            >
+              Send feedback
             </Button>
           </Card>
         </aside>

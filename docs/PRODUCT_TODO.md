@@ -121,9 +121,9 @@
 ## Next: Launch Readiness
 
 - [ ] Fix local verification/toolchain reliability by using a supported Node version and rerunning lint, tests, build, and Playwright.
-- [ ] Create a launch checklist covering auth, production env vars, Supabase policies, observability, demo data, billing, and QA routes.
-- [ ] Build a real upgrade/payment path with checkout, customer portal, plan status, and testable premium states.
-- [ ] Seed a polished founder-demo shoot that shows the first two minutes of the product at its best.
+- [x] Create a launch checklist covering auth, production env vars, Supabase policies, observability, demo data, billing, and QA routes.
+- [x] Build a real upgrade/payment path with checkout, customer portal, plan status, and testable premium states.
+- [x] Seed a polished founder-demo shoot that shows the first two minutes of the product at its best.
 - [ ] Run a full mobile and desktop QA pass across planner, shared guide, settings, billing, dashboard, and public pages.
-- [ ] Tighten landing/onboarding copy around the photographer pain: fewer apps, faster planning, better-prepared clients.
-- [ ] Add a beta feedback loop for photographers to report confusing planner output, missing location details, and guide handoff friction.
+- [x] Tighten landing/onboarding copy around the photographer pain: fewer apps, faster planning, better-prepared clients.
+- [x] Add a beta feedback loop for photographers to report confusing planner output, missing location details, and guide handoff friction.

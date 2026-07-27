@@ -7,10 +7,13 @@ type LocationVote = 'up' | 'down';
 interface PlannerFeedbackRequest {
   planId?: string;
   sessionId?: string;
-  locationVotes: Record<string, LocationVote>;
+  locationVotes?: Record<string, LocationVote>;
   preferredVenueBucket?: string;
-  excludedVenueBuckets: string[];
-  applied: boolean;
+  excludedVenueBuckets?: string[];
+  applied?: boolean;
+  feedbackType?: 'planner-output' | 'missing-location-details' | 'guide-handoff' | 'other';
+  message?: string;
+  contactEmail?: string;
   planMetadata?: {
     sessionCategory?: string;
     city?: string;
@@ -42,9 +45,24 @@ export async function POST(request: NextRequest) {
     // Generate plan ID if not provided (fallback to session ID + timestamp)
     const planId = body.planId || `plan-${body.sessionId || 'temp'}-${Date.now()}`;
 
+    const locationVotes = body.locationVotes ?? {};
+    const excludedVenueBuckets = body.excludedVenueBuckets ?? [];
+
+    if (body.message?.trim()) {
+      await admin.from('planner_beta_feedback').insert({
+        user_id: userId,
+        plan_id: planId,
+        feedback_type: body.feedbackType ?? 'other',
+        message: body.message.trim(),
+        contact_email: body.contactEmail?.trim() || null,
+        plan_metadata: body.planMetadata ?? {},
+        created_at: new Date().toISOString(),
+      });
+    }
+
     // Store location votes
-    if (Object.keys(body.locationVotes).length > 0) {
-      const locationFeedback: StoredLocationFeedback[] = Object.entries(body.locationVotes).map(
+    if (Object.keys(locationVotes).length > 0) {
+      const locationFeedback: StoredLocationFeedback[] = Object.entries(locationVotes).map(
         ([locationName, vote]) => ({
           location_name: locationName,
           vote,
@@ -73,8 +91,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Store excluded venue buckets
-    if (body.excludedVenueBuckets.length > 0) {
-      const excludedFeedback = body.excludedVenueBuckets.map((bucket: string) => ({
+    if (excludedVenueBuckets.length > 0) {
+      const excludedFeedback = excludedVenueBuckets.map((bucket: string) => ({
         user_id: userId,
         plan_id: planId,
         venue_bucket: bucket,
@@ -102,8 +120,8 @@ export async function POST(request: NextRequest) {
           city: body.planMetadata?.city,
           duration: body.planMetadata?.duration,
           shoot_type: body.planMetadata?.shootType,
-          location_vote_count: Object.keys(body.locationVotes).length,
-          excluded_bucket_count: body.excludedVenueBuckets.length,
+          location_vote_count: Object.keys(locationVotes).length,
+          excluded_bucket_count: excludedVenueBuckets.length,
           created_at: new Date().toISOString(),
         });
     }
@@ -114,8 +132,9 @@ export async function POST(request: NextRequest) {
         data: {
           planId,
           feedbackStored: true,
-          votesCount: Object.keys(body.locationVotes).length,
-          excludedBucketsCount: body.excludedVenueBuckets.length,
+          votesCount: Object.keys(locationVotes).length,
+          excludedBucketsCount: excludedVenueBuckets.length,
+          betaFeedbackStored: Boolean(body.message?.trim()),
         },
       },
       { status: 200 }
@@ -158,12 +177,20 @@ export async function GET(request: NextRequest) {
       .order('created_at', { ascending: false })
       .limit(20);
 
+    const { data: recentBetaFeedback } = await admin
+      .from('planner_beta_feedback')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(20);
+
     return NextResponse.json(
       {
         success: true,
         data: {
           recentFeedback: recentFeedback || [],
           recentApplications: recentApplications || [],
+          recentBetaFeedback: recentBetaFeedback || [],
         },
       },
       { status: 200 }

@@ -1,7 +1,18 @@
 export type SubscriptionTier = 'free' | 'pro';
 
+export type BillingPlanStatus = {
+  tier: SubscriptionTier;
+  status: 'free' | 'trialing' | 'active' | 'past_due' | 'canceled';
+  customerId: string | null;
+  currentPeriodEnd: string | null;
+  checkoutUrl: string | null;
+  portalUrl: string | null;
+  testMode: boolean;
+};
+
 export type BillingUsageSummary = {
   tier: SubscriptionTier;
+  planStatus?: BillingPlanStatus;
   limits: {
     plannerGenerations: number | null;
     shareLinks: number | null;
@@ -19,6 +30,14 @@ export type BillingUsageSummary = {
   };
   upgradeValueProps: string[];
 };
+
+export function normalizeBillingStatus(value: unknown): BillingPlanStatus['status'] {
+  if (value === 'trialing' || value === 'active' || value === 'past_due' || value === 'canceled') {
+    return value;
+  }
+
+  return 'free';
+}
 
 export const FREE_PLAN_LIMITS = {
   plannerGenerations: 3,

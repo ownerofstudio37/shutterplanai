@@ -93,12 +93,12 @@ export default function Home() {
 
         <div className="relative z-10 mx-auto grid min-h-[calc(100vh-5rem)] max-w-7xl items-center gap-10 px-5 pb-16 pt-8 md:px-8 lg:grid-cols-[1.05fr_0.95fr]">
           <div className="max-w-3xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#d8d2c8]">Pre-production workspace for photographers</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#d8d2c8]">One planning workspace for photographers</p>
             <h1 className="mt-5 max-w-4xl text-5xl font-semibold tracking-normal md:text-7xl">
-              Plan the shoot before the chaos starts.
+              Fewer apps. Faster plans. Better-prepared clients.
             </h1>
             <p className="mt-5 max-w-2xl text-base leading-7 text-[#e8e1d7] md:text-lg">
-              ShutterPlan AI finds location candidates, helps you choose the real shoot route, maps the exact micro-spots, and turns the plan into a client-ready guide.
+              ShutterPlan AI replaces tab-juggling with one flow for location candidates, route decisions, exact micro-spots, and a client-ready guide.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Link href="/auth/signup">
@@ -117,7 +117,7 @@ export default function Home() {
               {[
                 ['4', 'core planning tools'],
                 ['1', 'client-ready handoff'],
-                ['0', 'spreadsheet juggling'],
+                ['0', 'copy-paste planning'],
               ].map(([value, label]) => (
                 <div key={label} className="rounded-lg border border-white/10 bg-white/10 p-4">
                   <p className="text-2xl font-semibold text-white">{value}</p>
@@ -160,9 +160,9 @@ export default function Home() {
       <section className="mx-auto max-w-7xl px-5 py-14 md:px-8">
         <div className="mb-8 max-w-3xl">
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7c6f64]">Planner upgrade</p>
-          <h2 className="mt-2 text-3xl font-semibold text-[#1f2933]">AI gives options. The photographer chooses the route.</h2>
+          <h2 className="mt-2 text-3xl font-semibold text-[#1f2933]">AI gathers the messy details. You choose the route.</h2>
           <p className="mt-3 text-sm leading-6 text-[#5f6b76]">
-            Most sessions do not need six stops. ShutterPlan separates candidate discovery from final route selection so the guide reflects the locations clients will actually visit.
+            Stop bouncing between maps, notes, weather, and client emails. ShutterPlan separates discovery from final route selection so the guide reflects the places clients will actually visit.
           </p>
         </div>
         <div className="mb-12 grid gap-3 md:grid-cols-4">
