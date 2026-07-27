@@ -2476,6 +2476,8 @@ export default function PlannerPage() {
                   emptyShotMessage={emptyShotMessage}
                   shots={displayedShots}
                   timeline={plan.timeline}
+                  intelligence={intelligence}
+                  photographerSunWeatherNotes={plan.photographerPlan?.sunWeatherNotes}
                   checklist={plan.clientPrepChecklist}
                   contingencyPlans={plan.contingencyPlans}
                 />
@@ -2526,8 +2528,11 @@ export default function PlannerPage() {
                   onRegenerateShotList={() => regenerateSection('shot-list')}
                   onUpdateShotField={updateShotField}
                   timeline={plan.timeline}
+                  intelligence={intelligence}
+                  photographerSunWeatherNotes={plan.photographerPlan?.sunWeatherNotes}
                   isTimelineRegenerating={isRegenerating === 'timeline'}
                   onRegenerateTimeline={() => regenerateSection('timeline')}
+                  onOptimizeSunWeather={() => void sendPlannerBrainMessage('Optimize the timeline and shot cards around current sun and weather data. Move must-have portraits, backups, close-ups, and hero frames to the best windows.')}
                   onUpdateTimelineField={updateTimelineField}
                   checklist={plan.clientPrepChecklist}
                   contingencyPlans={plan.contingencyPlans}

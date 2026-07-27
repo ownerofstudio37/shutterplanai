@@ -61,6 +61,20 @@ type TimelineItem = {
   notes: string;
 };
 
+type MobilePlannerIntelligence = {
+  goldenHours: {
+    goldenHourStart: string;
+    goldenHourEnd: string;
+  };
+  weather?: {
+    conditionSummary?: string;
+    precipitationProbability: number;
+    uvIndex: number;
+    windSpeed: number;
+    recommendations: string[];
+  };
+};
+
 type PlannerMobileReviewContentProps = {
   reviewTab: ReviewTab;
   mapContent: ReactNode;
@@ -82,9 +96,18 @@ type PlannerMobileReviewContentProps = {
   emptyShotMessage: string | null;
   shots: ReviewShot[];
   timeline: TimelineItem[];
+  intelligence?: MobilePlannerIntelligence | null;
+  photographerSunWeatherNotes?: string[];
   checklist: string[];
   contingencyPlans: string[];
 };
+
+function formatTime(value?: string) {
+  if (!value) return 'Pending';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Pending';
+  return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
 
 export const PlannerMobileReviewContent = memo(function PlannerMobileReviewContent({
   reviewTab,
@@ -107,6 +130,8 @@ export const PlannerMobileReviewContent = memo(function PlannerMobileReviewConte
   emptyShotMessage,
   shots,
   timeline,
+  intelligence,
+  photographerSunWeatherNotes = [],
   checklist,
   contingencyPlans,
 }: PlannerMobileReviewContentProps) {
@@ -384,6 +409,20 @@ export const PlannerMobileReviewContent = memo(function PlannerMobileReviewConte
   if (reviewTab === 'timeline') {
     return (
       <div className="space-y-3">
+        <div className="rounded-lg border border-[#d8d2c8] bg-[#faf9f6] p-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7c6f64]">Sun + weather</p>
+          <p className="mt-2 text-sm font-semibold text-[#1f2933]">
+            Golden hour: {formatTime(intelligence?.goldenHours.goldenHourStart)} - {formatTime(intelligence?.goldenHours.goldenHourEnd)}
+          </p>
+          {intelligence?.weather && (
+            <p className="mt-1 text-xs leading-5 text-[#5f6b76]">
+              {intelligence.weather.conditionSummary || 'Forecast ready'}; rain {intelligence.weather.precipitationProbability}%, UV {intelligence.weather.uvIndex}, wind {Math.round(intelligence.weather.windSpeed)} mph.
+            </p>
+          )}
+          {[...photographerSunWeatherNotes, ...(intelligence?.weather?.recommendations ?? [])].slice(0, 2).map(note => (
+            <p key={note} className="mt-2 rounded-md bg-white px-3 py-2 text-xs leading-5 text-[#5f6b76]">{note}</p>
+          ))}
+        </div>
         {timeline.map(item => (
           <div key={`mobile-${item.timeBlock}-${item.focus}`} className="rounded-lg border border-gray-200 p-3">
             <p className="text-sm font-semibold text-gray-900">{item.timeBlock}</p>

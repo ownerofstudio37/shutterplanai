@@ -51,6 +51,40 @@ type TimelineItem = {
   notes: string;
 };
 
+type PlannerTimelineIntelligence = {
+  goldenHours: {
+    sunrise: string;
+    sunset: string;
+    goldenHourStart: string;
+    goldenHourEnd: string;
+    morningGoldenHourStart?: string;
+    morningGoldenHourEnd?: string;
+    eveningBlueHourStart?: string;
+    eveningBlueHourEnd?: string;
+  };
+  weather?: {
+    temperature?: number;
+    apparentTemperature?: number;
+    cloudCover: number;
+    uvIndex: number;
+    windSpeed: number;
+    windGustSpeed: number;
+    precipitationProbability: number;
+    conditionSummary?: string;
+    recommendations: string[];
+  };
+  confidence?: {
+    overall: number;
+    windows: Array<{
+      label: string;
+      startsAt: string;
+      endsAt: string;
+      confidence: number;
+      summary: string;
+    }>;
+  };
+};
+
 type LogisticsInfo = {
   parkingDifficulty: number;
   permitLikelihood: number;
@@ -121,8 +155,11 @@ type PlannerDesktopReviewContentProps = {
   onUpdateShotField: (index: number, field: 'title' | 'description' | 'location', value: string) => void;
   // timeline tab
   timeline: TimelineItem[];
+  intelligence?: PlannerTimelineIntelligence | null;
+  photographerSunWeatherNotes?: string[];
   isTimelineRegenerating: boolean;
   onRegenerateTimeline: () => void;
+  onOptimizeSunWeather: () => void;
   onUpdateTimelineField: (index: number, field: 'timeBlock' | 'focus' | 'notes', value: string) => void;
   // prep tab
   checklist: string[];
@@ -164,8 +201,11 @@ export const PlannerDesktopReviewContent = memo(function PlannerDesktopReviewCon
   onRegenerateShotList,
   onUpdateShotField,
   timeline,
+  intelligence,
+  photographerSunWeatherNotes,
   isTimelineRegenerating,
   onRegenerateTimeline,
+  onOptimizeSunWeather,
   onUpdateTimelineField,
   checklist,
   contingencyPlans,
@@ -233,9 +273,12 @@ export const PlannerDesktopReviewContent = memo(function PlannerDesktopReviewCon
     return (
       <PlannerTimelinePanel
         timeline={timeline}
+        intelligence={intelligence}
+        photographerSunWeatherNotes={photographerSunWeatherNotes}
         isEditMode={isEditMode}
         isRegenerating={isTimelineRegenerating}
         onRegenerate={onRegenerateTimeline}
+        onOptimizeSunWeather={onOptimizeSunWeather}
         onUpdateTimelineField={onUpdateTimelineField}
       />
     );
