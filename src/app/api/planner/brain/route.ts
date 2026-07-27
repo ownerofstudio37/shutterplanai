@@ -36,8 +36,16 @@ type PlannerBrainResponse = {
     assistantMessage: string;
     changedSections: string[];
     stage: PlannerBrainStage;
+    source: 'ai' | 'fallback';
   };
   error?: string;
+};
+
+type AiPlannerBrainResult = {
+  updatedPlan?: SessionPlan;
+  assistantMessage?: string;
+  changedSections?: string[];
+  stage?: PlannerBrainStage;
 };
 
 function uniqueValues(values: string[]) {
@@ -234,6 +242,172 @@ function buildAssistantMessage(input: { changedSections: string[]; stage: Planne
   return `Done. I updated ${sections} and kept the plan in the ${input.stage.replace(/_/g, ' ')} flow.`;
 }
 
+function getGeminiBrainConfig() {
+  const apiKey = process.env.GEMINI_API_KEY;
+  const model = process.env.GEMINI_MODEL || 'gemini-3.1-pro-preview';
+  if (!apiKey) return null;
+  return { apiKey, model };
+}
+
+function extractJsonObject<T>(text: string): T {
+  const trimmed = text.trim();
+  const fencedMatch = trimmed.match(/```json\s*([\s\S]*?)```/i);
+  const candidate = fencedMatch?.[1] ?? trimmed;
+  const startIndex = candidate.indexOf('{');
+  const endIndex = candidate.lastIndexOf('}');
+  if (startIndex === -1 || endIndex === -1) {
+    throw new Error('AI response did not include a JSON object');
+  }
+  return JSON.parse(candidate.slice(startIndex, endIndex + 1)) as T;
+}
+
+function clampPlanForPrompt(plan: SessionPlan): SessionPlan {
+  return {
+    ...plan,
+    locationSuggestions: plan.locationSuggestions.slice(0, 4).map(location => ({
+      ...location,
+      microLocations: location.microLocations.slice(0, 8),
+      microLocationPlan: location.microLocationPlan?.slice(0, 8),
+    })),
+    shotList: plan.shotList.slice(0, 18),
+    timeline: plan.timeline.slice(0, 8),
+    clientPrepChecklist: plan.clientPrepChecklist.slice(0, 12),
+    contingencyPlans: plan.contingencyPlans.slice(0, 12),
+  };
+}
+
+function isPlannerStage(value: unknown): value is PlannerBrainStage {
+  return (
+    value === 'intake' ||
+    value === 'location_discovery' ||
+    value === 'location_selection' ||
+    value === 'micro_location_mapping' ||
+    value === 'shot_list_generation' ||
+    value === 'sun_weather_optimization' ||
+    value === 'client_guide_generation'
+  );
+}
+
+function normalizeAiBrainResult(input: {
+  parsed: AiPlannerBrainResult;
+  fallbackPlan: SessionPlan;
+  fallbackStage: PlannerBrainStage;
+  fallbackChangedSections: string[];
+}) {
+  const updatedPlan =
+    input.parsed.updatedPlan &&
+    Array.isArray(input.parsed.updatedPlan.shotList) &&
+    Array.isArray(input.parsed.updatedPlan.locationSuggestions) &&
+    Array.isArray(input.parsed.updatedPlan.timeline)
+      ? input.parsed.updatedPlan
+      : input.fallbackPlan;
+
+  const changedSections = Array.isArray(input.parsed.changedSections)
+    ? uniqueValues(input.parsed.changedSections.slice(0, 8))
+    : input.fallbackChangedSections;
+
+  return {
+    updatedPlan,
+    assistantMessage:
+      typeof input.parsed.assistantMessage === 'string' && input.parsed.assistantMessage.trim()
+        ? input.parsed.assistantMessage.trim()
+        : buildAssistantMessage({ changedSections, stage: input.fallbackStage }),
+    changedSections,
+    stage: isPlannerStage(input.parsed.stage) ? input.parsed.stage : input.fallbackStage,
+  };
+}
+
+async function runAiPlannerBrain(input: {
+  plan: SessionPlan;
+  message: string;
+  stage: PlannerBrainStage;
+  fallbackChangedSections: string[];
+  sessionInputs?: PlannerBrainRequest['sessionInputs'];
+  chatHistory?: PlannerBrainMessage[];
+}) {
+  const config = getGeminiBrainConfig();
+  if (!config) return null;
+
+  const prompt = `You are ShutterPlan AI's planning brain for professional photographers.
+
+Update the structured SessionPlan according to the photographer's newest message. Preserve the existing schema and do not remove required arrays. Prefer practical shoot-planning decisions over generic advice.
+
+Planner stages:
+- intake
+- location_discovery
+- location_selection
+- micro_location_mapping
+- shot_list_generation
+- sun_weather_optimization
+- client_guide_generation
+
+Rules:
+- Return JSON only.
+- Keep all existing top-level SessionPlan fields.
+- Every shot should remain tied to a real location and microSpot.
+- If the request changes deliverables, update shotList with poseSuggestion, compositionSuggestion, angleSuggestion, lensSuggestion, timingHint, backupMicroSpot, priority, and lightWeatherNote when useful.
+- If the request changes location flow, update locationSuggestions, microLocations, microLocationPlan, timeline, shotList, photographerPlan, and clientGuide as needed.
+- If the request mentions sun/weather, alter decisions in timeline and shot cards instead of only adding notes.
+- Separate photographer-facing execution detail from client-facing reassurance.
+
+Current stage: ${input.stage}
+Shoot type: ${input.sessionInputs?.shootType || 'Unknown'}
+Mood/style: ${input.sessionInputs?.mood || 'Unknown'}
+Constraints: ${input.sessionInputs?.constraints || 'None'}
+
+Recent chat:
+${JSON.stringify((input.chatHistory ?? []).slice(-8))}
+
+Current plan JSON:
+${JSON.stringify(clampPlanForPrompt(input.plan))}
+
+Newest photographer message:
+${input.message}
+
+Return this JSON shape:
+{
+  "updatedPlan": { ...complete SessionPlan... },
+  "assistantMessage": "short human reply explaining what changed",
+  "changedSections": ["brief", "chosen location", "micro-spots", "shot list", "timeline", "sun/weather", "client guide"],
+  "stage": "one planner stage id"
+}`;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30_000);
+
+  try {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent?key=${config.apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.35, responseMimeType: 'application/json' },
+        }),
+      }
+    );
+
+    if (!response.ok) return null;
+
+    const payload = (await response.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
+    const text = payload.candidates?.[0]?.content?.parts?.map(part => part.text ?? '').join('') ?? '';
+    if (!text) return null;
+
+    return normalizeAiBrainResult({
+      parsed: extractJsonObject<AiPlannerBrainResult>(text),
+      fallbackPlan: input.plan,
+      fallbackStage: input.stage,
+      fallbackChangedSections: input.fallbackChangedSections,
+    });
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export async function POST(request: NextRequest): Promise<NextResponse<PlannerBrainResponse>> {
   const auth = await requireAuth(request);
   if (!auth.success) {
@@ -254,8 +428,22 @@ export async function POST(request: NextRequest): Promise<NextResponse<PlannerBr
 
     const stage = inferBrainStage(message, body.stage || 'shot_list_generation');
     const mutation = updatePlanFromMessage(body.currentPlan, message);
-    const hydratedPlan = hydrateSessionPlanOutputs({
+    const aiMutation = await runAiPlannerBrain({
       plan: mutation.plan,
+      message,
+      stage,
+      fallbackChangedSections: mutation.changedSections,
+      sessionInputs: body.sessionInputs,
+      chatHistory: body.chatHistory,
+    });
+    const selectedMutation = aiMutation ?? {
+      updatedPlan: mutation.plan,
+      assistantMessage: buildAssistantMessage({ changedSections: mutation.changedSections, stage }),
+      changedSections: mutation.changedSections,
+      stage,
+    };
+    const hydratedPlan = hydrateSessionPlanOutputs({
+      plan: selectedMutation.updatedPlan,
       shootType: body.sessionInputs?.shootType,
       constraints: body.sessionInputs?.constraints,
     });
@@ -269,16 +457,17 @@ export async function POST(request: NextRequest): Promise<NextResponse<PlannerBr
             currentStage: stage,
             completedStages: uniqueValues([
               ...(hydratedPlan.plannerBrain?.completedStages ?? []),
-              stage,
+              selectedMutation.stage,
             ]) as PlannerBrainStage[],
-            nextRecommendedStage: stage,
+            nextRecommendedStage: selectedMutation.stage,
             lockedSections: hydratedPlan.plannerBrain?.lockedSections ?? [],
             manualModeAvailable: true,
           },
         },
-        assistantMessage: buildAssistantMessage({ changedSections: mutation.changedSections, stage }),
-        changedSections: mutation.changedSections,
-        stage,
+        assistantMessage: selectedMutation.assistantMessage,
+        changedSections: selectedMutation.changedSections,
+        stage: selectedMutation.stage,
+        source: aiMutation ? 'ai' : 'fallback',
       },
     });
   } catch (error) {

@@ -5,10 +5,30 @@ type ReviewLocation = {
   displayName?: string;
   whyItWorks: string;
   microLocations: string[];
+  microLocationPlan?: Array<{
+    id: string;
+    name: string;
+    exactPin?: string;
+    purpose: string;
+    bestLightDirection: string;
+    bestShotTypes: string[];
+    walkingOrder: number;
+    backupUse: string;
+    parkingNote?: string;
+    restroomNote?: string;
+    resetNote?: string;
+    latitude?: number | null;
+    longitude?: number | null;
+  }>;
   selectionReasons?: string[];
   confidenceScore?: number;
   venueBucket?: string;
   sourceQuery?: string;
+  visualFit?: string;
+  crowdRisk?: 'low' | 'medium' | 'high';
+  permitRisk?: 'low' | 'medium' | 'high';
+  weatherBackupQuality?: 'poor' | 'fair' | 'strong';
+  sunDirectionUsefulness?: string;
   latitude?: number | null;
   longitude?: number | null;
   googleMapsUrl?: string;
@@ -246,6 +266,22 @@ export const PlannerLocationReviewPanel = memo(function PlannerLocationReviewPan
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7c6f64]">Why it works</p>
                     <p className="mt-2 text-sm leading-6 text-[#5f6b76]">{location.whyItWorks}</p>
+                    {(location.visualFit || location.sunDirectionUsefulness) && (
+                      <div className="mt-3 grid gap-2 md:grid-cols-2">
+                        {location.visualFit && (
+                          <div className="rounded-md border border-[#e4ded5] bg-[#faf9f6] px-3 py-2 text-xs text-[#5f6b76]">
+                            <p className="font-semibold text-[#1f2933]">Visual fit</p>
+                            <p className="mt-1 leading-5">{location.visualFit}</p>
+                          </div>
+                        )}
+                        {location.sunDirectionUsefulness && (
+                          <div className="rounded-md border border-[#e4ded5] bg-[#faf9f6] px-3 py-2 text-xs text-[#5f6b76]">
+                            <p className="font-semibold text-[#1f2933]">Sun usefulness</p>
+                            <p className="mt-1 leading-5">{location.sunDirectionUsefulness}</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
                     {Array.isArray(location.selectionReasons) && location.selectionReasons.length > 0 && (
                       <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-[#5f6b76]">
                         {location.selectionReasons.map(reason => (
@@ -282,7 +318,12 @@ export const PlannerLocationReviewPanel = memo(function PlannerLocationReviewPan
                     </div>
                     <div className="mt-2 grid gap-2 md:grid-cols-2">
                       {location.microLocations.length > 0 ? (
-                        location.microLocations.map((spot, spotIndex) => (
+                        location.microLocations.map((spot, spotIndex) => {
+                          const structuredSpot =
+                            location.microLocationPlan?.find(item => item.name === spot) ||
+                            location.microLocationPlan?.[spotIndex];
+
+                          return (
                           <div key={`${location.name}-${spot}-${spotIndex}`} className="grid grid-cols-[28px_1fr] gap-2 rounded-md border border-[#e4ded5] bg-[#faf9f6] px-2.5 py-2 text-xs text-[#1f2933]">
                             <span className="flex h-7 w-7 items-center justify-center rounded-md bg-white font-semibold text-[#5f6b76]">
                               {spotIndex + 1}
@@ -295,8 +336,19 @@ export const PlannerLocationReviewPanel = memo(function PlannerLocationReviewPan
                                 className="w-full rounded-md border border-[#d8d2c8] bg-white px-2 py-1.5 text-xs font-semibold text-[#1f2933] outline-none focus:border-[#1f2933]"
                               />
                               <span className="mt-1 block text-[#5f6b76]">
-                                {spotIndex === 0 ? 'Client arrival or first setup' : 'Optional portrait/background stop'}
+                                {structuredSpot?.purpose || (spotIndex === 0 ? 'Client arrival or first setup' : 'Optional portrait/background stop')}
                               </span>
+                              {structuredSpot && (
+                                <div className="mt-2 space-y-1 rounded-md border border-[#e4ded5] bg-white px-2 py-2 text-[#5f6b76]">
+                                  <p><span className="font-semibold text-[#1f2933]">Pin:</span> {structuredSpot.exactPin || 'Confirm on map'}</p>
+                                  <p><span className="font-semibold text-[#1f2933]">Best light:</span> {structuredSpot.bestLightDirection}</p>
+                                  <p><span className="font-semibold text-[#1f2933]">Shot types:</span> {structuredSpot.bestShotTypes.join(', ')}</p>
+                                  <p><span className="font-semibold text-[#1f2933]">Backup:</span> {structuredSpot.backupUse}</p>
+                                  {structuredSpot.resetNote && (
+                                    <p><span className="font-semibold text-[#1f2933]">Reset:</span> {structuredSpot.resetNote}</p>
+                                  )}
+                                </div>
+                              )}
                               <span className="mt-2 flex flex-wrap gap-1.5">
                                 <button
                                   type="button"
@@ -324,7 +376,8 @@ export const PlannerLocationReviewPanel = memo(function PlannerLocationReviewPan
                               </span>
                             </span>
                           </div>
-                        ))
+                          );
+                        })
                       ) : (
                         <span className="text-xs text-[#5f6b76]">No micro-spots listed yet.</span>
                       )}
@@ -376,6 +429,9 @@ export const PlannerLocationReviewPanel = memo(function PlannerLocationReviewPan
 
                   <div className="rounded-lg border border-[#e4ded5] bg-[#faf9f6] px-3 py-3 text-xs text-[#5f6b76]">
                     <p><span className="font-semibold text-[#1f2933]">Venue:</span> {formatBucket(location.venueBucket)}</p>
+                    <p className="mt-1"><span className="font-semibold text-[#1f2933]">Crowd:</span> {location.crowdRisk || 'Pending'}</p>
+                    <p className="mt-1"><span className="font-semibold text-[#1f2933]">Permit:</span> {location.permitRisk || 'Pending'}</p>
+                    <p className="mt-1"><span className="font-semibold text-[#1f2933]">Weather backup:</span> {location.weatherBackupQuality || 'Pending'}</p>
                     {location.sourceQuery && <p className="mt-1"><span className="font-semibold text-[#1f2933]">Source:</span> {location.sourceQuery}</p>}
                     {location.latitude != null && location.longitude != null && (
                       <p className="mt-1">

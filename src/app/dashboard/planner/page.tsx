@@ -116,6 +116,17 @@ type PlannerBrainChatMessage = {
   role: 'user' | 'assistant';
   content: string;
   changedSections?: string[];
+  source?: 'ai' | 'fallback';
+};
+
+type PlannerPlanVersion = {
+  id: string;
+  label: string;
+  message: string;
+  previousPlan: SessionPlan;
+  nextPlan: SessionPlan;
+  changedSections: string[];
+  createdAt: string;
 };
 
 export default function PlannerPage() {
@@ -157,6 +168,7 @@ export default function PlannerPage() {
   ]);
   const [isPlannerBrainUpdating, setIsPlannerBrainUpdating] = useState(false);
   const [lastPlannerBrainChanges, setLastPlannerBrainChanges] = useState<string[]>([]);
+  const [plannerPlanVersions, setPlannerPlanVersions] = useState<PlannerPlanVersion[]>([]);
 
   // Helper: classify raw error string before storing
   const setError = (raw: string | null) => setRawError(raw ? classifyPlannerError(raw) : null);
@@ -232,6 +244,51 @@ export default function PlannerPage() {
     () => CHAT_QUESTIONS.filter(question => !question.showWhen || question.showWhen(locationMode, sessionCategory)),
     [locationMode, sessionCategory]
   );
+  const structuredPlanPreview = useMemo(() => {
+    if (!plan) return [];
+    const primaryLocation = selectedLocations[0] || plan.locationSuggestions[0];
+    const microSpotCount = primaryLocation?.microLocationPlan?.length || primaryLocation?.microLocations?.length || 0;
+    const sunWeatherNote = plan.photographerPlan?.sunWeatherNotes?.[0] || intelligence?.weather?.recommendations?.[0] || 'Sun/weather optimization pending';
+
+    return [
+      {
+        label: 'Brief',
+        value: plan.creativeDirection,
+        action: 'edit',
+        tab: 'timeline' as const,
+      },
+      {
+        label: 'Chosen location',
+        value: primaryLocation?.name || 'Choose one primary location',
+        action: isRouteConfirmed ? 'locked' : 'lock',
+        tab: 'locations' as const,
+      },
+      {
+        label: 'Micro-spots',
+        value: `${microSpotCount} mapped inside ${primaryLocation?.name || 'location'}`,
+        action: 'map',
+        tab: 'locations' as const,
+      },
+      {
+        label: 'Shot list',
+        value: `${plan.shotList.length} shots matched to locations, poses, timing, and backups`,
+        action: 'regenerate',
+        tab: 'shot-list' as const,
+      },
+      {
+        label: 'Sun/weather',
+        value: sunWeatherNote,
+        action: 'optimize',
+        tab: 'timeline' as const,
+      },
+      {
+        label: 'Client guide',
+        value: plan.clientGuide?.reassurance || plan.clientPrepChecklist[0] || 'Client handoff pending',
+        action: 'ask AI',
+        tab: 'prep' as const,
+      },
+    ];
+  }, [intelligence, isRouteConfirmed, plan, selectedLocations]);
 
   const boundedChatStepIndex = Math.min(chatStepIndex, visibleQuestions.length);
   const aiTypingTimerRef = useRef<number | null>(null);
@@ -872,7 +929,7 @@ export default function PlannerPage() {
           ...getAuthHeader(),
         },
         body: JSON.stringify({
-          sessionId: `${shootType}-${city}-${Date.now()}`,
+          sessionId: `${draftId}-${shootType}-${city}`,
           locationVotes,
           preferredVenueBucket,
           excludedVenueBuckets,
@@ -1025,6 +1082,7 @@ export default function PlannerPage() {
           plan?: SessionPlan;
           assistantMessage?: string;
           changedSections?: string[];
+          source?: 'ai' | 'fallback';
         };
         error?: string;
       };
@@ -1042,15 +1100,29 @@ export default function PlannerPage() {
       }
 
       const changedSections = Array.isArray(result.data.changedSections) ? result.data.changedSections : [];
+      const nextPlan = result.data.plan;
       setPlan(result.data.plan);
       setIsRouteConfirmed(false);
       setLastPlannerBrainChanges(changedSections);
+      setPlannerPlanVersions(prev => [
+        {
+          id: `${Date.now()}-${prev.length + 1}`,
+          label: `Version ${prev.length + 1}`,
+          message,
+          previousPlan: plan,
+          nextPlan,
+          changedSections,
+          createdAt: new Date().toISOString(),
+        },
+        ...prev,
+      ].slice(0, 12));
       setPlannerBrainMessages(prev => [
         ...prev,
         {
           role: 'assistant',
           content: result.data?.assistantMessage || 'Done. I updated the structured plan.',
           changedSections,
+          source: result.data?.source,
         },
       ]);
     } catch {
@@ -1065,6 +1137,20 @@ export default function PlannerPage() {
     } finally {
       setIsPlannerBrainUpdating(false);
     }
+  };
+
+  const restorePlannerVersion = (version: PlannerPlanVersion) => {
+    setPlan(version.previousPlan);
+    setIsRouteConfirmed(false);
+    setLastPlannerBrainChanges(version.changedSections);
+    setPlannerBrainMessages(prev => [
+      ...prev,
+      {
+        role: 'assistant',
+        content: `Restored the plan to before "${version.message}".`,
+        changedSections: version.changedSections,
+      },
+    ]);
   };
 
   const applyPlanToWorkspace = async () => {
@@ -2156,6 +2242,7 @@ export default function PlannerPage() {
                         {message.changedSections?.length ? (
                           <p className="mt-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[#8f95a3]">
                             Updated: {message.changedSections.join(', ')}
+                            {message.source ? ` via ${message.source}` : ''}
                           </p>
                         ) : null}
                       </div>
@@ -2199,24 +2286,95 @@ export default function PlannerPage() {
                 </form>
               </div>
 
-              <div className="space-y-2">
-                {[
-                  'Make this easier for toddlers',
-                  'Build this around only one spot',
-                  'Add more editorial poses',
-                  'Move hero portraits later for golden hour',
-                  'Make the client guide sound warmer',
-                ].map(prompt => (
-                  <button
-                    key={prompt}
-                    type="button"
-                    onClick={() => void sendPlannerBrainMessage(prompt)}
-                    disabled={isPlannerBrainUpdating}
-                    className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-left text-sm font-medium text-[#d7dce7] transition hover:border-white/25 hover:bg-white/10 disabled:opacity-50"
-                  >
-                    {prompt}
-                  </button>
-                ))}
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8f95a3]">Live sections</p>
+                    <span className="rounded-full border border-white/10 px-2 py-1 text-[11px] text-[#aeb4c0]">
+                      {plan.plannerBrain?.currentStage?.replace(/_/g, ' ') || 'review'}
+                    </span>
+                  </div>
+                  <div className="mt-3 space-y-2">
+                    {structuredPlanPreview.map(section => (
+                      <div key={section.label} className="rounded-xl border border-white/10 bg-[#111216] p-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setActiveReviewTab(section.tab)}
+                            className="text-left text-xs font-semibold uppercase tracking-[0.14em] text-[#8f95a3] hover:text-white"
+                          >
+                            {section.label}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isPlannerBrainUpdating || isRegenerating !== 'idle'}
+                            onClick={() => {
+                              setActiveReviewTab(section.tab);
+                              if (section.label === 'Shot list') {
+                                void regenerateSection('shot-list');
+                              } else if (section.label === 'Sun/weather') {
+                                void sendPlannerBrainMessage('Optimize this plan around the current sun and weather constraints.');
+                              } else if (section.label === 'Client guide') {
+                                void sendPlannerBrainMessage('Make the client guide warmer, clearer, and more reassuring.');
+                              } else if (section.label === 'Chosen location') {
+                                setIsRouteConfirmed(true);
+                              } else if (section.label === 'Brief') {
+                                setIsEditMode(true);
+                              }
+                            }}
+                            className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[11px] font-semibold text-[#d7dce7] hover:border-white/25 disabled:opacity-50"
+                          >
+                            {section.action}
+                          </button>
+                        </div>
+                        <p className="mt-2 line-clamp-2 text-xs leading-5 text-[#d7dce7]">{section.value}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  {[
+                    'Make this easier for toddlers',
+                    'Build this around only one spot',
+                    'Add more editorial poses',
+                    'Move hero portraits later for golden hour',
+                    'Make the client guide sound warmer',
+                  ].map(prompt => (
+                    <button
+                      key={prompt}
+                      type="button"
+                      onClick={() => void sendPlannerBrainMessage(prompt)}
+                      disabled={isPlannerBrainUpdating}
+                      className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-left text-sm font-medium text-[#d7dce7] transition hover:border-white/25 hover:bg-white/10 disabled:opacity-50"
+                    >
+                      {prompt}
+                    </button>
+                  ))}
+                </div>
+
+                {plannerPlanVersions.length > 0 && (
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8f95a3]">Version history</p>
+                    <div className="mt-3 space-y-2">
+                      {plannerPlanVersions.slice(0, 3).map(version => (
+                        <div key={version.id} className="rounded-xl border border-white/10 bg-[#111216] p-3">
+                          <p className="line-clamp-1 text-xs font-semibold text-[#eef1f7]">{version.message}</p>
+                          <p className="mt-1 text-[11px] text-[#8f95a3]">
+                            {version.changedSections.join(', ') || 'brief'}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => restorePlannerVersion(version)}
+                            className="mt-2 rounded-full border border-white/10 px-3 py-1 text-[11px] font-semibold text-[#d7dce7] hover:border-white/25"
+                          >
+                            Restore before
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </Card>
