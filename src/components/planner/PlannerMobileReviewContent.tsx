@@ -100,6 +100,15 @@ type PlannerMobileReviewContentProps = {
   photographerSunWeatherNotes?: string[];
   checklist: string[];
   contingencyPlans: string[];
+  clientGuide?: {
+    arrivalInstructions: string;
+    parking: string;
+    whatToWearAndBring: string[];
+    sessionFlow: string;
+    weatherExpectations: string;
+    reassurance: string;
+    tone: string;
+  };
 };
 
 function formatTime(value?: string) {
@@ -134,6 +143,7 @@ export const PlannerMobileReviewContent = memo(function PlannerMobileReviewConte
   photographerSunWeatherNotes = [],
   checklist,
   contingencyPlans,
+  clientGuide,
 }: PlannerMobileReviewContentProps) {
   const getPriorityLabel = (priority?: ReviewShot['priority']) => {
     if (priority === 'must-have') return 'Must-have';
@@ -437,9 +447,18 @@ export const PlannerMobileReviewContent = memo(function PlannerMobileReviewConte
   return (
     <div className="space-y-4">
       <div>
-        <h4 className="mb-2 text-base font-semibold text-gray-900">Client Prep Checklist</h4>
+        <h4 className="mb-2 text-base font-semibold text-gray-900">Client Guide Preview</h4>
+        {clientGuide && (
+          <div className="mb-3 space-y-2 rounded-lg border border-blue-100 bg-blue-50 p-3 text-sm text-blue-950">
+            <p><span className="font-semibold">Arrival:</span> {clientGuide.arrivalInstructions}</p>
+            <p><span className="font-semibold">Parking:</span> {clientGuide.parking}</p>
+            <p><span className="font-semibold">Flow:</span> {clientGuide.sessionFlow}</p>
+            <p><span className="font-semibold">Weather:</span> {clientGuide.weatherExpectations}</p>
+            <p><span className="font-semibold">Tone:</span> {clientGuide.tone}</p>
+          </div>
+        )}
         <ul className="list-inside list-disc space-y-1 text-sm text-gray-700">
-          {checklist.map(item => (
+          {(clientGuide?.whatToWearAndBring ?? checklist).map(item => (
             <li key={`mobile-prep-${item}`}>{item}</li>
           ))}
         </ul>

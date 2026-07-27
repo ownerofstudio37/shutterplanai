@@ -164,6 +164,20 @@ type PlannerDesktopReviewContentProps = {
   // prep tab
   checklist: string[];
   contingencyPlans: string[];
+  photographerPlan?: {
+    priorityChecklist?: string[];
+    sunWeatherNotes?: string[];
+    backupPlan?: string[];
+  };
+  clientGuide?: {
+    arrivalInstructions: string;
+    parking: string;
+    whatToWearAndBring: string[];
+    sessionFlow: string;
+    weatherExpectations: string;
+    reassurance: string;
+    tone: string;
+  };
   onUpdateChecklistItem: (index: number, value: string) => void;
   onUpdateContingencyItem: (index: number, value: string) => void;
 };
@@ -209,6 +223,8 @@ export const PlannerDesktopReviewContent = memo(function PlannerDesktopReviewCon
   onUpdateTimelineField,
   checklist,
   contingencyPlans,
+  photographerPlan,
+  clientGuide,
   onUpdateChecklistItem,
   onUpdateContingencyItem,
 }: PlannerDesktopReviewContentProps) {
@@ -288,6 +304,8 @@ export const PlannerDesktopReviewContent = memo(function PlannerDesktopReviewCon
     <PlannerPrepPanel
       checklist={checklist}
       contingencyPlans={contingencyPlans}
+      photographerPlan={photographerPlan}
+      clientGuide={clientGuide}
       isEditMode={isEditMode}
       onUpdateChecklistItem={onUpdateChecklistItem}
       onUpdateContingencyItem={onUpdateContingencyItem}

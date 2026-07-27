@@ -2480,6 +2480,7 @@ export default function PlannerPage() {
                   photographerSunWeatherNotes={plan.photographerPlan?.sunWeatherNotes}
                   checklist={plan.clientPrepChecklist}
                   contingencyPlans={plan.contingencyPlans}
+                  clientGuide={plan.clientGuide}
                 />
               )}
               desktopContent={(
@@ -2536,6 +2537,8 @@ export default function PlannerPage() {
                   onUpdateTimelineField={updateTimelineField}
                   checklist={plan.clientPrepChecklist}
                   contingencyPlans={plan.contingencyPlans}
+                  photographerPlan={plan.photographerPlan}
+                  clientGuide={plan.clientGuide}
                   onUpdateChecklistItem={updateChecklistItem}
                   onUpdateContingencyItem={updateContingencyItem}
                 />
