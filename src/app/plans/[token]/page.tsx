@@ -49,6 +49,15 @@ type SharedPlanResponse = {
     timeline?: SharedTimelineItem[];
     clientPrepChecklist?: string[];
     contingencyPlans?: string[];
+    clientGuide?: {
+      arrivalInstructions?: string;
+      parking?: string;
+      whatToWearAndBring?: string[];
+      sessionFlow?: string;
+      weatherExpectations?: string;
+      reassurance?: string;
+      tone?: string;
+    };
   };
   metadata?: {
     shootType?: string;
@@ -170,7 +179,10 @@ export default function SharedPlanPage() {
   const locations = useMemo(() => plan?.locationSuggestions ?? [], [plan?.locationSuggestions]);
   const shots = useMemo(() => plan?.shotList ?? [], [plan?.shotList]);
   const timeline = useMemo(() => plan?.timeline ?? [], [plan?.timeline]);
-  const prepChecklist = plan?.clientPrepChecklist ?? [];
+  const clientGuide = plan?.clientGuide;
+  const prepChecklist = clientGuide?.whatToWearAndBring?.length
+    ? clientGuide.whatToWearAndBring
+    : plan?.clientPrepChecklist ?? [];
   const contingencies = plan?.contingencyPlans ?? [];
   const shootDate = formatDate(data?.metadata?.shootDate);
   const primaryLocation = locations[0];
@@ -460,9 +472,11 @@ export default function SharedPlanPage() {
                 {primaryLocation ? (
                   <div className="mt-4 rounded-lg border border-[#e4ded5] bg-[#faf9f6] p-4">
                     <p className="text-lg font-semibold text-[#1f2933]">{getLocationName(primaryLocation, 0)}</p>
-                    <p className="mt-2 text-sm leading-6 text-[#5f6b76]">{primaryLocation.whyItWorks || 'Your photographer will meet you here.'}</p>
+                    <p className="mt-2 text-sm leading-6 text-[#5f6b76]">
+                      {clientGuide?.arrivalInstructions || primaryLocation.whyItWorks || 'Your photographer will meet you here.'}
+                    </p>
                     <div className="mt-4 grid gap-2 text-xs text-[#5f6b76] md:grid-cols-3">
-                      <p><span className="font-semibold text-[#1f2933]">Parking:</span> {primaryLocation.logistics?.parking || 'Confirm with photographer'}</p>
+                      <p><span className="font-semibold text-[#1f2933]">Parking:</span> {clientGuide?.parking || primaryLocation.logistics?.parking || 'Confirm with photographer'}</p>
                       <p><span className="font-semibold text-[#1f2933]">Restroom:</span> {primaryLocation.logistics?.restroom || 'Confirm before arrival'}</p>
                       <p><span className="font-semibold text-[#1f2933]">Walking:</span> {primaryLocation.logistics?.walkingDistance || 'Keep transitions short'}</p>
                     </div>
@@ -486,7 +500,12 @@ export default function SharedPlanPage() {
 
               <Card className="border border-[#d8d2c8] shadow-sm">
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7c6f64]">Before you arrive</p>
-                <h2 className="mt-2 text-xl font-semibold text-[#1f2933]">Client prep checklist</h2>
+                <h2 className="mt-2 text-xl font-semibold text-[#1f2933]">What to wear and bring</h2>
+                {clientGuide?.reassurance && (
+                  <p className="mt-3 rounded-lg border border-[#e4ded5] bg-[#faf9f6] px-3 py-3 text-sm leading-6 text-[#5f6b76]">
+                    {clientGuide.reassurance}
+                  </p>
+                )}
                 {prepChecklist.length > 0 ? (
                   <ul className="mt-4 space-y-2">
                     {prepChecklist.map((item, index) => (
@@ -505,6 +524,25 @@ export default function SharedPlanPage() {
                 )}
               </Card>
             </section>
+
+            {clientGuide && (
+              <Card className="border border-blue-200 bg-blue-50 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-800">Client guide</p>
+                <h2 className="mt-2 text-xl font-semibold text-blue-950">Session flow and weather expectations</h2>
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  {[
+                    ['Session flow', clientGuide.sessionFlow],
+                    ['Weather expectations', clientGuide.weatherExpectations],
+                    ['Guide tone', clientGuide.tone],
+                  ].filter((item): item is [string, string] => Boolean(item[1])).map(([label, value]) => (
+                    <div key={label} className="rounded-lg border border-blue-100 bg-white px-3 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-blue-800">{label}</p>
+                      <p className="mt-1 text-sm leading-6 text-[#1f2933]">{value}</p>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
 
             {timeline.length > 0 && (
               <Card className="border border-[#d8d2c8] shadow-sm">

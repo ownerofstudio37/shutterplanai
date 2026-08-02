@@ -41,6 +41,15 @@ describe('shared plan page', () => {
             shotList: [{ title: 'Wide Hero', description: 'Couple at edge of pier', location: 'Lake Pier', microSpot: 'Pier edge' }],
             timeline: [{ timeBlock: 'Golden Hour', focus: 'Hero portraits', notes: 'Start with wide frames.' }],
             clientPrepChecklist: ['Arrive 10 minutes early.'],
+            clientGuide: {
+              arrivalInstructions: 'Meet near the pier entrance 10 minutes early.',
+              parking: 'Use west lot',
+              whatToWearAndBring: ['Bring comfortable shoes.'],
+              sessionFlow: 'We will start with easy walking photos, then move into hero portraits.',
+              weatherExpectations: 'Your photographer will adjust around wind and sunset.',
+              reassurance: 'You do not need to know how to pose.',
+              tone: 'warm and calm',
+            },
           },
           metadata: {
             shootType: 'Engagement Session',
@@ -61,7 +70,10 @@ describe('shared plan page', () => {
     expect(screen.getByText('Warm cinematic storytelling')).toBeInTheDocument();
     expect(screen.getByText('Wide Hero')).toBeInTheDocument();
     expect(screen.getByText('Arrival plan')).toBeInTheDocument();
-    expect(screen.getByText('Arrive 10 minutes early.')).toBeInTheDocument();
+    expect(screen.getByText('Meet near the pier entrance 10 minutes early.')).toBeInTheDocument();
+    expect(screen.getByText('Bring comfortable shoes.')).toBeInTheDocument();
+    expect(screen.getByText('You do not need to know how to pose.')).toBeInTheDocument();
+    expect(screen.getByText('Session flow and weather expectations')).toBeInTheDocument();
     expect(screen.getByText('Golden Hour')).toBeInTheDocument();
     expect(screen.getAllByText('Lake Pier').length).toBeGreaterThanOrEqual(1);
   });
